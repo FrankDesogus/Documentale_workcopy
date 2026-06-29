@@ -8,7 +8,7 @@ _Nessun task in corso._
 
 | ID | Titolo | Agente previsto | Note |
 |----|--------|-----------------|------|
-| TASK-004 | Output su file e opzioni CLI | Cursor Agent | `--output FILE`, `--project`, `--tasks-file`, validazione errori |
+| TASK-004 | Output su file e opzioni CLI | Cursor Agent | Aggiungere `--output FILE` (scrive il prompt su file invece di stdout); migliorare messaggi di errore CLI; `--project` e `--tasks-file` già implementati — non modificarli |
 | TASK-005 | Review completa e integrazione workflow | Claude Code + OneAI | Review diff, REVIEW_LOG, merge su decisione umana |
 
 ## Completati
