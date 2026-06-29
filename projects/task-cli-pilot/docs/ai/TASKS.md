@@ -17,7 +17,7 @@ _Nessun task in corso._
 | ID | Titolo | Commit | Data |
 |----|--------|--------|------|
 | TASK-001 | Scaffold progetto e test base | `e8abff5` | 2026-06-29 |
-| TASK-002 | Implementare `add` e `list` | — | 2026-06-29 |
+| TASK-002 | Implementare `add` e `list` | `1fec4be` | 2026-06-29 |
 
 ---
 
