@@ -2,9 +2,7 @@
 
 ## In corso
 
-| ID | Titolo | Agente | Branch | Note |
-|----|--------|--------|--------|------|
-| TASK-001 | Scaffold progetto e test base | Claude Code | task/cursor-prompt-builder | Struttura, docs, placeholder CLI, test iniziali |
+_Nessun task in corso._
 
 ## Backlog
 
@@ -19,6 +17,7 @@
 
 | ID | Titolo | Commit | Data |
 |----|--------|--------|------|
+| TASK-001 | Scaffold progetto e test base | `fda3d5b` | 2026-06-29 |
 
 ---
 
