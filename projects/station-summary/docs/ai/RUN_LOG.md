@@ -163,4 +163,36 @@ Approvare TASK-003, poi avviare TASK-004 (Opzione output file e gestione errori)
 
 Approvare TASK-004, poi avviare TASK-005 (Review finale e merge) con Claude Code.
 
+### Run — 2026-06-29 — TASK-005 Review finale e merge
+
+**Agente:** Claude Code
+**Task:** TASK-005 — Review finale e merge
+**Branch:** task/station-summary
+
+**Operazioni eseguite:**
+
+1. Verifica stato branch e working tree — pulito.
+2. Verifica log: 4 commit su main (`2b5b526`..`732c461`), tutti in scope.
+3. Verifica diff vs main: 11 file, tutti in `projects/station-summary/`. ✓
+4. Esecuzione `scripts/test.sh` — 25/25 PASS.
+5. Test regressione `log-analyzer/scripts/test.sh` — PASS.
+6. Test regressione `cursor-prompt-builder/scripts/test.sh` — PASS.
+7. Verifica helper stazione (`ai-cycle.sh`, `cursor-prompt.sh`, `ai-review.sh`, `task-intake.sh`) — tutti rispondono a `--help`. ✓
+8. Aggiornamento TASKS.md: hash commit TASK-002/003/004, TASK-005 spostato in Completati.
+9. Aggiornamento REVIEW_LOG.md con review finale.
+
+**Esito test (`scripts/test.sh`):**
+
+```
+== Risultato: 25 PASS, 0 FAIL ==
+```
+
+**Problemi riscontrati:**
+
+- Nessuno.
+
+**Prossimo passo per l'operatore umano:**
+
+Eseguire merge manuale: `git switch main && git merge --ff-only task/station-summary`.
+
 <!-- Aggiungi i run qui sotto in ordine cronologico -->

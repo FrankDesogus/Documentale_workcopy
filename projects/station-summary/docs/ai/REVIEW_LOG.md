@@ -74,4 +74,33 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 
 ---
 
+### Review — 2026-06-29 — TASK-005 Review finale branch task/station-summary
+
+**Reviewer:** Claude Code
+**Diff / branch:** task/station-summary vs main (4 commit, 11 file)
+**Esito:** Approvato — pronto per merge manuale
+
+**Osservazioni:**
+
+- Tutti e 5 i task completati: TASK-001..005. ✓
+- 11 file aggiunti, tutti in `projects/station-summary/`. Nessun file fuori scope. ✓
+- `summary.py` usa solo stdlib: `argparse`, `datetime`, `pathlib`, `sys`. ✓
+- `scan_projects()`, `scan_scripts()`, `render_report()`, `main()` implementate correttamente. ✓
+- `--output FILE` con gestione `OSError`. ✓
+- 25/25 test PASS (struttura, py_compile, help/version, scan, render, --output, shellcheck, shfmt). ✓
+- Regressione `log-analyzer`: PASS. ✓
+- Regressione `cursor-prompt-builder`: PASS. ✓
+- Helper stazione (`ai-cycle.sh`, `cursor-prompt.sh`, `ai-review.sh`, `task-intake.sh`): tutti operativi. ✓
+- RUN_LOG.md aggiornato per tutti i task. ✓
+- REVIEW_LOG.md aggiornato per tutti i task. ✓
+- TASKS.md aggiornato con hash commit. ✓
+- Nessun segreto o credenziale nel diff. ✓
+- Nessuna dipendenza esterna. ✓
+
+**Azioni richieste prima del merge:**
+
+- Nessuna. Branch pronto per merge `--ff-only` su main.
+
+---
+
 <!-- Aggiungi le review qui sotto in ordine cronologico -->

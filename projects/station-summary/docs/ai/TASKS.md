@@ -10,16 +10,16 @@
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
-| TASK-005 | Review finale e merge | Bassa | Claude Code |
 
 ## Completati
 
 | ID | Titolo | Commit | Data |
 | -- | ------ | ------ | ---- |
 | TASK-001 | Scaffold + test base | 2b5b526 | 2026-06-29 |
-| TASK-002 | Rilevamento progetti e helper | — | 2026-06-29 |
-| TASK-003 | Generazione report markdown | — | 2026-06-29 |
-| TASK-004 | Opzione output file e gestione errori | — | 2026-06-29 |
+| TASK-002 | Rilevamento progetti e helper | 61cb79e | 2026-06-29 |
+| TASK-003 | Generazione report markdown | 7b8f215 | 2026-06-29 |
+| TASK-004 | Opzione output file e gestione errori | 732c461 | 2026-06-29 |
+| TASK-005 | Review finale e merge | — | 2026-06-29 |
 
 ---
 
