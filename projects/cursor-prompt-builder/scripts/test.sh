@@ -77,6 +77,58 @@ check_exit0 "prompt_builder.py --help" \
 	python "${PROJECT_ROOT}/prompt_builder.py" --help
 
 echo ""
+echo "-- Parsing task da TASKS.md --"
+TASKS_FILE="${PROJECT_ROOT}/docs/ai/TASKS.md"
+
+if python "${PROJECT_ROOT}/prompt_builder.py" \
+	--tasks-file "${TASKS_FILE}" --task TASK-002 \
+	2>/dev/null | grep -q "TASK-002"; then
+	pass "parsing TASK-002 → output contiene ID"
+else
+	fail "parsing TASK-002 → output contiene ID"
+fi
+
+if python "${PROJECT_ROOT}/prompt_builder.py" \
+	--tasks-file "${TASKS_FILE}" --task TASK-002 \
+	2>/dev/null | grep -q "Cursor Agent"; then
+	pass "parsing TASK-002 → output contiene agente"
+else
+	fail "parsing TASK-002 → output contiene agente"
+fi
+
+if python "${PROJECT_ROOT}/prompt_builder.py" \
+	--tasks-file "${TASKS_FILE}" --task TASK-003 \
+	2>/dev/null | grep -q "Cursor Agent"; then
+	pass "parsing TASK-003 (riga non prima) → agente estratto"
+else
+	fail "parsing TASK-003 (riga non prima) → agente estratto"
+fi
+
+if python "${PROJECT_ROOT}/prompt_builder.py" \
+	--tasks-file "${TASKS_FILE}" --task TASK-001 \
+	2>/dev/null | grep -q "fda3d5b"; then
+	pass "parsing TASK-001 (Completati) → commit estratto"
+else
+	fail "parsing TASK-001 (Completati) → commit estratto"
+fi
+
+if (python "${PROJECT_ROOT}/prompt_builder.py" \
+	--tasks-file "${TASKS_FILE}" --task TASK-999 \
+	>/dev/null 2>&1); then
+	fail "task non trovato → exit 1"
+else
+	pass "task non trovato → exit 1"
+fi
+
+if (python "${PROJECT_ROOT}/prompt_builder.py" \
+	--tasks-file "/tmp/nonexistent-tasks.md" --task TASK-002 \
+	>/dev/null 2>&1); then
+	fail "file non trovato → exit 1"
+else
+	pass "file non trovato → exit 1"
+fi
+
+echo ""
 if [[ "${FAILURES}" -eq 0 ]]; then
 	echo "Tutti i controlli passati."
 	exit 0
