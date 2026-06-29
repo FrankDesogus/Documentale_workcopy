@@ -66,3 +66,31 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 **Azioni richieste prima del commit:**
 
 - Nessuna.
+
+### Review — 2026-06-29 — TASK-005 Review completa e integrazione workflow
+
+**Reviewer:** Claude Code
+**Diff / branch:** task/cursor-prompt-builder vs main (9 commit, 12 file, +1207 righe)
+**Esito:** Approvato — pronto per merge manuale su main
+
+**Checklist finale:**
+
+- Scope: tutti i file del branch appartengono a `projects/cursor-prompt-builder/`. Nessuna modifica fuori progetto.
+- Dipendenze: solo Python standard library (`argparse`, `re`, `sys`, `pathlib`, `typing`). Confermato da ispezione import.
+- CLI: `--project`, `--tasks-file`, `--output` funzionano tutti correttamente. Senza `--output` → stdout; con `--output` → file + conferma breve su stdout.
+- Errori: task non trovato, file mancante, output non scrivibile → stderr + exit 1 in tutti i casi.
+- Commit coerenti: `fda3d5b` (TASK-001), `dc5c5a0` (TASK-002), `d6a922a` (TASK-003), `85ef50d` (TASK-004) — tutti presenti nel log e referenziati correttamente in TASKS.md.
+- Documentazione: RUN_LOG.md, REVIEW_LOG.md e TASKS.md aggiornati per tutti i task completati.
+- Test: 35/35 PASS. shellcheck OK. shfmt OK.
+- Automazioni pericolose: nessuna. Nessun push, merge, reset, clean nel codice o negli script.
+
+**Note sul workflow multi-agente:**
+
+- TASK-001, TASK-002: implementati da Claude Code (ruolo architect/implementer nelle fasi iniziali).
+- TASK-003: implementato da Cursor Agent. Review e commit di Claude Code.
+- TASK-004: implementato da Cursor Agent. Deviazione controllata: Cursor non ha potuto eseguire i test (approvazione shell negata nella sessione); test eseguiti manualmente dall'operatore. Deviazione documentata in RUN_LOG.md e REVIEW_LOG.md.
+- TASK-005: review finale di Claude Code. Merge decision in carico all'operatore umano.
+
+**Azioni richieste prima del merge:**
+
+- Nessuna. Il branch è pronto per merge manuale su main da parte dell'operatore.

@@ -123,3 +123,40 @@ Tutti i controlli passati. (35/35 PASS)
 **Prossimo passo per l'operatore umano:**
 
 Approvare il commit. TASK-005 (Review completa e integrazione workflow) è il prossimo task per Claude Code + OneAI.
+
+---
+
+### Run — 2026-06-29 — TASK-005 Review completa e integrazione workflow
+
+**Agente:** Claude Code
+**Task:** TASK-005 — Review completa e integrazione workflow
+**Branch:** task/cursor-prompt-builder
+
+**Operazioni eseguite:**
+
+1. Verificato git diff vs main: 9 commit, 12 file, +1207 righe, tutti in scope.
+2. Verificato stdlib-only import in `prompt_builder.py`.
+3. Verificato comportamento CLI: `--project`, `--tasks-file`, `--output`, stdout, errori.
+4. Verificato coerenza commit hash in TASKS.md vs git log.
+5. Aggiornato REVIEW_LOG.md con review finale TASK-005.
+6. Aggiornato TASKS.md: TASK-005 marcato completato, backlog svuotato.
+
+**Esito test (`scripts/test.sh`):**
+
+```
+Tutti i controlli passati. (35/35 PASS)
+```
+
+**Problemi riscontrati:**
+
+- Nessuno.
+
+**Prossimo passo per l'operatore umano:**
+
+Merge manuale del branch `task/cursor-prompt-builder` su `main`:
+
+```bash
+git checkout main
+git merge --ff-only task/cursor-prompt-builder
+git branch -d task/cursor-prompt-builder
+```
