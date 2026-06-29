@@ -1,7 +1,7 @@
 # Next Steps — AI Software Station
 
 Documento delle decisioni aperte e della roadmap immediata.
-Aggiornato dopo la chiusura di `task-cli-pilot` (2026-06-29).
+Aggiornato il 2026-06-29.
 
 ---
 
@@ -28,15 +28,11 @@ Template aggiornati con ruoli formali di tutti gli agenti.
 
 ### 1. Cursor Agent come implementatore ufficiale
 
-**Stato:** non ancora validato in pratica.
+**Stato:** ✓ DECISO — 2026-06-29
 
-Finora Claude Code ha implementato tutto. Il workflow prevede Cursor Agent come
-implementatore, ma non è mai stato usato davvero su un task di codice reale.
-
-**Domanda per l'operatore:** il prossimo progetto viene affidato a Cursor Agent
-per l'implementazione, con Claude Code solo come reviewer?
-
-**Impatto:** se sì, il prossimo progetto è il test reale del ciclo multi-agente.
+Il prossimo progetto viene implementato da Cursor Agent.
+Claude Code opera solo come architetto, planner e reviewer.
+Questo è il primo test reale del ciclo multi-agente completo.
 
 ---
 
