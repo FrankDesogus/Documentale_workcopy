@@ -43,6 +43,22 @@ Ogni progetto dovrà contenere almeno:
 - `docs/ai/RUN_LOG.md`;
 - `scripts/test.sh`.
 
+### Generare un progetto dai template
+
+Usare lo script `scripts/new-project.sh` per creare la struttura di base da zero:
+
+```bash
+./scripts/new-project.sh nome-progetto
+```
+
+Per verificare cosa verrebbe creato senza creare nulla:
+
+```bash
+./scripts/new-project.sh --dry-run nome-progetto
+```
+
+Lo script valida il nome, verifica che la directory non esista già, copia i template e rende eseguibile `scripts/test.sh`. Non esegue `git add` né commit: la revisione e il commit restano all'operatore umano.
+
 ## Flusso manuale iniziale
 
 1. Scrivere o aggiornare il requisito in `docs/ai/PROJECT_BRIEF.md`.
