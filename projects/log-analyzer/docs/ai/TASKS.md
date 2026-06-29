@@ -16,7 +16,7 @@ _Nessun task in backlog._
 | TASK-002 | Parsing TASKS.md | `b72b328` | 2026-06-29 |
 | TASK-003 | Parsing RUN\_LOG e REVIEW\_LOG | `aebefa9` | 2026-06-29 |
 | TASK-004 | Scanning directory e output CLI | `ee68ab2` | 2026-06-29 |
-| TASK-005 | Review completa e integrazione workflow | `TBD` | 2026-06-29 |
+| TASK-005 | Review completa e integrazione workflow | `8ed1cdf` | 2026-06-29 |
 
 ---
 
