@@ -3,7 +3,13 @@
 
 
 def summarize_status(items: list) -> dict:
-    raise NotImplementedError("TASK-001: implement this function")
+    result = {}
+    for item in items:
+        status = item.get("status")
+        if status is None:
+            continue
+        result[status] = result.get(status, 0) + 1
+    return result
 
 
 if __name__ == "__main__":

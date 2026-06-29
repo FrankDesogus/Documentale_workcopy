@@ -10,13 +10,12 @@
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
-| TASK-001 | Implementa summarize_status | Alta | Cursor Agent |
 
 ## Completati
 
 | ID | Titolo | Commit | Data |
 | -- | ------ | ------ | ---- |
-|    |        |        |      |
+| TASK-001 | Implementa summarize_status | — | 2026-06-29 |
 
 ---
 
