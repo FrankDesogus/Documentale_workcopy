@@ -70,6 +70,37 @@ else
 fi
 
 echo ""
+echo "-- Parsing TASKS.md (TASK-002) --"
+PROJECTS_DIR="$(cd "${PROJECT_ROOT}/.." && pwd)"
+TASK002_OUT="$(python "${PROJECT_ROOT}/log_analyzer.py" \
+	--projects-dir "${PROJECTS_DIR}" \
+	--project log-analyzer 2>/dev/null || true)"
+
+if echo "${TASK002_OUT}" | grep -q "Tasks:"; then
+	pass "parse_tasks → output contiene Tasks:"
+else
+	fail "parse_tasks → output contiene Tasks:"
+fi
+
+if echo "${TASK002_OUT}" | grep -Eq "[1-9]+ completati"; then
+	pass "parse_tasks → almeno 1 task completato"
+else
+	fail "parse_tasks → almeno 1 task completato"
+fi
+
+if echo "${TASK002_OUT}" | grep -q "0 in corso"; then
+	pass "parse_tasks → 0 task in corso"
+else
+	fail "parse_tasks → 0 task in corso"
+fi
+
+if echo "${TASK002_OUT}" | grep -Eq "[1-9]+ backlog"; then
+	pass "parse_tasks → almeno 1 task in backlog"
+else
+	fail "parse_tasks → almeno 1 task in backlog"
+fi
+
+echo ""
 echo "-- Qualità script bash --"
 if command -v shellcheck >/dev/null 2>&1; then
 	if shellcheck "${PROJECT_ROOT}/scripts/test.sh" >/dev/null 2>&1; then

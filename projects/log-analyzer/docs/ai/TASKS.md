@@ -8,7 +8,6 @@ _Nessun task in corso._
 
 | ID | Titolo | Agente previsto | Note |
 |----|--------|-----------------|------|
-| TASK-002 | Parsing TASKS.md | Cursor Agent | `parse_tasks(path)` — conteggi per sezione, lista task con ID/titolo |
 | TASK-003 | Parsing RUN\_LOG e REVIEW\_LOG | Cursor Agent | `parse_last_run(path)`, `parse_last_review(path)` — ultima entry per file |
 | TASK-004 | Scanning directory e output CLI | Cursor Agent | Scansione `projects/`, `--project`, `--output FILE`, output testuale finale |
 | TASK-005 | Review completa e integrazione workflow | Claude Code + OneAI | Review diff, REVIEW\_LOG, merge su decisione umana |
@@ -18,6 +17,7 @@ _Nessun task in corso._
 | ID | Titolo | Commit | Data |
 |----|--------|--------|------|
 | TASK-001 | Scaffold progetto e test base | `cbeea24` | 2026-06-29 |
+| TASK-002 | Parsing TASKS.md | pending | 2026-06-29 |
 
 ---
 

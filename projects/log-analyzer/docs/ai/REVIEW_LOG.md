@@ -25,3 +25,22 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 ---
 
 <!-- Aggiungi le review qui sotto in ordine cronologico -->
+
+### Review — 2026-06-29 — TASK-002 Parsing TASKS.md
+
+**Reviewer:** Claude Code
+**Diff / branch:** task/log-analyzer (working tree, post Cursor Agent)
+**Esito:** Approvato
+
+**Osservazioni:**
+
+- `_SECTION_KEYS`, `_split_row`, `_is_separator`: pattern identico a cursor-prompt-builder — corretto e coerente.
+- `parse_tasks`: gestisce file mancante, sezioni dinamiche, header variabile, righe separator, rows non-TASK-*. Logica solida.
+- Import `re` aggiunto correttamente (stdlib).
+- `parse_last_run` e `parse_last_review` ancora placeholder — corretto per TASK-002.
+- Test originali (16) non coprivano il comportamento di parsing. Aggiunti 4 test via CLI durante la review per verificare conteggi (completati, in corso, backlog, integrazione).
+- 20/20 PASS. shellcheck OK. shfmt OK.
+
+**Azioni richieste prima del commit:**
+
+- Nessuna.

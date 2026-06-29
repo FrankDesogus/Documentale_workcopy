@@ -61,3 +61,33 @@ Tutti i controlli passati. (16/16 PASS)
 **Prossimo passo per l'operatore umano:**
 
 Approvare il commit. TASK-002 (Parsing TASKS.md) è il prossimo task per Cursor Agent.
+
+---
+
+### Run — 2026-06-29 — TASK-002 Parsing TASKS.md
+
+**Agente:** Cursor Agent
+**Task:** TASK-002 — Parsing TASKS.md
+**Branch:** task/log-analyzer
+
+**Operazioni eseguite:**
+
+1. Aggiunti helper `_SECTION_KEYS`, `_split_row`, `_is_separator` (pattern identico a cursor-prompt-builder).
+2. Implementata `parse_tasks(tasks_path)`: scansione sezioni `## Backlog/In corso/Completati`, header dinamico, righe separator, file mancante → dict vuoto.
+3. Aggiunto `import re`.
+
+**Esito test (`scripts/test.sh`):**
+
+```
+Tutti i controlli passati. (20/20 PASS)
+```
+
+Note: 4 test di parsing aggiunti durante la review (Claude Code) per verificare i conteggi.
+
+**Problemi riscontrati:**
+
+- Nessuno.
+
+**Prossimo passo per l'operatore umano:**
+
+Approvare il commit. TASK-003 (Parsing RUN_LOG e REVIEW_LOG) è il prossimo task per Cursor Agent.

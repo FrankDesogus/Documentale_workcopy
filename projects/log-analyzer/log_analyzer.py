@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -14,13 +15,65 @@ def find_projects(projects_dir: Path) -> List[Path]:
     )
 
 
+_SECTION_KEYS = {
+    "backlog": "backlog",
+    "in corso": "in_corso",
+    "completati": "completati",
+}
+
+
+def _split_row(line: str) -> List[str]:
+    line = line.strip()
+    if not line.startswith("|") or not line.endswith("|"):
+        return []
+    return [c.strip() for c in line[1:-1].split("|")]
+
+
+def _is_separator(cols: List[str]) -> bool:
+    return bool(cols) and all(re.match(r"^-+$", c) for c in cols if c)
+
+
 def parse_tasks(tasks_path: Path) -> Dict[str, List[Dict[str, str]]]:
     result: Dict[str, List[Dict[str, str]]] = {
         "backlog": [],
         "in_corso": [],
         "completati": [],
     }
-    # placeholder — implementato in TASK-002
+    if not tasks_path.is_file():
+        return result
+
+    current_section: Optional[str] = None
+    titolo_col: Optional[int] = None
+
+    for line in tasks_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("## "):
+            current_section = _SECTION_KEYS.get(stripped[3:].strip().lower())
+            titolo_col = None
+            continue
+
+        if current_section is None:
+            continue
+
+        cols = _split_row(line)
+        if not cols or _is_separator(cols):
+            continue
+
+        if cols[0].upper() == "ID":
+            titolo_col = next(
+                (i for i, h in enumerate(cols) if h.lower() == "titolo"),
+                1 if len(cols) > 1 else None,
+            )
+            continue
+
+        if not cols[0].startswith("TASK-"):
+            continue
+
+        title = ""
+        if titolo_col is not None and titolo_col < len(cols):
+            title = cols[titolo_col]
+        result[current_section].append({"id": cols[0], "titolo": title})
+
     return result
 
 
