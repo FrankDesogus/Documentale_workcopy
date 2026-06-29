@@ -2,21 +2,19 @@
 
 ## In corso
 
-| ID       | Titolo                               | Agente      | Branch                 | Note                    |
-| -------- | ------------------------------------ | ----------- | ---------------------- | ----------------------- |
-| TASK-002 | Implementare CLI minimale (`cli.py`) | Claude Code | task/demo-minimal-cli  | In fase di completamento |
+_Nessun task in corso._
 
 ## Backlog
 
-| ID       | Titolo                       | Priorità | Note                                                        |
-| -------- | ---------------------------- | -------- | ----------------------------------------------------------- |
-| TASK-003 | Eseguire review e aggiornare RUN_LOG | Media | Review con Claude Code, log in `RUN_LOG.md` e `REVIEW_LOG.md` |
+_Backlog vuoto._
 
 ## Completati
 
 | ID       | Titolo                                   | Commit    | Data       |
 | -------- | ---------------------------------------- | --------- | ---------- |
 | TASK-001 | Configurare test reale del progetto demo | `5e53acd` | 2026-06-29 |
+| TASK-002 | Implementare CLI minimale (`cli.py`)     | `9977cee` | 2026-06-29 |
+| TASK-003 | Review formale e merge su main           | —         | 2026-06-29 |
 
 ---
 
@@ -30,5 +28,5 @@
 ## Ordine di esecuzione suggerito
 
 1. TASK-001 ✓ — test struttura reale configurato e funzionante.
-2. TASK-002 — implementazione CLI (`cli.py`) con branch `task/demo-minimal-cli`.
-3. TASK-003 — review del diff, log, commit finale.
+2. TASK-002 ✓ — implementazione CLI (`cli.py`) con branch `task/demo-minimal-cli`.
+3. TASK-003 ✓ — review formale, aggiornamento log, merge su `main`.
