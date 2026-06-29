@@ -80,7 +80,43 @@ def parse_task(tasks_md: str, task_id: str) -> Optional[Dict[str, str]]:
     return None
 
 
-def build_prompt(task: Dict[str, str], project_dir: Path, task_id: str) -> str:
+def extract_task_detail(tasks_md: str, task_id: str) -> Optional[str]:
+    """
+    Estrae la sezione dettaglio di un task da TASKS.md.
+
+    Cerca una riga heading (## o ###) che contenga task_id,
+    e restituisce tutto il contenuto fino al prossimo heading di livello >= 2.
+    Restituisce None se non trova la sezione.
+
+    Esempi di heading accettati:
+      ### TASK-001 — Scaffold + test base — Claude Code
+      ### TASK-001 — Implementa summarize_status — Cursor Agent
+      ## TASK-001 — Titolo
+    """
+    lines = tasks_md.splitlines()
+    start = None
+    heading_re = re.compile(r"^#{2,3}\s")
+    task_re = re.compile(r"^#{2,3}\s.*\b" + re.escape(task_id) + r"\b")
+
+    for i, line in enumerate(lines):
+        if task_re.match(line):
+            start = i
+            break
+
+    if start is None:
+        return None
+
+    detail_lines = [lines[start]]
+    for line in lines[start + 1:]:
+        if heading_re.match(line):
+            break
+        detail_lines.append(line)
+
+    content = "\n".join(detail_lines).strip()
+    return content if content else None
+
+
+def build_prompt(task: Dict[str, str], project_dir: Path, task_id: str, tasks_md: str = "") -> str:
     project_dir = Path(project_dir).resolve()
     repo_root = find_repo_root(project_dir)
     repository = str(repo_root)
@@ -90,6 +126,7 @@ def build_prompt(task: Dict[str, str], project_dir: Path, task_id: str) -> str:
     title = task.get("Titolo", "").strip()
     agent = task.get("Agente previsto", task.get("Agente", "")).strip()
     notes = task.get("Note", "").strip()
+    task_detail = extract_task_detail(tasks_md, task_id) if tasks_md else None
 
     read_first = [
         f"{project_rel}/AGENTS.md",
@@ -152,6 +189,14 @@ def build_prompt(task: Dict[str, str], project_dir: Path, task_id: str) -> str:
     ])
     if notes:
         lines.append(f"- {notes}")
+
+    if task_detail:
+        lines.extend([
+            "",
+            "## Dettaglio completo del task (da TASKS.md)",
+            "",
+            task_detail,
+        ])
 
     lines.extend([
         "",
@@ -254,7 +299,7 @@ def main() -> None:
         sys.exit(1)
 
     project_dir = resolve_project_dir(args.project, tasks_path)
-    prompt = build_prompt(task, project_dir, args.task)
+    prompt = build_prompt(task, project_dir, args.task, tasks_md)
 
     if args.output:
         output_path = Path(args.output)

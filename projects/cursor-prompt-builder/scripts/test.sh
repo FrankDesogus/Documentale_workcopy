@@ -236,6 +236,48 @@ else
 fi
 
 echo ""
+echo "-- Dettaglio task (extract_task_detail) --"
+# usa station-summary TASKS.md (ha sezioni ### TASK-XXX)
+STATION_TASKS="${PROJECT_ROOT}/../station-summary/docs/ai/TASKS.md"
+# usa log-analyzer TASKS.md (NON ha sezioni ### TASK-XXX)
+LOG_TASKS="${PROJECT_ROOT}/../log-analyzer/docs/ai/TASKS.md"
+
+# task con sezione dettaglio: output deve contenere "Dettaglio completo"
+if python "${PROJECT_ROOT}/prompt_builder.py" \
+	--tasks-file "${STATION_TASKS}" --task TASK-001 \
+	2>/dev/null | grep -q "Dettaglio completo del task"; then
+	pass "TASKS.md con dettaglio → prompt contiene sezione dettaglio"
+else
+	fail "TASKS.md con dettaglio → prompt contiene sezione dettaglio"
+fi
+
+# task con sezione dettaglio: il contenuto della sezione è incluso
+if python "${PROJECT_ROOT}/prompt_builder.py" \
+	--tasks-file "${STATION_TASKS}" --task TASK-001 \
+	2>/dev/null | grep -q "Scaffold"; then
+	pass "TASKS.md con dettaglio → contenuto sezione incluso nel prompt"
+else
+	fail "TASKS.md con dettaglio → contenuto sezione incluso nel prompt"
+fi
+
+# task senza sezione dettaglio: nessun crash, nessuna sezione vuota
+LOG_OUTPUT="$(python "${PROJECT_ROOT}/prompt_builder.py" \
+	--tasks-file "${LOG_TASKS}" --task TASK-001 \
+	2>/dev/null || true)"
+
+if [[ -n "${LOG_OUTPUT}" ]]; then
+	pass "TASKS.md senza dettaglio → prompt generato senza crash"
+else
+	fail "TASKS.md senza dettaglio → prompt generato senza crash"
+fi
+
+if ! echo "${LOG_OUTPUT}" | grep -q "Dettaglio completo del task"; then
+	pass "TASKS.md senza dettaglio → nessuna sezione dettaglio nel prompt"
+else
+	fail "TASKS.md senza dettaglio → nessuna sezione dettaglio nel prompt"
+fi
+
+echo ""
 echo "-- Qualità script bash --"
 if command -v shellcheck >/dev/null 2>&1; then
 	if shellcheck "${PROJECT_ROOT}/scripts/test.sh" >/dev/null 2>&1; then
