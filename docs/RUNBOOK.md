@@ -114,6 +114,32 @@ possono essere assenti perché la tabella ha struttura diversa.
 
 ---
 
+## Generazione prompt di review per Claude Code
+
+Dopo che Cursor Agent ha completato un task, generare un prompt di review strutturato:
+
+```bash
+./scripts/ai-review.sh \
+  --project projects/<nome-progetto> \
+  --task TASK-XXX \
+  --output /tmp/review-prompt.md
+```
+
+Per stampare il prompt su stdout (utile per copiarlo direttamente):
+
+```bash
+./scripts/ai-review.sh \
+  --project projects/<nome-progetto> \
+  --task TASK-XXX \
+  --stdout
+```
+
+Il prompt generato include: contesto repository/branch, file da leggere, comandi di verifica,
+checklist review, istruzioni per commit locale se approvato, e divieti espliciti (no push, merge, reset).
+Lo script non chiama agenti, non modifica file e non esegue operazioni Git.
+
+---
+
 ## Flusso manuale iniziale
 
 1. Scrivere o aggiornare il requisito in `docs/ai/PROJECT_BRIEF.md`.
