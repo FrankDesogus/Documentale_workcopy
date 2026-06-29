@@ -17,7 +17,7 @@ _Nessun task in corso._
 | ID | Titolo | Commit | Data |
 |----|--------|--------|------|
 | TASK-001 | Scaffold progetto e test base | `fda3d5b` | 2026-06-29 |
-| TASK-002 | Parsing task da TASKS.md | — | 2026-06-29 |
+| TASK-002 | Parsing task da TASKS.md | `dc5c5a0` | 2026-06-29 |
 
 ---
 
