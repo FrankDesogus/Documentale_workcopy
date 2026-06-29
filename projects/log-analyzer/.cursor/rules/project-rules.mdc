@@ -1,0 +1,40 @@
+---
+description: Regole operative per Cursor in questo progetto
+alwaysApply: true
+---
+
+# Regole Cursor — Project Rules
+
+> Le regole operative complete sono in `AGENTS.md`.
+> Leggi prima quello. Questo file aggiunge solo i vincoli specifici per Cursor.
+
+## Prima di iniziare
+
+1. Leggi `AGENTS.md`.
+2. Leggi `docs/ai/TASKS.md` e seleziona un solo task dal backlog.
+3. Esegui `git status` — il working tree deve essere pulito.
+4. Crea un branch dedicato: `git checkout -b task/nome-task`.
+
+## Scope del lavoro
+
+- Implementa **solo** il task selezionato in `docs/ai/TASKS.md`.
+- Non modificare file fuori scope del task corrente.
+- Non aggiungere feature non richieste.
+- Non refactorare codice non coinvolto nel task.
+- Non cambiare dipendenze senza conferma umana.
+
+## Dopo ogni modifica
+
+1. Esegui `scripts/test.sh`.
+2. Non committare se i test falliscono.
+3. Registra l'esito in `docs/ai/RUN_LOG.md`.
+4. Attendi review prima di committare.
+
+## Stop immediato se
+
+- I test falliscono.
+- Il task è ambiguo o contraddittorio.
+- Stai per modificare file fuori scope.
+- Stai per eseguire un comando distruttivo.
+- Stai per versionare segreti o credenziali.
+- Non sei sicuro di cosa fare.
