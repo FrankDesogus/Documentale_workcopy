@@ -47,3 +47,52 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 **Azioni richieste prima del commit:**
 
 - Corretta la riga `cleanup_tmp` in `test.sh` (già applicata). Nessun'altra azione richiesta.
+
+---
+
+### Review — 2026-06-29 — TASK-005 · Review completa `main..task/task-cli-pilot`
+
+**Reviewer:** Claude Code
+**Diff / branch:** `main..task/task-cli-pilot` — 8 commit, 13 file, +1034 righe
+**Esito:** Approvato
+
+**Osservazioni:**
+
+**`task_cli.py`**
+
+- Struttura: singolo file, solo stdlib (`argparse`, `json`, `sys`, `pathlib`, `typing`). Zero dipendenze esterne. ✓
+- `load_tasks`: gestione file mancante (lista vuota) e `JSONDecodeError` (stderr + exit 1). ✓
+- `save_tasks`: encoding UTF-8 esplicito, indent=2, newline finale. ✓
+- `cmd_add`: ID = `max(existing) + 1`, robusto su ID non contigui (es. dopo delete). ✓
+- `cmd_list`: formato `[ ]`/`[x]`, "No tasks." su lista vuota. ✓
+- `cmd_done`: scan lineare per ID, mutazione in place, salva solo su successo. ✓
+- `cmd_delete`: `tasks.pop(i)` corretto, salva solo su successo. ✓
+- `cmd_clear`: `tasks.clear()` muta la lista originale (necessario per la semantica di `save_tasks`), stampa sempre. ✓
+- `main()`: catena `if/elif` completa, nessun ramo `not yet implemented` residuo, comando nullo gestito. ✓
+- `tasks.json` in CWD — confermato dai test in `mktemp -d`. ✓
+- Compatibilità Python 3.8+: `from typing import` corretto. ✓
+- Note: `cmd_done` su task già completato è idempotente — comportamento accettabile per un pilota.
+
+**`scripts/test.sh`**
+
+- 35 check totali: struttura (11), sintassi (1), CLI base (1), add/list (9), done/delete (8), clear/errori (5). ✓
+- Test isolati in `mktemp -d` — nessuna interferenza con l'ambiente. ✓
+- `# shellcheck disable=SC2329` su `cleanup_tmp*` — falso positivo documentato e motivato. ✓
+- `CMD_DONE="done"` per evitare SC1010 (keyword bash). ✓
+- shellcheck e shfmt: zero warning. ✓
+
+**Documentazione**
+
+- `PROJECT_BRIEF.md`, `ARCHITECTURE.md`, `DECISIONS.md`: completi e coerenti con l'implementazione. ✓
+- `TASKS.md`: tutti i task con hash commit. ✓
+- `RUN_LOG.md`: esiti documentati per TASK-002, TASK-003, TASK-004. ✓
+- `.gitignore` progetto: `tasks.json`, `__pycache__/`, `*.pyc`. ✓
+- `.gitignore` root: `.ai/` aggiunto. ✓
+
+**Scope**
+
+Tutti i comandi previsti da `PROJECT_BRIEF.md` implementati. Nessuna feature fuori scope.
+
+**Azioni richieste prima del merge:**
+
+Nessuna. Approvato per merge fast-forward su `main`.
