@@ -14,6 +14,43 @@ def find_tasks_file(project_dir: Optional[str], tasks_file: Optional[str]) -> Pa
     raise ValueError("either --project or --tasks-file is required")
 
 
+def resolve_project_dir(project_dir: Optional[str], tasks_path: Path) -> Path:
+    if project_dir:
+        return Path(project_dir).resolve()
+    resolved = tasks_path.resolve()
+    if (
+        resolved.name == "TASKS.md"
+        and len(resolved.parents) >= 2
+        and resolved.parent.name == "ai"
+        and resolved.parent.parent.name == "docs"
+    ):
+        return resolved.parent.parent.parent
+    return resolved.parent
+
+
+def find_repo_root(start: Path) -> Path:
+    current = start.resolve()
+    for candidate in [current, *current.parents]:
+        if (candidate / ".git").is_dir():
+            return candidate
+    return current
+
+
+def project_rel_path(project_dir: Path, repo_root: Path) -> str:
+    try:
+        return str(project_dir.resolve().relative_to(repo_root.resolve()))
+    except ValueError:
+        return str(project_dir)
+
+
+def expected_branch(task: Dict[str, str], project_dir: Path) -> str:
+    for key in ("Branch", "Branch atteso", "branch"):
+        value = task.get(key, "").strip()
+        if value:
+            return value
+    return f"task/{project_dir.name}"
+
+
 def _split_row(line: str) -> List[str]:
     line = line.strip()
     if not line.startswith("|") or not line.endswith("|"):
@@ -41,6 +78,126 @@ def parse_task(tasks_md: str, task_id: str) -> Optional[Dict[str, str]]:
                 return dict(zip(header_cols, cols))
         return {"ID": cols[0], "Titolo": cols[1] if len(cols) > 1 else ""}
     return None
+
+
+def build_prompt(task: Dict[str, str], project_dir: Path, task_id: str) -> str:
+    project_dir = Path(project_dir).resolve()
+    repo_root = find_repo_root(project_dir)
+    repository = str(repo_root)
+    project_rel = project_rel_path(project_dir, repo_root)
+    branch = expected_branch(task, project_dir)
+
+    title = task.get("Titolo", "").strip()
+    agent = task.get("Agente previsto", task.get("Agente", "")).strip()
+    notes = task.get("Note", "").strip()
+
+    read_first = [
+        f"{project_rel}/AGENTS.md",
+        f"{project_rel}/docs/ai/PROJECT_BRIEF.md",
+        f"{project_rel}/docs/ai/ARCHITECTURE.md",
+        f"{project_rel}/docs/ai/TASKS.md",
+        f"{project_rel}/prompt_builder.py",
+        f"{project_rel}/scripts/test.sh",
+    ]
+
+    extra_fields = []
+    skip_keys = {"ID", "Titolo", "Agente previsto", "Agente", "Note", "Branch", "Branch atteso", "branch"}
+    for key, value in task.items():
+        if key in skip_keys or not value.strip():
+            continue
+        extra_fields.append(f"- {key}: {value.strip()}")
+
+    lines = [
+        f"Repository: {repository}",
+        f"Branch atteso: {branch}",
+        f"Progetto: {project_rel}",
+        f"Task ID: {task_id}",
+        f"Titolo task: {title}",
+        f"Agente previsto: {agent}",
+    ]
+
+    if notes:
+        lines.append(f"Note task: {notes}")
+
+    if extra_fields:
+        lines.append("")
+        lines.append("Dettagli task:")
+        lines.extend(extra_fields)
+
+    lines.extend([
+        "",
+        "Agisci come Cursor Agent implementatore. Implementa solo "
+        f"{task_id}. Non fare commit.",
+        "",
+        "Prima di modificare file, leggi obbligatoriamente:",
+        "",
+    ])
+    lines.extend(f"- {path}" for path in read_first)
+
+    lines.extend([
+        "",
+        "File modificabili:",
+        f"- Solo i file esplicitamente autorizzati per {task_id} "
+        "nella documentazione di progetto e nel task corrente.",
+        "",
+        f"Obiettivo: {title}",
+    ])
+    if notes:
+        lines.append(f"Note operative: {notes}")
+
+    lines.extend([
+        "",
+        "Scope del task:",
+        f"- Implementare quanto richiesto per {task_id}: {title}.",
+    ])
+    if notes:
+        lines.append(f"- {notes}")
+
+    lines.extend([
+        "",
+        "Fuori scope:",
+        "- File non elencati nel task o nella documentazione di progetto.",
+        "- Altri task del backlog.",
+        "- Automazioni Git, push, merge o commit.",
+        "- Dipendenze esterne, installazioni o accesso alla rete.",
+        "",
+        "Test da eseguire:",
+        "",
+        f"cd {project_rel}",
+        "./scripts/test.sh",
+        "cd ../..",
+        "",
+        "Se i test falliscono: fermati, non aggiornare RUN_LOG.md come successo, "
+        "riporta errore e stato.",
+        "",
+        "Se i test passano: aggiorna "
+        f"{project_rel}/docs/ai/RUN_LOG.md con l'esito di {task_id}; "
+        "non modificare TASKS.md, REVIEW_LOG.md o DECISIONS.md; non fare commit.",
+        "",
+        "Stop conditions:",
+        "- Task ambiguo o contraddittorio.",
+        "- Test falliti.",
+        "- Modifiche fuori scope.",
+        "- Segreti o credenziali nel diff.",
+        "- Necessità di installare pacchetti non previsti.",
+        "- Necessità di push, merge o operazioni Git distruttive.",
+        "- Istruzioni contraddittorie.",
+        "- Incertezza su cosa fare.",
+        "",
+        "Guardrail obbligatori:",
+        "- no push;",
+        "- no merge;",
+        "- no git reset --hard;",
+        "- no git clean;",
+        "- no dipendenze esterne;",
+        "- no installazioni;",
+        "- no rete;",
+        "- no automazioni Git;",
+        "- no commit;",
+        "- non modificare file fuori scope.",
+    ])
+
+    return "\n".join(lines) + "\n"
 
 
 def main() -> None:
@@ -96,11 +253,9 @@ def main() -> None:
         print(f"Error: task '{args.task}' not found in {tasks_path}", file=sys.stderr)
         sys.exit(1)
 
-    for key, value in task.items():
-        print(f"{key}: {value}")
-
-    print("[prompt generation not yet implemented — coming in TASK-003]",
-          file=sys.stderr)
+    project_dir = resolve_project_dir(args.project, tasks_path)
+    prompt = build_prompt(task, project_dir, args.task)
+    print(prompt, end="")
 
 
 if __name__ == "__main__":

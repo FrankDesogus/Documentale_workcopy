@@ -11,6 +11,8 @@ FAILURES=0
 
 pass() { printf "PASS  %s\n" "$1"; }
 
+skip() { printf "SKIP  %s\n" "$1"; }
+
 fail() {
 	printf "FAIL  %s\n" "$1" >&2
 	FAILURES=$((FAILURES + 1))
@@ -126,6 +128,70 @@ if (python "${PROJECT_ROOT}/prompt_builder.py" \
 	fail "file non trovato → exit 1"
 else
 	pass "file non trovato → exit 1"
+fi
+
+echo ""
+echo "-- Generazione prompt TASK-003 --"
+TASK003_OUTPUT="$(python "${PROJECT_ROOT}/prompt_builder.py" \
+	--tasks-file "${TASKS_FILE}" --task TASK-003 2>/dev/null || true)"
+
+if [[ -n "${TASK003_OUTPUT}" ]]; then
+	pass "TASK-003 → output su stdout"
+else
+	fail "TASK-003 → output su stdout"
+fi
+
+if echo "${TASK003_OUTPUT}" | grep -q "Cursor Agent"; then
+	pass "TASK-003 → output contiene Cursor Agent"
+else
+	fail "TASK-003 → output contiene Cursor Agent"
+fi
+
+if echo "${TASK003_OUTPUT}" | grep -q "TASK-003"; then
+	pass "TASK-003 → output contiene TASK-003"
+else
+	fail "TASK-003 → output contiene TASK-003"
+fi
+
+if echo "${TASK003_OUTPUT}" | grep -q "Generazione prompt Cursor base"; then
+	pass "TASK-003 → output contiene titolo task"
+else
+	fail "TASK-003 → output contiene titolo task"
+fi
+
+if echo "${TASK003_OUTPUT}" | grep -Eiq "no push"; then
+	pass "TASK-003 → output contiene guardrail no push"
+else
+	fail "TASK-003 → output contiene guardrail no push"
+fi
+
+if echo "${TASK003_OUTPUT}" | grep -q "\[prompt generation not yet implemented\]"; then
+	fail "TASK-003 → output non contiene placeholder"
+else
+	pass "TASK-003 → output non contiene placeholder"
+fi
+
+echo ""
+echo "-- Qualità script bash --"
+if command -v shellcheck >/dev/null 2>&1; then
+	if shellcheck "${PROJECT_ROOT}/scripts/test.sh" >/dev/null 2>&1; then
+		pass "scripts/test.sh (shellcheck)"
+	else
+		fail "scripts/test.sh (shellcheck)"
+	fi
+else
+	skip "scripts/test.sh (shellcheck) — shellcheck non disponibile"
+fi
+
+if command -v shfmt >/dev/null 2>&1; then
+	if diff -u <(cat "${PROJECT_ROOT}/scripts/test.sh") \
+		<(shfmt "${PROJECT_ROOT}/scripts/test.sh") >/dev/null 2>&1; then
+		pass "scripts/test.sh (shfmt)"
+	else
+		fail "scripts/test.sh (shfmt)"
+	fi
+else
+	skip "scripts/test.sh (shfmt) — shfmt non disponibile"
 fi
 
 echo ""

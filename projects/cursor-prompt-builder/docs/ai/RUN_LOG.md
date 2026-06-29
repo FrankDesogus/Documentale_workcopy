@@ -65,3 +65,32 @@ Tutti i controlli passati. (21/21 PASS)
 **Prossimo passo:**
 
 TASK-003 — Generazione prompt Cursor base.
+
+---
+
+### Run — 2026-06-29 — TASK-003 Generazione prompt Cursor base
+
+**Agente:** Cursor Agent
+**Task:** TASK-003 — Generazione prompt Cursor base
+**Branch:** task/cursor-prompt-builder
+
+**Operazioni eseguite:**
+
+1. Implementate funzioni ausiliarie: `resolve_project_dir`, `find_repo_root`, `project_rel_path`, `expected_branch`.
+2. Implementata `build_prompt(task, project_dir, task_id) -> str`: output strutturato su stdout con repository, branch atteso, progetto, task ID, titolo, agente, file da leggere, file modificabili, obiettivo, scope, fuori scope, test, stop conditions, guardrail.
+3. Aggiornato `main()`: risolve la project dir, chiama `build_prompt()`, rimuove il placeholder e il dump key:value.
+4. Esteso `scripts/test.sh`: aggiunta `skip()`, sezione "Generazione prompt TASK-003" (6 nuovi check), sezione "Qualità script bash" (shellcheck + shfmt condizionali).
+
+**Esito test (`scripts/test.sh`):**
+
+```
+Tutti i controlli passati. (27/27 PASS)
+```
+
+**Problemi riscontrati:**
+
+- Nessuno.
+
+**Prossimo passo per l'operatore umano:**
+
+Approvare il commit. TASK-004 (Output su file e opzioni CLI) è il prossimo task per Cursor Agent.

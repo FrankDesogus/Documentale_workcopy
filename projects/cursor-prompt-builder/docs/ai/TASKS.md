@@ -8,7 +8,6 @@ _Nessun task in corso._
 
 | ID | Titolo | Agente previsto | Note |
 |----|--------|-----------------|------|
-| TASK-003 | Generazione prompt Cursor base | Cursor Agent | Output strutturato su stdout, scope, stop conditions |
 | TASK-004 | Output su file e opzioni CLI | Cursor Agent | `--output FILE`, `--project`, `--tasks-file`, validazione errori |
 | TASK-005 | Review completa e integrazione workflow | Claude Code + OneAI | Review diff, REVIEW_LOG, merge su decisione umana |
 
@@ -18,6 +17,7 @@ _Nessun task in corso._
 |----|--------|--------|------|
 | TASK-001 | Scaffold progetto e test base | `fda3d5b` | 2026-06-29 |
 | TASK-002 | Parsing task da TASKS.md | `dc5c5a0` | 2026-06-29 |
+| TASK-003 | Generazione prompt Cursor base | pending | 2026-06-29 |
 
 ---
 
