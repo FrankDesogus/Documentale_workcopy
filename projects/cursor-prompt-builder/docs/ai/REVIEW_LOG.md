@@ -45,3 +45,24 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 **Azioni richieste prima del commit:**
 
 - Nessuna.
+
+### Review — 2026-06-29 — TASK-004 Output su file e opzioni CLI
+
+**Reviewer:** Claude Code
+**Diff / branch:** task/cursor-prompt-builder (working tree, post Cursor Agent)
+**Esito:** Approvato
+
+**Nota deviazione workflow:** TASK-004 era assegnato a Cursor Agent come implementatore. Cursor Agent ha implementato il codice ma non ha potuto eseguire i test per mancata approvazione comandi shell nella sessione; i test sono stati eseguiti manualmente dall'operatore. La review e il commit restano di competenza Claude Code. Deviazione accettata e documentata.
+
+**Osservazioni:**
+
+- `--output FILE`: implementazione corretta e minimale (20 righe in `main()`). `Path.write_text()` con encoding utf-8. Conferma su stdout. Senza `--output` comportamento invariato.
+- Gestione errori `OSError` con messaggio su stderr e exit 1 — corretta per percorsi non scrivibili o directory.
+- Nessuna dipendenza esterna aggiunta. `Path` era già importata.
+- `scripts/test.sh`: 8 nuovi check che coprono tutti i casi rilevanti: creazione file, contenuto, conferma stdout, separazione stdout/prompt, `--project`, `--tasks-file`, output non scrivibile. Usa `mktemp` + `rm -f` per cleanup.
+- shellcheck e shfmt: OK.
+- 35/35 PASS.
+
+**Azioni richieste prima del commit:**
+
+- Nessuna.

@@ -172,6 +172,70 @@ else
 fi
 
 echo ""
+echo "-- Opzioni CLI e output su file (TASK-004) --"
+OUTPUT_TMP="$(mktemp)"
+OUTPUT_STDOUT="$(python "${PROJECT_ROOT}/prompt_builder.py" \
+	--tasks-file "${TASKS_FILE}" --task TASK-004 \
+	--output "${OUTPUT_TMP}" 2>/dev/null || true)"
+
+if [[ -f "${OUTPUT_TMP}" ]]; then
+	pass "--output → crea il file"
+else
+	fail "--output → crea il file"
+fi
+
+if grep -q "Cursor Agent" "${OUTPUT_TMP}"; then
+	pass "--output → file contiene Cursor Agent"
+else
+	fail "--output → file contiene Cursor Agent"
+fi
+
+if grep -q "TASK-004" "${OUTPUT_TMP}"; then
+	pass "--output → file contiene task ID"
+else
+	fail "--output → file contiene task ID"
+fi
+
+if echo "${OUTPUT_STDOUT}" | grep -qi "prompt written to"; then
+	pass "--output → stdout contiene messaggio di conferma"
+else
+	fail "--output → stdout contiene messaggio di conferma"
+fi
+
+if ! echo "${OUTPUT_STDOUT}" | grep -q "Cursor Agent"; then
+	pass "--output → stdout non contiene il prompt completo"
+else
+	fail "--output → stdout non contiene il prompt completo"
+fi
+
+rm -f "${OUTPUT_TMP}"
+
+if python "${PROJECT_ROOT}/prompt_builder.py" \
+	--project "${PROJECT_ROOT}" --task TASK-004 \
+	2>/dev/null | grep -q "TASK-004"; then
+	pass "--project → risolve docs/ai/TASKS.md"
+else
+	fail "--project → risolve docs/ai/TASKS.md"
+fi
+
+if python "${PROJECT_ROOT}/prompt_builder.py" \
+	--tasks-file "${TASKS_FILE}" --task TASK-004 \
+	2>/dev/null | grep -q "Output su file"; then
+	pass "--tasks-file → legge TASKS.md direttamente"
+else
+	fail "--tasks-file → legge TASKS.md direttamente"
+fi
+
+if (python "${PROJECT_ROOT}/prompt_builder.py" \
+	--tasks-file "${TASKS_FILE}" --task TASK-004 \
+	--output "${PROJECT_ROOT}" \
+	>/dev/null 2>&1); then
+	fail "output non scrivibile → exit 1"
+else
+	pass "output non scrivibile → exit 1"
+fi
+
+echo ""
 echo "-- Qualità script bash --"
 if command -v shellcheck >/dev/null 2>&1; then
 	if shellcheck "${PROJECT_ROOT}/scripts/test.sh" >/dev/null 2>&1; then

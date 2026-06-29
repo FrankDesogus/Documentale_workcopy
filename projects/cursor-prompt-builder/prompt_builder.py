@@ -255,7 +255,20 @@ def main() -> None:
 
     project_dir = resolve_project_dir(args.project, tasks_path)
     prompt = build_prompt(task, project_dir, args.task)
-    print(prompt, end="")
+
+    if args.output:
+        output_path = Path(args.output)
+        try:
+            output_path.write_text(prompt, encoding="utf-8")
+        except OSError as exc:
+            print(
+                f"Error: cannot write output file '{output_path}': {exc}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print(f"Prompt written to {output_path}")
+    else:
+        print(prompt, end="")
 
 
 if __name__ == "__main__":

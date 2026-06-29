@@ -8,7 +8,6 @@ _Nessun task in corso._
 
 | ID | Titolo | Agente previsto | Note |
 |----|--------|-----------------|------|
-| TASK-004 | Output su file e opzioni CLI | Cursor Agent | Aggiungere `--output FILE` (scrive il prompt su file invece di stdout); migliorare messaggi di errore CLI; `--project` e `--tasks-file` già implementati — non modificarli |
 | TASK-005 | Review completa e integrazione workflow | Claude Code + OneAI | Review diff, REVIEW_LOG, merge su decisione umana |
 
 ## Completati
@@ -18,6 +17,7 @@ _Nessun task in corso._
 | TASK-001 | Scaffold progetto e test base | `fda3d5b` | 2026-06-29 |
 | TASK-002 | Parsing task da TASKS.md | `dc5c5a0` | 2026-06-29 |
 | TASK-003 | Generazione prompt Cursor base | `d6a922a` | 2026-06-29 |
+| TASK-004 | Output su file e opzioni CLI | pending | 2026-06-29 |
 
 ---
 
