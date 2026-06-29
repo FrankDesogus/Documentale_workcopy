@@ -10,6 +10,13 @@ Stazione locale per sviluppo software assistito da AI.
 - usare Git, test, lint, diff e log come fonte della verità;
 - evitare automazioni fragili basate su copia-incolla tra chat.
 
+## Documentazione
+
+- [AI Workflow](docs/AI_WORKFLOW.md) — ciclo operativo, ruoli degli agenti, guardrail
+- [Architecture](docs/ARCHITECTURE.md) — struttura della stazione
+- [Security](docs/SECURITY.md) — guardrail di sicurezza
+- [Runbook](docs/RUNBOOK.md) — operazioni comuni
+
 ## Regola principale
 
 Il repository è la fonte della verità.
