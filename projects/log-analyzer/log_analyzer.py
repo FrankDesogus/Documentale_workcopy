@@ -205,19 +205,52 @@ def summarize_project(project_dir: Path) -> Dict:
     }
 
 
+def _format_last_run(last_run: Optional[Dict[str, str]]) -> str:
+    if not last_run:
+        return "Ultimo run: nessuno"
+    parts = [
+        last_run.get("data", "—"),
+        last_run.get("task", "—"),
+    ]
+    agente = last_run.get("agente")
+    esito = last_run.get("esito_test")
+    line = f"Ultimo run: {parts[0]} — {parts[1]}"
+    if agente:
+        line += f" — Agente: {agente}"
+    if esito:
+        line += f" — Esito: {esito}"
+    return line
+
+
+def _format_last_review(last_review: Optional[Dict[str, str]]) -> str:
+    if not last_review:
+        return "Ultima review: nessuna"
+    line = f"Ultima review: {last_review.get('data', '—')}"
+    reviewer = last_review.get("reviewer")
+    esito = last_review.get("esito")
+    if reviewer:
+        line += f" — Reviewer: {reviewer}"
+    if esito:
+        line += f" — Esito: {esito}"
+    return line
+
+
 def format_summary(summaries: List[Dict]) -> str:
-    # placeholder — implementato in TASK-004
-    lines = []
+    blocks: List[str] = []
     for s in summaries:
-        lines.append(f"== {s['name']} ==")
         t = s["tasks"]
-        lines.append(
-            f"Tasks: {len(t['completati'])} completati"
-            f" | {len(t['in_corso'])} in corso"
-            f" | {len(t['backlog'])} backlog"
-        )
-        lines.append("")
-    return "\n".join(lines)
+        block = [
+            f"== {s['name']} ==",
+            (
+                f"Tasks: {len(t['completati'])} completati"
+                f" | {len(t['in_corso'])} in corso"
+                f" | {len(t['backlog'])} backlog"
+            ),
+            _format_last_run(s.get("last_run")),
+            _format_last_review(s.get("last_review")),
+        ]
+        blocks.append("\n".join(block))
+    return "\n\n".join(blocks) + "\n"
 
 
 def main() -> None:

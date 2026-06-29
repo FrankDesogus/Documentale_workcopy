@@ -147,6 +147,52 @@ else
 fi
 
 echo ""
+echo "-- Scanning e output CLI (TASK-004) --"
+PROJECTS_DIR="$(cd "${PROJECT_ROOT}/.." && pwd)"
+TASK004_OUT="$(python "${PROJECT_ROOT}/log_analyzer.py" \
+	--projects-dir "${PROJECTS_DIR}" \
+	--project log-analyzer 2>/dev/null || true)"
+
+if echo "${TASK004_OUT}" | grep -q "^== log-analyzer =="; then
+	pass "output CLI → header progetto"
+else
+	fail "output CLI → header progetto"
+fi
+
+if echo "${TASK004_OUT}" | grep -q "Ultimo run:"; then
+	pass "output CLI → contiene Ultimo run"
+else
+	fail "output CLI → contiene Ultimo run"
+fi
+
+if echo "${TASK004_OUT}" | grep -q "Ultima review:"; then
+	pass "output CLI → contiene Ultima review"
+else
+	fail "output CLI → contiene Ultima review"
+fi
+
+MULTI_OUT="$(python "${PROJECT_ROOT}/log_analyzer.py" \
+	--projects-dir "${PROJECTS_DIR}" 2>/dev/null || true)"
+
+if echo "${MULTI_OUT}" | grep -c "^== " | grep -q "[2-9]"; then
+	pass "scanning multi-progetto → almeno 2 progetti trovati"
+else
+	fail "scanning multi-progetto → almeno 2 progetti trovati"
+fi
+
+OUTPUT_TMP="$(mktemp)"
+python "${PROJECT_ROOT}/log_analyzer.py" \
+	--projects-dir "${PROJECTS_DIR}" \
+	--project log-analyzer \
+	--output "${OUTPUT_TMP}" >/dev/null 2>&1 || true
+if [[ -s "${OUTPUT_TMP}" ]]; then
+	pass "--output FILE → file scritto"
+else
+	fail "--output FILE → file scritto"
+fi
+rm -f "${OUTPUT_TMP}"
+
+echo ""
 echo "-- Qualità script bash --"
 if command -v shellcheck >/dev/null 2>&1; then
 	if shellcheck "${PROJECT_ROOT}/scripts/test.sh" >/dev/null 2>&1; then

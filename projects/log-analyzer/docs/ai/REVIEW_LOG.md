@@ -67,3 +67,26 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 **Azioni richieste prima del commit:**
 
 - Nessuna.
+
+### Review — 2026-06-29 — TASK-004 Scanning directory e output CLI
+
+**Reviewer:** Claude Code
+**Diff / branch:** task/log-analyzer (working tree, post Cursor Agent)
+**Esito:** Approvato
+
+**Osservazioni:**
+
+- `find_projects`: scansione ordinata, filtra correttamente per `docs/ai/TASKS.md`. ✅
+- `summarize_project`: composizione pulita dei tre parser. ✅
+- `_format_last_run` e `_format_last_review`: costruzione linea con parti opzionali (agente, esito, reviewer). Nessuna dipendenza esterna. ✅
+- `format_summary`: output `== nome ==` con `\n\n` tra blocchi e `\n` finale. Compatibile con stdout e `--output FILE`. ✅
+- `main()`: validazione `--project` su `TASKS.md` esistente, fallback a `find_projects`, gestione `OSError` su write. ✅
+- Scan multi-progetto verificato su tutti e 4 i progetti reali dello station: output corretto. ✅
+- `--output FILE` scrive il file e stampa conferma su stdout. ✅
+- Cursor Agent non ha potuto eseguire i test (shell bloccata). Deviazione controllata documentata.
+- 5 test aggiunti (Claude Code): header, Ultimo run, Ultima review, multi-project ≥2, --output FILE.
+- 29/29 PASS. shellcheck OK. shfmt OK.
+
+**Azioni richieste prima del commit:**
+
+- Nessuna.

@@ -123,3 +123,34 @@ Tutti i controlli passati. (24/24 PASS)
 **Prossimo passo per l'operatore umano:**
 
 Approvare il commit. TASK-004 (Scanning directory e output CLI) è il prossimo task per Cursor Agent.
+
+---
+
+### Run — 2026-06-29 — TASK-004 Scanning directory e output CLI
+
+**Agente:** Cursor Agent
+**Nota:** test non eseguibili da Cursor Agent (shell bloccata); test verificati da Claude Code.
+**Task:** TASK-004 — Scanning directory e output CLI
+**Branch:** task/log-analyzer
+
+**Operazioni eseguite:**
+
+1. Implementata `summarize_project(project_dir)`: aggrega `parse_tasks`, `parse_last_run`, `parse_last_review` in un dict unificato.
+2. Implementata `_format_last_run` e `_format_last_review`: formattazione testuale dei log entry.
+3. Implementata `format_summary(summaries)`: output testuale per singolo e multi-progetto.
+4. Implementato `main()`: argparse completo con `--projects-dir`, `--project`, `--output`; gestione file inesistente, `--output FILE`, output su stdout.
+5. Aggiunti 5 test in `scripts/test.sh` (Claude Code durante review): header progetto, Ultimo run, Ultima review, multi-project scan ≥2 progetti, --output FILE.
+
+**Esito test (`scripts/test.sh`):**
+
+```
+Tutti i controlli passati. (29/29 PASS)
+```
+
+**Problemi riscontrati:**
+
+- Cursor Agent non ha potuto eseguire i test (shell bloccata in sessione). Test eseguiti da Claude Code.
+
+**Prossimo passo per l'operatore umano:**
+
+Approvare il commit. TASK-005 (Review completa e integrazione workflow) è il prossimo task.
