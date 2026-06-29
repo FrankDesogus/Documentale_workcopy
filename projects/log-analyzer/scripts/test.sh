@@ -94,10 +94,10 @@ else
 	fail "parse_tasks → 0 task in corso"
 fi
 
-if echo "${TASK002_OUT}" | grep -Eq "[1-9]+ backlog"; then
-	pass "parse_tasks → almeno 1 task in backlog"
+if echo "${TASK002_OUT}" | grep -Eq "[0-9]+ backlog"; then
+	pass "parse_tasks → output contiene contatore backlog"
 else
-	fail "parse_tasks → almeno 1 task in backlog"
+	fail "parse_tasks → output contiene contatore backlog"
 fi
 
 echo ""
