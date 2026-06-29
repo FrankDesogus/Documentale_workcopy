@@ -140,6 +140,29 @@ Lo script non chiama agenti, non modifica file e non esegue operazioni Git.
 
 ---
 
+## Orchestrazione del ciclo operativo (dry-run)
+
+Per visualizzare in un colpo solo tutti i comandi del ciclo operativo per un task:
+
+```bash
+./scripts/ai-cycle.sh \
+  --project <nome-progetto> \
+  --task TASK-XXX \
+  --dry-run
+```
+
+Lo script valida le precondizioni (branch ≠ main, working tree pulito, task in Backlog o In corso)
+e mostra i comandi del ciclo nell'ordine corretto: generazione prompt Cursor, generazione prompt
+review, esecuzione test, snapshot git. Non esegue nulla automaticamente.
+
+Errori gestiti: branch main, working tree sporco, progetto inesistente, task non trovato, task già
+in Completati. In tutti i casi: exit 1 con messaggio chiaro.
+
+**Versione 1: solo --dry-run.** Nessun lancio automatico di agenti, nessuna modifica file,
+nessuna operazione Git oltre la lettura del branch e dello status.
+
+---
+
 ## Flusso manuale iniziale
 
 1. Scrivere o aggiornare il requisito in `docs/ai/PROJECT_BRIEF.md`.
