@@ -124,31 +124,68 @@ task_section="$(awk '
 ' "${TASKS_MD}")"
 [[ -n "${task_section}" ]] || task_section="Backlog"
 
-# ── Run output (stub — full implementation in TASK-002) ──────────────────────
+# ── Run mode — assisted execution ────────────────────────────────────────────
 
 run_cycle() {
+	local cursor_prompt_file="/tmp/cursor-prompt-${TASK_ID}.md"
+	local review_prompt_file="/tmp/review-prompt-${TASK_ID}.md"
+
 	echo "[RUN] Progetto: ${PROJECT_REL}"
 	echo "[RUN] Task:     ${TASK_ID}"
 	echo "[RUN] Modalità: run (esecuzione assistita)"
 	echo ""
+
 	echo "[STEP 1] ✓ Branch: ${current_branch}"
 	echo "[STEP 1] ✓ Working tree: pulito"
 	echo ""
+
 	echo "[STEP 2] ✓ Progetto: ${PROJECT_REL}"
 	echo "[STEP 2] ✓ Task: ${TASK_ID} (${task_section})"
 	echo ""
+
 	echo "[STEP 3] Generazione prompt Cursor Agent..."
-	echo "         (non ancora implementato — TASK-002)"
-	echo "[STEP 4] Lancio Cursor Agent..."
-	echo "         (non ancora implementato — TASK-002)"
-	echo "[STEP 5] Esecuzione test..."
-	echo "         (non ancora implementato — TASK-002)"
-	echo "[STEP 6] Generazione prompt review..."
-	echo "         (non ancora implementato — TASK-002)"
-	echo "[STEP 7] Snapshot git..."
-	echo "         (non ancora implementato — TASK-002)"
+	"${SCRIPT_DIR}/cursor-prompt.sh" \
+		--project "${PROJECT_REL}" \
+		--task "${TASK_ID}" \
+		--output "${cursor_prompt_file}"
+	echo "[STEP 3] ✓ Prompt generato: ${cursor_prompt_file}"
 	echo ""
-	echo "[RUN] Stub completato. Implementazione in TASK-002."
+
+	echo "[STEP 4] Lancio Cursor Agent (timeout 300s)..."
+	if ! timeout 300s claude -p --allowedTools "Read,Edit,Write,Bash" \
+		<"${cursor_prompt_file}"; then
+		printf "ERROR: Cursor Agent fallito o timeout.\n" >&2
+		exit 1
+	fi
+	echo "[STEP 4] ✓ Cursor Agent completato."
+	echo ""
+
+	echo "[STEP 5] Esecuzione test..."
+	if ! (cd "${PROJECT_ABS}" && ./scripts/test.sh); then
+		printf "ERROR: Test falliti. Correggere prima di procedere.\n" >&2
+		exit 1
+	fi
+	echo "[STEP 5] ✓ Test passati."
+	echo ""
+
+	echo "[STEP 6] Generazione prompt review..."
+	"${SCRIPT_DIR}/ai-review.sh" \
+		--project "${PROJECT_REL}" \
+		--task "${TASK_ID}" \
+		--output "${review_prompt_file}"
+	echo "[STEP 6] ✓ Prompt review generato: ${review_prompt_file}"
+	echo ""
+
+	echo "[STEP 7] Snapshot git:"
+	git -C "${REPO_ROOT}" status --short
+	echo ""
+	git -C "${REPO_ROOT}" diff --stat -- "${PROJECT_REL}"
+	echo ""
+
+	echo "[RUN] Ciclo completato."
+	echo "[RUN] Leggi il diff e il prompt di review: ${review_prompt_file}"
+	echo "[RUN] Commit manualmente dopo review APPROVED."
+	echo "[RUN] NON è stato eseguito alcun commit, push o merge."
 }
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
