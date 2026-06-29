@@ -77,14 +77,119 @@ def parse_tasks(tasks_path: Path) -> Dict[str, List[Dict[str, str]]]:
     return result
 
 
+_RUN_HEADER_RE = re.compile(
+    r"^### Run — (\d{4}-\d{2}-\d{2})(?:\s+\d{2}:\d{2})?\s*—\s*(.*)$"
+)
+_REVIEW_HEADER_RE = re.compile(
+    r"^### Review — (\d{4}-\d{2}-\d{2})(?:\s+\d{2}:\d{2})?\s*—\s*(.*)$"
+)
+
+
+def _normalize_test_outcome(text: str) -> str:
+    upper = text.upper()
+    if "FAIL" in upper or "FALLIT" in upper:
+        return "FAIL"
+    if "PASS" in upper or "PASSATI" in upper:
+        return "PASS"
+    return text.strip()
+
+
+def _parse_run_body(lines: List[str]) -> Dict[str, str]:
+    entry: Dict[str, str] = {}
+    in_code = False
+    code_lines: List[str] = []
+    capture_esito = False
+
+    for line in lines:
+        stripped = line.strip()
+        agente_m = re.match(r"^\*\*Agente:\*\*\s*(.+)$", stripped)
+        if agente_m:
+            entry["agente"] = agente_m.group(1).strip()
+            continue
+        task_m = re.match(r"^\*\*Task:\*\*\s*(.+)$", stripped)
+        if task_m:
+            task_text = task_m.group(1).strip()
+            id_m = re.search(r"(TASK-\d+)", task_text)
+            entry["task"] = id_m.group(1) if id_m else task_text
+            continue
+        if "**Esito test" in stripped and "scripts/test.sh" in stripped:
+            capture_esito = True
+            continue
+        if capture_esito:
+            if not in_code:
+                if stripped.startswith("```"):
+                    in_code = True
+                continue
+            if stripped == "```":
+                entry["esito_test"] = _normalize_test_outcome("\n".join(code_lines))
+                capture_esito = False
+                in_code = False
+                code_lines = []
+                continue
+            code_lines.append(line)
+
+    if capture_esito and code_lines:
+        entry["esito_test"] = _normalize_test_outcome("\n".join(code_lines))
+
+    return entry
+
+
+def _parse_review_body(lines: List[str]) -> Dict[str, str]:
+    entry: Dict[str, str] = {}
+    for line in lines:
+        stripped = line.strip()
+        reviewer_m = re.match(r"^\*\*Reviewer:\*\*\s*(.+)$", stripped)
+        if reviewer_m:
+            entry["reviewer"] = reviewer_m.group(1).strip()
+            continue
+        esito_m = re.match(r"^\*\*Esito:\*\*\s*(.+)$", stripped)
+        if esito_m:
+            entry["esito"] = esito_m.group(1).strip()
+    return entry
+
+
+def _parse_last_log_entry(
+    log_path: Path,
+    header_re: re.Pattern,
+    body_parser,
+) -> Optional[Dict[str, str]]:
+    if not log_path.is_file():
+        return None
+
+    last: Optional[Dict[str, str]] = None
+    current_date: Optional[str] = None
+    section_lines: List[str] = []
+
+    def flush() -> None:
+        nonlocal last
+        if current_date is None:
+            return
+        entry = body_parser(section_lines)
+        entry["data"] = current_date
+        last = entry
+
+    for line in log_path.read_text(encoding="utf-8").splitlines():
+        match = header_re.match(line.strip())
+        if match:
+            flush()
+            current_date = match.group(1)
+            section_lines = []
+            continue
+        if current_date is not None:
+            section_lines.append(line)
+
+    flush()
+    return last
+
+
 def parse_last_run(run_log_path: Path) -> Optional[Dict[str, str]]:
-    # placeholder — implementato in TASK-003
-    return None
+    return _parse_last_log_entry(run_log_path, _RUN_HEADER_RE, _parse_run_body)
 
 
 def parse_last_review(review_log_path: Path) -> Optional[Dict[str, str]]:
-    # placeholder — implementato in TASK-003
-    return None
+    return _parse_last_log_entry(
+        review_log_path, _REVIEW_HEADER_RE, _parse_review_body
+    )
 
 
 def summarize_project(project_dir: Path) -> Dict:

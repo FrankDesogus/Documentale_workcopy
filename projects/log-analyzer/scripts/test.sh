@@ -101,6 +101,52 @@ else
 fi
 
 echo ""
+echo "-- Parsing RUN_LOG e REVIEW_LOG (TASK-003) --"
+TMPPY="$(mktemp)"
+cat >"${TMPPY}" <<'PYEOF'
+import sys
+sys.path.insert(0, sys.argv[1])
+from log_analyzer import parse_last_run, parse_last_review
+from pathlib import Path
+run = parse_last_run(Path(sys.argv[2]))
+review = parse_last_review(Path(sys.argv[3]))
+print("run_task:" + (run.get("task", "") if run else ""))
+print("run_esito:" + (run.get("esito_test", "") if run else ""))
+print("review_esito:" + (review.get("esito", "") if review else ""))
+missing = parse_last_run(Path("/tmp/nonexistent-log.md"))
+print("missing_none:" + ("1" if missing is None else "0"))
+PYEOF
+TASK003_OUT="$(python3 "${TMPPY}" \
+	"${PROJECT_ROOT}" \
+	"${PROJECT_ROOT}/docs/ai/RUN_LOG.md" \
+	"${PROJECT_ROOT}/docs/ai/REVIEW_LOG.md" 2>/dev/null || true)"
+rm -f "${TMPPY}"
+
+if echo "${TASK003_OUT}" | grep -q "run_task:TASK-"; then
+	pass "parse_last_run → estrae task ID"
+else
+	fail "parse_last_run → estrae task ID"
+fi
+
+if echo "${TASK003_OUT}" | grep -qi "run_esito:PASS\|run_esito:FAIL"; then
+	pass "parse_last_run → estrae esito test"
+else
+	fail "parse_last_run → estrae esito test"
+fi
+
+if echo "${TASK003_OUT}" | grep -q "review_esito:Approvato"; then
+	pass "parse_last_review → estrae esito review"
+else
+	fail "parse_last_review → estrae esito review"
+fi
+
+if echo "${TASK003_OUT}" | grep -q "missing_none:1"; then
+	pass "parse_last_run → file mancante → None"
+else
+	fail "parse_last_run → file mancante → None"
+fi
+
+echo ""
 echo "-- Qualità script bash --"
 if command -v shellcheck >/dev/null 2>&1; then
 	if shellcheck "${PROJECT_ROOT}/scripts/test.sh" >/dev/null 2>&1; then

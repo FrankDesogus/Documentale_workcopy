@@ -91,3 +91,35 @@ Note: 4 test di parsing aggiunti durante la review (Claude Code) per verificare 
 **Prossimo passo per l'operatore umano:**
 
 Approvare il commit. TASK-003 (Parsing RUN_LOG e REVIEW_LOG) è il prossimo task per Cursor Agent.
+
+---
+
+### Run — 2026-06-29 — TASK-003 Parsing RUN_LOG e REVIEW_LOG
+
+**Agente:** Cursor Agent
+**Nota:** test non eseguibili da Cursor Agent (shell bloccata); test verificati manualmente da Claude Code.
+**Task:** TASK-003 — Parsing RUN\_LOG e REVIEW\_LOG
+**Branch:** task/log-analyzer
+
+**Operazioni eseguite:**
+
+1. Aggiunte regex `_RUN_HEADER_RE` e `_REVIEW_HEADER_RE` per `### Run/Review — YYYY-MM-DD …`.
+2. Aggiunto `_normalize_test_outcome` (gestisce PASS/FAIL italiano e inglese).
+3. Aggiunti `_parse_run_body` e `_parse_review_body` (scansione linea per linea, stdlib).
+4. Aggiunto `_parse_last_log_entry` (helper generico: scansiona file, trova ultima entry, chiama body_parser).
+5. Rimossi placeholder in `parse_last_run` e `parse_last_review`; ora delegano a `_parse_last_log_entry`.
+6. Aggiunti 4 test in `scripts/test.sh` durante review (Claude Code) per verificare estrazione task ID, esito, review esito e file mancante.
+
+**Esito test (`scripts/test.sh`):**
+
+```
+Tutti i controlli passati. (24/24 PASS)
+```
+
+**Problemi riscontrati:**
+
+- Cursor Agent non ha potuto eseguire i test (shell bloccata in sessione). Test eseguiti da Claude Code.
+
+**Prossimo passo per l'operatore umano:**
+
+Approvare il commit. TASK-004 (Scanning directory e output CLI) è il prossimo task per Cursor Agent.
