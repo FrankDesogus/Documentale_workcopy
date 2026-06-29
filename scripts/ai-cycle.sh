@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Orchestratore dry-run del ciclo operativo AI Software Station.
-# Versione 1: solo modalità --dry-run. Non modifica file, non esegue agenti,
-# non effettua operazioni Git. Mostra i comandi del ciclo nell'ordine corretto.
+# Orchestratore del ciclo operativo AI Software Station.
+# --dry-run (v1): mostra i comandi senza eseguirli.
+# --run     (v2): esecuzione assistita controllata — genera prompt, lancia agente,
+#                 esegue test, prepara review. Non fa commit, push o merge automatici.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,20 +11,25 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 usage() {
 	cat <<EOF
 Usage: $(basename "$0") --project NAME|PATH --task ID --dry-run
+       $(basename "$0") --project NAME|PATH --task ID --run
        $(basename "$0") --help
 
-Orchestrate the AI Software Station task cycle in dry-run mode.
-Shows all commands that would be executed without running them.
+Orchestrate the AI Software Station task cycle.
 
 Options:
   --project NAME|PATH  project name (e.g. log-analyzer) or path
                        (e.g. projects/log-analyzer)
   --task ID            task ID to cycle (e.g. TASK-004)
-  --dry-run            required in v1: show commands without executing them
+  --dry-run            show all commands without executing them (v1)
+  --run                execute the full assisted cycle: generate Cursor prompt,
+                       launch Cursor Agent, run tests, prepare review prompt,
+                       show git snapshot. Stops before commit. (v2)
   --help, -h           show this help and exit
 
-Version 1 supports only --dry-run mode.
-No agents, Git operations, file modifications, or network access are performed.
+Guardrails (--run mode):
+  Never performs push, merge, branch delete, reset --hard, or git clean.
+  Never commits automatically.
+  Aborts immediately if tests fail.
 EOF
 }
 
@@ -43,6 +49,7 @@ normalize_project() {
 PROJECT_INPUT=""
 TASK_ID=""
 DRY_RUN=0
+RUN_MODE=0
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -64,6 +71,10 @@ while [[ $# -gt 0 ]]; do
 		DRY_RUN=1
 		shift
 		;;
+	--run)
+		RUN_MODE=1
+		shift
+		;;
 	-*)
 		error "Unknown option: '$1'. Use --help for usage."
 		;;
@@ -75,7 +86,10 @@ done
 
 [[ -n "${PROJECT_INPUT}" ]] || error "--project is required."
 [[ -n "${TASK_ID}" ]] || error "--task is required."
-[[ "${DRY_RUN}" -eq 1 ]] || error "Only --dry-run is supported in v1. Pass --dry-run explicitly."
+[[ "${DRY_RUN}" -eq 1 ]] || [[ "${RUN_MODE}" -eq 1 ]] ||
+	error "Specify --dry-run (show commands) or --run (execute cycle). Use --help for usage."
+[[ ! ("${DRY_RUN}" -eq 1 && "${RUN_MODE}" -eq 1) ]] ||
+	error "--dry-run and --run are mutually exclusive."
 
 current_branch="$(git -C "${REPO_ROOT}" branch --show-current)"
 [[ "${current_branch}" != "main" ]] ||
@@ -110,9 +124,37 @@ task_section="$(awk '
 ' "${TASKS_MD}")"
 [[ -n "${task_section}" ]] || task_section="Backlog"
 
-# ── Dry-run output ────────────────────────────────────────────────────────────
+# ── Run output (stub — full implementation in TASK-002) ──────────────────────
 
-cat <<EOF
+run_cycle() {
+	echo "[RUN] Progetto: ${PROJECT_REL}"
+	echo "[RUN] Task:     ${TASK_ID}"
+	echo "[RUN] Modalità: run (esecuzione assistita)"
+	echo ""
+	echo "[STEP 1] ✓ Branch: ${current_branch}"
+	echo "[STEP 1] ✓ Working tree: pulito"
+	echo ""
+	echo "[STEP 2] ✓ Progetto: ${PROJECT_REL}"
+	echo "[STEP 2] ✓ Task: ${TASK_ID} (${task_section})"
+	echo ""
+	echo "[STEP 3] Generazione prompt Cursor Agent..."
+	echo "         (non ancora implementato — TASK-002)"
+	echo "[STEP 4] Lancio Cursor Agent..."
+	echo "         (non ancora implementato — TASK-002)"
+	echo "[STEP 5] Esecuzione test..."
+	echo "         (non ancora implementato — TASK-002)"
+	echo "[STEP 6] Generazione prompt review..."
+	echo "         (non ancora implementato — TASK-002)"
+	echo "[STEP 7] Snapshot git..."
+	echo "         (non ancora implementato — TASK-002)"
+	echo ""
+	echo "[RUN] Stub completato. Implementazione in TASK-002."
+}
+
+# ── Dispatch ──────────────────────────────────────────────────────────────────
+
+if [[ "${DRY_RUN}" -eq 1 ]]; then
+	cat <<EOF
 [DRY-RUN] Progetto: ${PROJECT_REL}
 [DRY-RUN] Task:     ${TASK_ID}
 [DRY-RUN] Modalità: dry-run (nessuna modifica effettiva)
@@ -150,3 +192,6 @@ cat <<EOF
 [DRY-RUN] Fine. Nessuna modifica effettuata.
 [DRY-RUN] Eseguire i comandi mostrati nell'ordine indicato.
 EOF
+else
+	run_cycle
+fi
