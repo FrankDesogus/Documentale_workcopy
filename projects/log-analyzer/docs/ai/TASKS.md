@@ -17,7 +17,7 @@ _Nessun task in corso._
 
 | ID | Titolo | Commit | Data |
 |----|--------|--------|------|
-| TASK-001 | Scaffold progetto e test base | pending | 2026-06-29 |
+| TASK-001 | Scaffold progetto e test base | `cbeea24` | 2026-06-29 |
 
 ---
 
