@@ -59,6 +59,29 @@ Per verificare cosa verrebbe creato senza creare nulla:
 
 Lo script valida il nome, verifica che la directory non esista già, copia i template e rende eseguibile `scripts/test.sh`. Non esegue `git add` né commit: la revisione e il commit restano all'operatore umano.
 
+## Intake di un nuovo progetto
+
+Per trasformare un'idea libera in una bozza strutturata pronta per Claude Code:
+
+```bash
+./scripts/task-intake.sh \
+  --project-name <nome-progetto> \
+  --title "Titolo breve" \
+  --request "Descrizione libera di cosa vuoi costruire." \
+  --output /tmp/<nome-progetto>-intake.md
+```
+
+Il comando genera un file Markdown di intake con:
+
+- richiesta originale;
+- proposta di task iniziali;
+- prompt pronto da passare a Claude Code per scaffold e TASKS.md;
+- guardrail e vincoli standard.
+
+**Nessun agente AI viene invocato.** L'operatore deve revisionare il file prima di procedere.
+
+---
+
 ## Generazione prompt per Cursor Agent
 
 Per generare un prompt operativo da passare a Cursor Agent, usare il wrapper dalla root del repository:

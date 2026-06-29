@@ -150,7 +150,7 @@ Ogni MCP introdotto deve avere uno scope definito e un guardrail esplicito.
 Il ciclo attuale è manuale e controllato dall'operatore ad ogni passaggio.
 
 ```
-1. Operatore   →  definisce obiettivo e scope
+1. Operatore   →  definisce obiettivo e scope (supporto: \`./scripts/task-intake.sh\`)
 2. Claude Code →  struttura architettura e lista task (docs/ai/TASKS.md)
 3. OneAI       →  trasforma in task operativo; usa `./scripts/cursor-prompt.sh` per generare il prompt
 4. Cursor      →  implementa su branch dedicato
