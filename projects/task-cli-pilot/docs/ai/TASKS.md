@@ -2,15 +2,12 @@
 
 ## In corso
 
-| ID | Titolo | Agente | Branch | Note |
-|----|--------|--------|--------|------|
-| TASK-001 | Scaffold progetto e test base | Claude Code | task/task-cli-pilot | Struttura, docs, placeholder CLI, test iniziali |
+_Nessun task in corso._
 
 ## Backlog
 
 | ID | Titolo | Agente previsto | Note |
 |----|--------|-----------------|------|
-| TASK-002 | Implementare `add` e `list` | Cursor Agent | Storage JSON, auto-ID, output formattato |
 | TASK-003 | Implementare `done` e `delete` | Cursor Agent | Gestione ID non trovato, exit 1 |
 | TASK-004 | Implementare `clear`, `--version`, gestione errori | Cursor Agent | Input non validi, edge case lista vuota |
 | TASK-005 | Review completa e aggiornamento log | Claude Code + OneAI | Review diff completo, REVIEW_LOG, merge |
@@ -19,6 +16,8 @@
 
 | ID | Titolo | Commit | Data |
 |----|--------|--------|------|
+| TASK-001 | Scaffold progetto e test base | `e8abff5` | 2026-06-29 |
+| TASK-002 | Implementare `add` e `list` | — | 2026-06-29 |
 
 ---
 

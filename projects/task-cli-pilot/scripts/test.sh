@@ -74,6 +74,72 @@ check_output "task_cli.py --version" \
 	"$(python "${PROJECT_ROOT}/task_cli.py" --version)"
 
 echo ""
+echo "-- Comportamento add/list (directory temporanea) --"
+TMPDIR="$(mktemp -d)"
+trap 'rm -rf "${TMPDIR}"' EXIT
+
+CLI=(python "${PROJECT_ROOT}/task_cli.py")
+
+check_output "list senza tasks.json" \
+	"No tasks." \
+	"$(cd "${TMPDIR}" && "${CLI[@]}" list)"
+
+check_output "add primo task" \
+	"Added task #1: testo" \
+	"$(cd "${TMPDIR}" && "${CLI[@]}" add "testo")"
+
+if [[ -f "${TMPDIR}/tasks.json" ]]; then
+	pass "tasks.json creato nella directory temporanea"
+else
+	fail "tasks.json creato nella directory temporanea — file mancante"
+fi
+
+if python -c "import json; json.load(open('${TMPDIR}/tasks.json'))" >/dev/null 2>&1; then
+	pass "tasks.json è JSON valido"
+else
+	fail "tasks.json è JSON valido — parsing fallito"
+fi
+
+if python -c "
+import json
+data = json.load(open('${TMPDIR}/tasks.json'))
+assert isinstance(data, list), 'root non è una lista'
+assert len(data) == 1, 'attesa una task'
+task = data[0]
+for key in ('id', 'text', 'done'):
+    assert key in task, f'chiave mancante: {key}'
+" >/dev/null 2>&1; then
+	pass "tasks.json ha formato id/text/done"
+else
+	fail "tasks.json ha formato id/text/done — struttura non valida"
+fi
+
+check_output "list dopo add" \
+	"[ ] 1 — testo" \
+	"$(cd "${TMPDIR}" && "${CLI[@]}" list)"
+
+check_output "add secondo task (ID 2)" \
+	"Added task #2: altro" \
+	"$(cd "${TMPDIR}" && "${CLI[@]}" add "altro")"
+
+if python -c "
+import json
+data = json.load(open('${TMPDIR}/tasks.json'))
+ids = [task['id'] for task in data]
+assert ids == [1, 2], f'ID attesi [1, 2], ottenuti {ids}'
+" >/dev/null 2>&1; then
+	pass "due add consecutivi producono ID 1 e 2"
+else
+	fail "due add consecutivi producono ID 1 e 2 — ID non corretti"
+fi
+
+printf '[{"id": 1, "text": "completato", "done": true}]\n' >"${TMPDIR}/tasks.json"
+
+check_output "list task con done=true" \
+	"[x] 1 — completato" \
+	"$(cd "${TMPDIR}" && "${CLI[@]}" list)"
+
+echo ""
 if [[ "${FAILURES}" -eq 0 ]]; then
 	echo "Tutti i controlli passati."
 	exit 0

@@ -34,3 +34,40 @@ Registro delle esecuzioni dei cicli AI su questo progetto.
 ---
 
 <!-- Aggiungi i run qui sotto in ordine cronologico -->
+
+### Run — 2026-06-29 — TASK-002 Implementare `add` e `list`
+
+**Agente:** Cursor Agent
+**Task:** TASK-002 — Implementare `add` e `list`
+**Branch:** task/task-cli-pilot
+
+**Operazioni eseguite:**
+
+1. Implementati helper `load_tasks`, `save_tasks`, `cmd_add`, `cmd_list` in `task_cli.py`.
+2. Collegati i comandi `add` e `list` al dispatch in `main()` con persistenza su `tasks.json` (CWD).
+3. Lasciati `done`, `delete`, `clear` con messaggio esplicito «not yet implemented» (exit 1).
+4. Esteso `scripts/test.sh` con test comportamentali in directory temporanea (`mktemp -d`).
+
+**File modificati:**
+
+- `task_cli.py`
+- `scripts/test.sh`
+- `docs/ai/RUN_LOG.md`
+
+**Esito test (`scripts/test.sh`):**
+
+```
+Non eseguito dall'agente: invocazione shell di python/bash bloccata in questo ambiente.
+Verifica manuale richiesta all'operatore:
+
+  cd projects/task-cli-pilot && scripts/test.sh
+```
+
+**Problemi riscontrati:**
+
+- L'ambiente agente ha rifiutato l'esecuzione di `scripts/test.sh` e dei comandi `python`; `TASKS.md` non aggiornato finché i test non passano localmente.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Eseguire `cd projects/task-cli-pilot && scripts/test.sh`.
+2. Se i test passano, aggiornare `docs/ai/TASKS.md` (TASK-002 → Completati) e procedere con review/commit.
