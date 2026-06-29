@@ -17,7 +17,7 @@ _Nessun task in corso._
 | TASK-001 | Scaffold progetto e test base | `fda3d5b` | 2026-06-29 |
 | TASK-002 | Parsing task da TASKS.md | `dc5c5a0` | 2026-06-29 |
 | TASK-003 | Generazione prompt Cursor base | `d6a922a` | 2026-06-29 |
-| TASK-004 | Output su file e opzioni CLI | pending | 2026-06-29 |
+| TASK-004 | Output su file e opzioni CLI | `85ef50d` | 2026-06-29 |
 
 ---
 
