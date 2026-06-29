@@ -76,7 +76,11 @@ check_output "task_cli.py --version" \
 echo ""
 echo "-- Comportamento add/list (directory temporanea) --"
 TMPDIR="$(mktemp -d)"
-trap 'rm -rf "${TMPDIR}"' EXIT
+# shellcheck disable=SC2329
+cleanup_tmp() {
+	rm -rf "${TMPDIR}"
+}
+trap cleanup_tmp EXIT
 
 CLI=(python "${PROJECT_ROOT}/task_cli.py")
 
