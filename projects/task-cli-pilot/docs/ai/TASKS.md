@@ -2,13 +2,14 @@
 
 ## In corso
 
-_Nessun task in corso._
+| ID | Titolo | Agente | Branch | Note |
+|----|--------|--------|--------|------|
+| TASK-003 | Implementare `done` e `delete` | Claude Code | task/task-cli-pilot | In completamento |
 
 ## Backlog
 
 | ID | Titolo | Agente previsto | Note |
 |----|--------|-----------------|------|
-| TASK-003 | Implementare `done` e `delete` | Cursor Agent | Gestione ID non trovato, exit 1 |
 | TASK-004 | Implementare `clear`, `--version`, gestione errori | Cursor Agent | Input non validi, edge case lista vuota |
 | TASK-005 | Review completa e aggiornamento log | Claude Code + OneAI | Review diff completo, REVIEW_LOG, merge |
 

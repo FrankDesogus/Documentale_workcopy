@@ -144,6 +144,71 @@ check_output "list task con done=true" \
 	"$(cd "${TMPDIR}" && "${CLI[@]}" list)"
 
 echo ""
+echo "-- Comportamento done/delete (directory temporanea) --"
+TMPDIR2="$(mktemp -d)"
+# shellcheck disable=SC2329
+cleanup_tmp2() {
+	rm -rf "${TMPDIR2}"
+}
+trap cleanup_tmp2 EXIT
+
+# "done" è una keyword bash: usare variabile per evitare SC1010
+CMD_DONE="done"
+
+printf '[{"id":1,"text":"alpha","done":false},{"id":2,"text":"beta","done":false}]\n' \
+	>"${TMPDIR2}/tasks.json"
+
+check_output "done task esistente" \
+	"Task #1 marked as done." \
+	"$(cd "${TMPDIR2}" && "${CLI[@]}" "${CMD_DONE}" 1)"
+
+if python -c "
+import json
+data = json.load(open('${TMPDIR2}/tasks.json'))
+assert data[0]['done'] is True, 'done non salvato'
+assert data[1]['done'] is False, 'task 2 modificato per errore'
+" >/dev/null 2>&1; then
+	pass "done salva flag correttamente"
+else
+	fail "done salva flag correttamente — stato JSON errato"
+fi
+
+check_output "list dopo done" \
+	"$(printf '[x] 1 — alpha\n[ ] 2 — beta')" \
+	"$(cd "${TMPDIR2}" && "${CLI[@]}" list)"
+
+check_output "delete task esistente" \
+	"Task #2 deleted." \
+	"$(cd "${TMPDIR2}" && "${CLI[@]}" delete 2)"
+
+if python -c "
+import json
+data = json.load(open('${TMPDIR2}/tasks.json'))
+assert len(data) == 1, f'atteso 1 task, trovati {len(data)}'
+assert data[0]['id'] == 1, 'task rimasto è quello sbagliato'
+" >/dev/null 2>&1; then
+	pass "delete rimuove il task corretto"
+else
+	fail "delete rimuove il task corretto — stato JSON errato"
+fi
+
+check_output "list dopo delete" \
+	"[x] 1 — alpha" \
+	"$(cd "${TMPDIR2}" && "${CLI[@]}" list)"
+
+if (cd "${TMPDIR2}" && "${CLI[@]}" "${CMD_DONE}" 99 >/dev/null 2>&1); then
+	fail "done su ID inesistente → exit 1 — non ha restituito errore"
+else
+	pass "done su ID inesistente → exit 1"
+fi
+
+if (cd "${TMPDIR2}" && "${CLI[@]}" delete 99 >/dev/null 2>&1); then
+	fail "delete su ID inesistente → exit 1 — non ha restituito errore"
+else
+	pass "delete su ID inesistente → exit 1"
+fi
+
+echo ""
 if [[ "${FAILURES}" -eq 0 ]]; then
 	echo "Tutti i controlli passati."
 	exit 0

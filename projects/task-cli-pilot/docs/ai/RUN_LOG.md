@@ -35,6 +35,33 @@ Registro delle esecuzioni dei cicli AI su questo progetto.
 
 <!-- Aggiungi i run qui sotto in ordine cronologico -->
 
+### Run — 2026-06-29 — TASK-003 Implementare `done` e `delete`
+
+**Agente:** Claude Code
+**Task:** TASK-003 — Implementare `done` e `delete`
+**Branch:** task/task-cli-pilot
+
+**Operazioni eseguite:**
+
+1. Implementate `cmd_done` e `cmd_delete` in `task_cli.py`.
+2. Refactoring del dispatch in `main()`: sostituito il blocco `if args.command in ("add","list")` con catena `if/elif` completa.
+3. Esteso `scripts/test.sh` con 8 nuovi check per `done` e `delete` (flag salvato, task rimosso, exit 1 su ID inesistente). Risolto SC1010 (`done` keyword bash) usando variabile `CMD_DONE`.
+4. shellcheck e shfmt: OK.
+
+**Esito test (`scripts/test.sh`):**
+
+```
+Tutti i controlli passati. (30/30 PASS)
+```
+
+**Problemi riscontrati:**
+
+SC1010 — `done` è keyword bash: risolto con `CMD_DONE="done"`.
+
+**Prossimo passo per l'operatore umano:**
+
+Procedere con TASK-004: `clear`, `--version`, gestione errori.
+
 ### Run — 2026-06-29 — TASK-002 Implementare `add` e `list`
 
 **Agente:** Cursor Agent

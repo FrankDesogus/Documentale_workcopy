@@ -40,6 +40,26 @@ def cmd_list(tasks: List[Dict[str, Any]]) -> None:
         print(f"{checkbox} {task['id']} — {task['text']}")
 
 
+def cmd_done(tasks: List[Dict[str, Any]], task_id: int) -> bool:
+    for task in tasks:
+        if task["id"] == task_id:
+            task["done"] = True
+            print(f"Task #{task_id} marked as done.")
+            return True
+    print(f"Error: task #{task_id} not found.", file=sys.stderr)
+    return False
+
+
+def cmd_delete(tasks: List[Dict[str, Any]], task_id: int) -> bool:
+    for i, task in enumerate(tasks):
+        if task["id"] == task_id:
+            tasks.pop(i)
+            print(f"Task #{task_id} deleted.")
+            return True
+    print(f"Error: task #{task_id} not found.", file=sys.stderr)
+    return False
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="task-cli-pilot",
@@ -73,17 +93,24 @@ def main() -> None:
         parser.print_help()
         sys.exit(1)
 
-    if args.command in ("add", "list"):
-        tasks = load_tasks(TASKS_FILE)
-        if args.command == "add":
-            cmd_add(tasks, args.text)
-            save_tasks(TASKS_FILE, tasks)
-        else:
-            cmd_list(tasks)
-        sys.exit(0)
+    tasks = load_tasks(TASKS_FILE)
 
-    print("task-cli-pilot: not yet implemented", file=sys.stderr)
-    sys.exit(1)
+    if args.command == "add":
+        cmd_add(tasks, args.text)
+        save_tasks(TASKS_FILE, tasks)
+    elif args.command == "list":
+        cmd_list(tasks)
+    elif args.command == "done":
+        if not cmd_done(tasks, args.id):
+            sys.exit(1)
+        save_tasks(TASKS_FILE, tasks)
+    elif args.command == "delete":
+        if not cmd_delete(tasks, args.id):
+            sys.exit(1)
+        save_tasks(TASKS_FILE, tasks)
+    else:
+        print("task-cli-pilot: not yet implemented", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
