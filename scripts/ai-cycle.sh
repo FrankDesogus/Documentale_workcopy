@@ -77,6 +77,13 @@ done
 [[ -n "${TASK_ID}" ]] || error "--task is required."
 [[ "${DRY_RUN}" -eq 1 ]] || error "Only --dry-run is supported in v1. Pass --dry-run explicitly."
 
+current_branch="$(git -C "${REPO_ROOT}" branch --show-current)"
+[[ "${current_branch}" != "main" ]] ||
+	error "ai-cycle must run on a task branch, not on 'main'. Switch to a task branch first."
+
+[[ -z "$(git -C "${REPO_ROOT}" status --short)" ]] ||
+	error "Working tree is not clean. Commit or stash your changes before running ai-cycle."
+
 PROJECT_REL="$(normalize_project "${PROJECT_INPUT}")"
 PROJECT_ABS="${REPO_ROOT}/${PROJECT_REL}"
 TASKS_MD="${PROJECT_ABS}/docs/ai/TASKS.md"
@@ -85,6 +92,15 @@ TASKS_MD="${PROJECT_ABS}/docs/ai/TASKS.md"
 [[ -f "${TASKS_MD}" ]] || error "TASKS.md not found: '${PROJECT_REL}/docs/ai/TASKS.md'"
 grep -q "${TASK_ID}" "${TASKS_MD}" ||
 	error "Task '${TASK_ID}' not found in ${PROJECT_REL}/docs/ai/TASKS.md"
+
+if awk '
+  /^## Completati/ { in_section=1; next }
+  /^## /           { in_section=0 }
+  in_section && /'"${TASK_ID}"'/ { found=1 }
+  END { exit !found }
+' "${TASKS_MD}"; then
+	error "Task '${TASK_ID}' is already in the 'Completati' section. Use a task in Backlog or In corso."
+fi
 
 # ── Dry-run output ────────────────────────────────────────────────────────────
 
