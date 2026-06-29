@@ -17,7 +17,7 @@ _Nessun task in corso._
 | TASK-001 | Scaffold progetto e test base | `e8abff5` | 2026-06-29 |
 | TASK-002 | Implementare `add` e `list` | `1fec4be` | 2026-06-29 |
 | TASK-003 | Implementare `done` e `delete` | `784885d` | 2026-06-29 |
-| TASK-004 | Implementare `clear`, `--version`, gestione errori | — | 2026-06-29 |
+| TASK-004 | Implementare `clear`, `--version`, gestione errori | `6b8bbe0` | 2026-06-29 |
 
 ---
 
