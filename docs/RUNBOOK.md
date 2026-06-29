@@ -1,0 +1,73 @@
+# Runbook operativo
+
+## Scopo
+
+Questo documento descrive come usare la AI Software Station in modo controllato.
+
+## Prima di iniziare qualsiasi lavoro
+
+Eseguire sempre:
+
+```bash
+git status
+```
+
+Il repository deve essere pulito prima di avviare un ciclo automatico o semi-automatico.
+
+## Check ambiente
+
+Quando sarà disponibile, eseguire:
+
+```bash
+./scripts/checks/check-environment.sh
+```
+
+## Creazione di un nuovo progetto
+
+I progetti software andranno creati dentro:
+
+```text
+projects/
+```
+
+Ogni progetto dovrà contenere almeno:
+
+- `AGENTS.md`;
+- `CLAUDE.md`;
+- `.cursor/rules/project-rules.mdc`;
+- `docs/ai/PROJECT_BRIEF.md`;
+- `docs/ai/ARCHITECTURE.md`;
+- `docs/ai/TASKS.md`;
+- `docs/ai/DECISIONS.md`;
+- `docs/ai/REVIEW_LOG.md`;
+- `docs/ai/RUN_LOG.md`;
+- `scripts/test.sh`.
+
+## Flusso manuale iniziale
+
+1. Scrivere o aggiornare il requisito in `docs/ai/PROJECT_BRIEF.md`.
+2. Far preparare a Claude Code un piano tecnico.
+3. Far decomporre il piano a Codex in task piccoli.
+4. Far implementare un solo task a Cursor.
+5. Eseguire `scripts/test.sh`.
+6. Fare review con Claude e, se utile, con Codex.
+7. Committare solo se test e review sono positivi.
+
+## Regole Git
+
+- Un branch per task.
+- Un commit per task completato.
+- Nessun push automatico.
+- Nessun merge automatico.
+- Nessun commit con working tree sporco non compreso.
+
+## Regola di stop
+
+Il ciclo deve fermarsi se:
+
+- i test falliscono;
+- la review respinge il diff;
+- il task è ambiguo;
+- vengono modificati file fuori scope;
+- compaiono segreti o credenziali;
+- un comando richiede privilegi o azioni distruttive non previste.
