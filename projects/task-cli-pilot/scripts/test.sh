@@ -209,6 +209,48 @@ else
 fi
 
 echo ""
+echo "-- Comportamento clear e gestione errori --"
+TMPDIR3="$(mktemp -d)"
+# shellcheck disable=SC2329
+cleanup_tmp3() {
+	rm -rf "${TMPDIR3}"
+}
+trap cleanup_tmp3 EXIT
+
+printf '[{"id":1,"text":"uno","done":false},{"id":2,"text":"due","done":false}]\n' \
+	>"${TMPDIR3}/tasks.json"
+
+check_output "clear lista non vuota" \
+	"All tasks cleared." \
+	"$(cd "${TMPDIR3}" && "${CLI[@]}" clear)"
+
+if python -c "
+import json
+data = json.load(open('${TMPDIR3}/tasks.json'))
+assert data == [], f'atteso [], ottenuto {data}'
+" >/dev/null 2>&1; then
+	pass "clear salva lista vuota in tasks.json"
+else
+	fail "clear salva lista vuota in tasks.json — contenuto errato"
+fi
+
+check_output "list dopo clear" \
+	"No tasks." \
+	"$(cd "${TMPDIR3}" && "${CLI[@]}" list)"
+
+check_output "clear su lista già vuota" \
+	"All tasks cleared." \
+	"$(cd "${TMPDIR3}" && "${CLI[@]}" clear)"
+
+printf 'QUESTO NON E JSON VALIDO\n' >"${TMPDIR3}/tasks.json"
+
+if (cd "${TMPDIR3}" && "${CLI[@]}" list >/dev/null 2>&1); then
+	fail "tasks.json corrotto → exit 1 — non ha restituito errore"
+else
+	pass "tasks.json corrotto → exit 1"
+fi
+
+echo ""
 if [[ "${FAILURES}" -eq 0 ]]; then
 	echo "Tutti i controlli passati."
 	exit 0

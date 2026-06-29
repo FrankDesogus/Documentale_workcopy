@@ -12,7 +12,11 @@ def load_tasks(path: Path) -> List[Dict[str, Any]]:
     if not path.exists():
         return []
     with path.open(encoding="utf-8") as f:
-        return json.load(f)
+        try:
+            return json.load(f)
+        except json.JSONDecodeError as exc:
+            print(f"Error: tasks.json is corrupt ({exc}).", file=sys.stderr)
+            sys.exit(1)
 
 
 def save_tasks(path: Path, tasks: List[Dict[str, Any]]) -> None:
@@ -48,6 +52,11 @@ def cmd_done(tasks: List[Dict[str, Any]], task_id: int) -> bool:
             return True
     print(f"Error: task #{task_id} not found.", file=sys.stderr)
     return False
+
+
+def cmd_clear(tasks: List[Dict[str, Any]]) -> None:
+    tasks.clear()
+    print("All tasks cleared.")
 
 
 def cmd_delete(tasks: List[Dict[str, Any]], task_id: int) -> bool:
@@ -108,9 +117,9 @@ def main() -> None:
         if not cmd_delete(tasks, args.id):
             sys.exit(1)
         save_tasks(TASKS_FILE, tasks)
-    else:
-        print("task-cli-pilot: not yet implemented", file=sys.stderr)
-        sys.exit(1)
+    elif args.command == "clear":
+        cmd_clear(tasks)
+        save_tasks(TASKS_FILE, tasks)
 
 
 if __name__ == "__main__":

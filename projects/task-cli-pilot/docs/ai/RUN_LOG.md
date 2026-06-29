@@ -35,6 +35,35 @@ Registro delle esecuzioni dei cicli AI su questo progetto.
 
 <!-- Aggiungi i run qui sotto in ordine cronologico -->
 
+### Run — 2026-06-29 — TASK-004 Implementare `clear`, gestione errori
+
+**Agente:** Claude Code
+**Task:** TASK-004 — Implementare `clear`, `--version`, gestione errori
+**Branch:** task/task-cli-pilot
+
+**Operazioni eseguite:**
+
+1. Implementata `cmd_clear` in `task_cli.py`: svuota la lista e salva, stampa "All tasks cleared." anche se già vuota.
+2. Aggiunta gestione `json.JSONDecodeError` in `load_tasks`: messaggio su stderr ed exit 1 su file corrotto.
+3. Cablato `clear` nel dispatch di `main()`. Rimosso il ramo `else: not yet implemented` (tutti i comandi ora sono gestiti).
+4. `--version` era già funzionante via argparse; test già presente dal TASK-001.
+5. Esteso `scripts/test.sh` con 5 nuovi check: clear su lista piena, JSON risultante vuoto, list dopo clear, clear su lista già vuota, tasks.json corrotto → exit 1.
+6. shellcheck e shfmt: OK.
+
+**Esito test (`scripts/test.sh`):**
+
+```
+Tutti i controlli passati. (35/35 PASS)
+```
+
+**Problemi riscontrati:**
+
+Nessuno.
+
+**Prossimo passo:**
+
+TASK-005 — review completa e merge su main.
+
 ### Run — 2026-06-29 — TASK-003 Implementare `done` e `delete`
 
 **Agente:** Claude Code

@@ -8,7 +8,6 @@ _Nessun task in corso._
 
 | ID | Titolo | Agente previsto | Note |
 |----|--------|-----------------|------|
-| TASK-004 | Implementare `clear`, `--version`, gestione errori | Cursor Agent | Input non validi, edge case lista vuota |
 | TASK-005 | Review completa e aggiornamento log | Claude Code + OneAI | Review diff completo, REVIEW_LOG, merge |
 
 ## Completati
@@ -18,6 +17,7 @@ _Nessun task in corso._
 | TASK-001 | Scaffold progetto e test base | `e8abff5` | 2026-06-29 |
 | TASK-002 | Implementare `add` e `list` | `1fec4be` | 2026-06-29 |
 | TASK-003 | Implementare `done` e `delete` | `784885d` | 2026-06-29 |
+| TASK-004 | Implementare `clear`, `--version`, gestione errori | — | 2026-06-29 |
 
 ---
 
