@@ -16,7 +16,7 @@ _Nessun task in backlog._
 | TASK-002 | Parsing task da TASKS.md | `dc5c5a0` | 2026-06-29 |
 | TASK-003 | Generazione prompt Cursor base | `d6a922a` | 2026-06-29 |
 | TASK-004 | Output su file e opzioni CLI | `85ef50d` | 2026-06-29 |
-| TASK-005 | Review completa e integrazione workflow | pending | 2026-06-29 |
+| TASK-005 | Review completa e integrazione workflow | `c633cd4` | 2026-06-29 |
 
 ---
 
