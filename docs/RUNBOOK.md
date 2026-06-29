@@ -16,7 +16,7 @@ Il repository deve essere pulito prima di avviare un ciclo automatico o semi-aut
 
 ## Check ambiente
 
-Quando sarà disponibile, eseguire:
+Eseguire prima di qualsiasi ciclo di lavoro:
 
 ```bash
 ./scripts/checks/check-environment.sh
