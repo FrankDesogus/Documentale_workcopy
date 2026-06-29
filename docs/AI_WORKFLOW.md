@@ -152,7 +152,7 @@ Il ciclo attuale è manuale e controllato dall'operatore ad ogni passaggio.
 ```
 1. Operatore   →  definisce obiettivo e scope
 2. Claude Code →  struttura architettura e lista task (docs/ai/TASKS.md)
-3. OneAI       →  trasforma in task operativo con prompt per Cursor
+3. OneAI       →  trasforma in task operativo; usa `./scripts/cursor-prompt.sh` per generare il prompt
 4. Cursor      →  implementa su branch dedicato
 5. Cursor      →  esegue test automatici (scripts/test.sh)
 6. Claude Code →  review del diff (docs/ai/REVIEW_LOG.md)

@@ -13,9 +13,12 @@ Sono stati completati e mergiati su `main`:
 |----------|-------------|------|
 | `demo-minimal` | CLI Python minimale (`--version`, `--name`) | 14/14 |
 | `task-cli-pilot` | Task manager CLI (add, list, done, delete, clear) | 35/35 |
+| `cursor-prompt-builder` | Generatore di prompt operativi per Cursor Agent da TASKS.md | 35/35 |
 
-Il ciclo manuale è stato validato end-to-end due volte:
+Il ciclo manuale è stato validato end-to-end tre volte:
 scaffold → implementazione → test → review → commit → merge.
+
+Wrapper di stazione disponibile: `./scripts/cursor-prompt.sh`
 
 Documentazione di stazione completa:
 `ARCHITECTURE.md`, `SECURITY.md`, `RUNBOOK.md`, `AI_WORKFLOW.md`, `NEXT_STEPS.md`.
@@ -89,21 +92,14 @@ riassunti di log, lavoro senza connessione) e il workflow base è stabile.
 
 ### 6. Terzo progetto pilota
 
-**Stato:** da pianificare.
+**Stato:** ✓ COMPLETATO — 2026-06-29
 
-Il terzo progetto dovrebbe essere più reale dei due pilota: un problema concreto
-dell'operatore, non un esercizio costruito apposta per testare il workflow.
+`cursor-prompt-builder` — generatore di prompt operativi per Cursor Agent da `TASKS.md`.
+Implementato con ciclo multi-agente reale (Claude Code + Cursor Agent).
+Wrapper di stazione: `./scripts/cursor-prompt.sh`.
 
-**Criterio di scelta:**
-- Scope definibile in 3-5 task
-- Nessuna dipendenza esterna obbligatoria
-- Implementabile con Python o Bash
-- Utile nella pratica quotidiana dell'operatore
-
-**Candidati possibili** (decidere con l'operatore):
-- Wrapper CLI per operazioni git ripetitive nella stazione
-- Script di analisi dei log dei cicli AI
-- Generatore di prompt operativi per Cursor Agent da `TASKS.md`
+Il quarto progetto è da pianificare: un problema concreto dell'operatore,
+non un esercizio costruito apposta per testare il workflow.
 
 ---
 
@@ -112,20 +108,16 @@ dell'operatore, non un esercizio costruito apposta per testare il workflow.
 Ordine basato su dipendenze e valore immediato:
 
 ```
-1. Decidere se Cursor Agent implementa il prossimo progetto
-   └── Se sì → avviare terzo progetto con Cursor come implementatore
-   └── Se no → continuare con Claude Code, rivalutare dopo
-
-2. Terzo progetto reale
+1. Quarto progetto reale
    └── Usa new-project.sh per lo scaffold
-   └── OneAI decompone i task
-   └── Cursor implementa (o Claude Code se non ancora pronto)
+   └── Usa cursor-prompt.sh per generare i prompt operativi
+   └── Cursor Agent implementa
    └── Claude Code + OneAI fanno review
 
-3. ai-review.sh (dry-run)
-   └── Solo dopo il primo ciclo con Cursor come implementatore
+2. ai-review.sh (dry-run)
+   └── Prerequisito soddisfatto: tre cicli con Cursor completati
 
-4. ai-cycle.sh (dry-run)
+3. ai-cycle.sh (dry-run)
    └── Solo dopo ai-review.sh stabile
 
 5. MCP / modello locale
@@ -146,4 +138,4 @@ Ordine basato su dipendenze e valore immediato:
 
 ## Data ultima revisione
 
-2026-06-29
+2026-06-29 (aggiornato post cursor-prompt-builder)

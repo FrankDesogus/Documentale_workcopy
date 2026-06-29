@@ -59,6 +59,38 @@ Per verificare cosa verrebbe creato senza creare nulla:
 
 Lo script valida il nome, verifica che la directory non esista già, copia i template e rende eseguibile `scripts/test.sh`. Non esegue `git add` né commit: la revisione e il commit restano all'operatore umano.
 
+## Generazione prompt per Cursor Agent
+
+Per generare un prompt operativo da passare a Cursor Agent, usare il wrapper dalla root del repository:
+
+```bash
+./scripts/cursor-prompt.sh --project projects/<nome-progetto> --task TASK-XXX
+```
+
+Per salvare il prompt su file (consigliato):
+
+```bash
+./scripts/cursor-prompt.sh \
+  --project projects/<nome-progetto> \
+  --task TASK-XXX \
+  --output /tmp/cursor-task.md
+```
+
+In alternativa, puntare direttamente a un file TASKS.md:
+
+```bash
+./scripts/cursor-prompt.sh \
+  --tasks-file projects/<nome-progetto>/docs/ai/TASKS.md \
+  --task TASK-XXX \
+  --output /tmp/cursor-task.md
+```
+
+**Nota:** usare sempre su task in Backlog o In corso.
+Sui task già spostati nella sezione Completati, alcune colonne (es. "Agente previsto")
+possono essere assenti perché la tabella ha struttura diversa.
+
+---
+
 ## Flusso manuale iniziale
 
 1. Scrivere o aggiornare il requisito in `docs/ai/PROJECT_BRIEF.md`.
