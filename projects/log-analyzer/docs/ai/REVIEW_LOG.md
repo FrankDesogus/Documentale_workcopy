@@ -90,3 +90,42 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 **Azioni richieste prima del commit:**
 
 - Nessuna.
+
+### Review — 2026-06-29 — TASK-005 Review completa e integrazione workflow
+
+**Reviewer:** Claude Code
+**Diff / branch:** task/log-analyzer (8 commit su main)
+**Esito:** Approvato — pronto per merge manuale su main
+
+**Osservazioni:**
+
+**Correttezza funzionale:**
+- `find_projects`: filtra correttamente per `docs/ai/TASKS.md`, ordina, gestisce directory inesistente. ✅
+- `parse_tasks`: sezioni dinamiche, header colonna variabile, separator rows, file mancante → dict vuoto. ✅
+- `_parse_last_log_entry`: helper generico; template entries (`YYYY-MM-DD`) escluse automaticamente. ✅
+- `_parse_run_body` / `_parse_review_body`: estrazione campi robusta, gestisce code block aperto. ✅
+- `format_summary` / `_format_last_run` / `_format_last_review`: output leggibile, parti opzionali corrette. ✅
+- `main()`: validazione `--project`, fallback multi-project, `--output FILE` con gestione OSError. ✅
+
+**Qualità tecnica:**
+- Zero dipendenze esterne. Solo stdlib Python 3.8+. ✅
+- Nessuna automazione git pericolosa in `scripts/test.sh`. ✅
+- shellcheck + shfmt: OK. ✅
+- `py_compile`: OK. ✅
+
+**Documentazione:**
+- TASK-001..TASK-004 completati in TASKS.md con hash commit. ✅
+- RUN_LOG.md: 4 run entry complete + TASK-005. ✅
+- REVIEW_LOG.md: review formali TASK-002..TASK-005. ✅
+- TASK-001 non ha review separata: accettabile (scaffold Claude Code, non implementazione esterna). ✅
+- Deviazioni TASK-003/004 (shell Cursor Agent bloccata) documentate in entrambi i log. ✅
+- ARCHITECTURE.md aggiornato e coerente con implementazione reale. ✅
+
+**Test:**
+- 29/29 PASS. Copertura: struttura, py_compile, CLI, parsing TASKS.md, parsing RUN/REVIEW_LOG, scanning multi-progetto, --output FILE. ✅
+
+**Output reale (scan 4 progetti):** cursor-prompt-builder, demo-minimal, log-analyzer, task-cli-pilot tutti rilevati. ✅
+
+**Azioni richieste prima del commit:**
+
+- Nessuna.
