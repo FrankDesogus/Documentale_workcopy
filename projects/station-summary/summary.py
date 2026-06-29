@@ -57,14 +57,28 @@ def main() -> int:
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {__version__}"
     )
-    parser.parse_args()
+    parser.add_argument(
+        "--output", metavar="FILE", help="Write report to FILE instead of stdout."
+    )
+    args = parser.parse_args()
 
     station_dir = pathlib.Path(__file__).resolve().parent.parent.parent
     data = {
         "projects": scan_projects(station_dir),
         "scripts": scan_scripts(station_dir),
     }
-    print(render_report(data))
+    report = render_report(data)
+
+    if args.output:
+        try:
+            with open(args.output, "w", encoding="utf-8") as fh:
+                fh.write(report)
+        except OSError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+        print(f"Report written to {args.output}")
+    else:
+        print(report)
     return 0
 
 

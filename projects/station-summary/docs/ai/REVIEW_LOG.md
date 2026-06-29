@@ -51,4 +51,27 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 
 ---
 
+### Review — 2026-06-29 — TASK-004 Opzione output file e gestione errori
+
+**Reviewer:** Claude Code
+**Diff / branch:** task/station-summary (post Cursor Agent TASK-004)
+**Esito:** Approvato
+
+**Osservazioni:**
+
+- `--output FILE`: aggiunto correttamente ad argparse. ✓
+- Con `--output`: scrive file, stampa `Report written to FILE` su stdout, exit 0. ✓
+- Senza `--output`: comportamento invariato rispetto a TASK-003 (`print(report)`, exit 0). ✓
+- `OSError` gestita con `try/except`: messaggio su stderr, exit 1, nessun traceback. ✓
+- Solo stdlib Python. ✓
+- 3 nuovi test in `test.sh`: exit code, file non vuoto, stringa stdout. 25/25 PASS. ✓
+- Nessuna operazione Git nel codice. ✓
+- 3 file modificati, tutti nello scope TASK-004. ✓
+
+**Azioni richieste prima del commit:**
+
+- Nessuna.
+
+---
+
 <!-- Aggiungi le review qui sotto in ordine cronologico -->

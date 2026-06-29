@@ -122,4 +122,45 @@ Approvare TASK-002, poi avviare TASK-003 (Generazione report markdown) con Curso
 
 Approvare TASK-003, poi avviare TASK-004 (Opzione output file e gestione errori) con Cursor Agent.
 
+---
+
+### Run — 2026-06-29 — TASK-004 Opzione output file e gestione errori
+
+**Agente:** Cursor Agent (Claude Code)
+**Task:** TASK-004 — Opzione output file e gestione errori
+**Branch:** task/station-summary
+
+**Operazioni eseguite:**
+
+1. Aggiunto argomento `--output FILE` in `main()` di `summary.py`.
+2. Aggiornato `main()`: senza `--output` comportamento invariato (stdout, exit 0); con `--output FILE` scrive il report su file, stampa `Report written to FILE` su stdout, exit 0.
+3. Aggiunta gestione errori `try/except OSError` sulla scrittura file: messaggio su stderr, exit 1. Nessun traceback non gestito.
+4. Aggiunta sezione `-- --output FILE --` in `scripts/test.sh` con 3 test (exit code 0, file esiste e non vuoto, stdout contiene "Report written to"); pulizia file temporanei al termine.
+5. Esecuzione `scripts/test.sh` — tutti i check passati.
+
+**Esito test (`scripts/test.sh`):**
+
+```
+== station-summary — test suite ==
+
+-- struttura -- 11 PASS
+-- py_compile -- 1 PASS
+-- help / version -- 2 PASS
+-- scan_projects / scan_scripts -- 2 PASS
+-- render_report / main -- 4 PASS
+-- --output FILE -- 3 PASS
+-- shellcheck (opzionale) -- 1 PASS
+-- shfmt (opzionale) -- 1 PASS
+
+== Risultato: 25 PASS, 0 FAIL ==
+```
+
+**Problemi riscontrati:**
+
+- Nessuno.
+
+**Prossimo passo per l'operatore umano:**
+
+Approvare TASK-004, poi avviare TASK-005 (Review finale e merge) con Claude Code.
+
 <!-- Aggiungi i run qui sotto in ordine cronologico -->

@@ -104,6 +104,33 @@ else
 fi
 echo ""
 
+# --- --output FILE ---
+echo "-- --output FILE --"
+TMP_REPORT="/tmp/test-station-report.md"
+TMP_STDOUT="/tmp/test-station-stdout.txt"
+rm -f "$TMP_REPORT" "$TMP_STDOUT"
+
+if python3 "$PROJECT_DIR/summary.py" --output "$TMP_REPORT" > "$TMP_STDOUT" 2>&1; then
+    ok "--output esce con codice 0"
+else
+    fail "--output esce con codice non-zero"
+fi
+
+if [ -s "$TMP_REPORT" ]; then
+    ok "file output esiste ed è non vuoto"
+else
+    fail "file output mancante o vuoto"
+fi
+
+if grep -q "Report written to" "$TMP_STDOUT" 2>/dev/null; then
+    ok "stdout contiene 'Report written to'"
+else
+    fail "stdout non contiene 'Report written to'"
+fi
+
+rm -f "$TMP_REPORT" "$TMP_STDOUT"
+echo ""
+
 # --- shellcheck (opzionale) ---
 echo "-- shellcheck (opzionale) --"
 if command -v shellcheck > /dev/null 2>&1; then

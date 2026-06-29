@@ -10,7 +10,6 @@
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
-| TASK-004 | Opzione output file e gestione errori | Media | Cursor Agent |
 | TASK-005 | Review finale e merge | Bassa | Claude Code |
 
 ## Completati
@@ -20,6 +19,7 @@
 | TASK-001 | Scaffold + test base | 2b5b526 | 2026-06-29 |
 | TASK-002 | Rilevamento progetti e helper | — | 2026-06-29 |
 | TASK-003 | Generazione report markdown | — | 2026-06-29 |
+| TASK-004 | Opzione output file e gestione errori | — | 2026-06-29 |
 
 ---
 
