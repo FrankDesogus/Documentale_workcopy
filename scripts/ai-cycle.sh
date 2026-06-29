@@ -102,6 +102,14 @@ if awk '
 	error "Task '${TASK_ID}' is already in the 'Completati' section. Use a task in Backlog or In corso."
 fi
 
+task_section="$(awk '
+  /^## Backlog/   { section="Backlog" }
+  /^## In corso/  { section="In corso" }
+  /^## /          { if ($0 !~ /Backlog/ && $0 !~ /In corso/) section="" }
+  section != "" && /'"${TASK_ID}"'/ { print section; exit }
+' "${TASKS_MD}")"
+[[ -n "${task_section}" ]] || task_section="Backlog"
+
 # ── Dry-run output ────────────────────────────────────────────────────────────
 
 cat <<EOF
@@ -110,14 +118,14 @@ cat <<EOF
 [DRY-RUN] Modalità: dry-run (nessuna modifica effettiva)
 
 [STEP 1] Verifica branch e working tree
-  git branch --show-current
-  git status --short
-  # Atteso: branch != main, working tree pulito
+  Branch:        ${current_branch}  ✓
+  Working tree:  pulito  ✓
 
 [STEP 2] Verifica precondizioni task
-  # Progetto risolto: ${PROJECT_REL}
-  # TASKS.md:         ${PROJECT_REL}/docs/ai/TASKS.md  ✓
-  # Task trovato:     ${TASK_ID}  ✓
+  Progetto:  ${PROJECT_REL}  ✓
+  TASKS.md:  ${PROJECT_REL}/docs/ai/TASKS.md  ✓
+  Task:      ${TASK_ID}  ✓
+  Stato:     ${task_section}
 
 [STEP 3] Genera prompt Cursor Agent
   ./scripts/cursor-prompt.sh \\
