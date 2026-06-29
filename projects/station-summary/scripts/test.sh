@@ -50,6 +50,31 @@ else
 fi
 echo ""
 
+# --- scan_projects / scan_scripts ---
+echo "-- scan_projects / scan_scripts --"
+STATION_DIR="$(cd "$PROJECT_DIR/../.." && pwd)"
+
+if PYTHONPATH="$PROJECT_DIR" python3 -c "
+from summary import scan_projects as f
+r = f('$STATION_DIR')
+assert isinstance(r, list) and len(r) > 0 and 'station-summary' in r
+" 2>&1; then
+    ok "scan_projects lista non vuota, contiene station-summary"
+else
+    fail "scan_projects fallito"
+fi
+
+if PYTHONPATH="$PROJECT_DIR" python3 -c "
+from summary import scan_scripts as f
+r = f('$STATION_DIR')
+assert isinstance(r, list) and len(r) > 0 and all(n.endswith('.sh') for n in r)
+" 2>&1; then
+    ok "scan_scripts lista non vuota, solo file .sh"
+else
+    fail "scan_scripts fallito"
+fi
+echo ""
+
 # --- shellcheck (opzionale) ---
 echo "-- shellcheck (opzionale) --"
 if command -v shellcheck > /dev/null 2>&1; then

@@ -42,4 +42,44 @@ Approvare commit TASK-001, poi avviare TASK-002 con Cursor Agent tramite `ai-cyc
 
 ---
 
+---
+
+### Run — 2026-06-29 — TASK-002 Rilevamento progetti e helper
+
+**Agente:** Cursor Agent (Claude Code)
+**Task:** TASK-002 — Rilevamento progetti e helper
+**Branch:** task/station-summary
+
+**Operazioni eseguite:**
+
+1. Aggiunto `import pathlib` in `summary.py`.
+2. Implementata `scan_projects(station_dir)`: ritorna lista ordinata di cartelle sotto `projects/`.
+3. Implementata `scan_scripts(station_dir)`: ritorna lista ordinata di file `.sh` sotto `scripts/` (non ricorsivo).
+4. Aggiornato messaggio in `main()` da TASK-002 a TASK-003.
+5. Aggiunta sezione `-- scan_projects / scan_scripts --` in `scripts/test.sh` con 2 test unitari.
+6. Esecuzione `scripts/test.sh` — tutti i check passati.
+
+**Esito test (`scripts/test.sh`):**
+
+```
+== station-summary — test suite ==
+
+-- struttura -- 11 PASS
+-- py_compile -- 1 PASS
+-- help / version -- 2 PASS
+-- scan_projects / scan_scripts -- 2 PASS
+-- shellcheck (opzionale) -- 1 PASS
+-- shfmt (opzionale) -- 1 PASS
+
+== Risultato: 18 PASS, 0 FAIL ==
+```
+
+**Problemi riscontrati:**
+
+- Nessuno.
+
+**Prossimo passo per l'operatore umano:**
+
+Approvare TASK-002, poi avviare TASK-003 (Generazione report markdown) con Cursor Agent.
+
 <!-- Aggiungi i run qui sotto in ordine cronologico -->
