@@ -2,9 +2,7 @@
 
 ## In corso
 
-| ID | Titolo | Agente | Branch | Note |
-|----|--------|--------|--------|------|
-| TASK-003 | Implementare `done` e `delete` | Claude Code | task/task-cli-pilot | In completamento |
+_Nessun task in corso._
 
 ## Backlog
 
@@ -19,6 +17,7 @@
 |----|--------|--------|------|
 | TASK-001 | Scaffold progetto e test base | `e8abff5` | 2026-06-29 |
 | TASK-002 | Implementare `add` e `list` | `1fec4be` | 2026-06-29 |
+| TASK-003 | Implementare `done` e `delete` | `784885d` | 2026-06-29 |
 
 ---
 
