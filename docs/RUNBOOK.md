@@ -140,9 +140,11 @@ Lo script non chiama agenti, non modifica file e non esegue operazioni Git.
 
 ---
 
-## Orchestrazione del ciclo operativo (dry-run)
+## Orchestrazione del ciclo operativo
 
-Per visualizzare in un colpo solo tutti i comandi del ciclo operativo per un task:
+### Modalità dry-run (v1)
+
+Per visualizzare tutti i comandi del ciclo senza eseguirli:
 
 ```bash
 ./scripts/ai-cycle.sh \
@@ -152,14 +154,38 @@ Per visualizzare in un colpo solo tutti i comandi del ciclo operativo per un tas
 ```
 
 Lo script valida le precondizioni (branch ≠ main, working tree pulito, task in Backlog o In corso)
-e mostra i comandi del ciclo nell'ordine corretto: generazione prompt Cursor, generazione prompt
-review, esecuzione test, snapshot git. Non esegue nulla automaticamente.
+e mostra i comandi del ciclo nell'ordine corretto. Non esegue nulla automaticamente.
+
+### Modalità run — esecuzione assistita (v2)
+
+Per eseguire il ciclo completo in modo assistito e controllato:
+
+```bash
+./scripts/ai-cycle.sh \
+  --project <nome-progetto> \
+  --task TASK-XXX \
+  --run
+```
+
+Il ciclo esegue nell'ordine:
+
+1. Valida branch e working tree (blocca se non soddisfatte).
+2. Valida progetto e task (blocca se task non in Backlog/In corso).
+3. Genera il prompt Cursor Agent via `cursor-prompt.sh` → `/tmp/cursor-prompt-TASK-XXX.md`.
+4. Lancia `claude -p --allowedTools "Read,Edit,Write,Bash"` con timeout 300s.
+5. Esegue `scripts/test.sh` del progetto — **se i test falliscono, si ferma con exit 1**.
+6. Genera il prompt di review via `ai-review.sh` → `/tmp/review-prompt-TASK-XXX.md`.
+7. Mostra `git status` e `git diff --stat` come snapshot.
+
+**Guardrail obbligatori di `--run`:**
+
+- Mai push, merge, branch delete, `reset --hard`, `git clean`.
+- Mai commit automatico.
+- Si ferma immediatamente se i test falliscono.
+- Il commit resta sempre a cura di Claude Code dopo review APPROVED.
 
 Errori gestiti: branch main, working tree sporco, progetto inesistente, task non trovato, task già
-in Completati. In tutti i casi: exit 1 con messaggio chiaro.
-
-**Versione 1: solo --dry-run.** Nessun lancio automatico di agenti, nessuna modifica file,
-nessuna operazione Git oltre la lettura del branch e dello status.
+in Completati, agent timeout/failure, test failure. In tutti i casi: exit 1 con messaggio chiaro.
 
 ---
 
