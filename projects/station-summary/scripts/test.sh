@@ -75,6 +75,35 @@ else
 fi
 echo ""
 
+# --- render_report / main ---
+echo "-- render_report / main --"
+if python3 "$PROJECT_DIR/summary.py" > /dev/null 2>&1; then
+    ok "python summary.py esce con codice 0"
+else
+    fail "python summary.py esce con codice non-zero"
+fi
+
+REPORT_OUTPUT="$(python3 "$PROJECT_DIR/summary.py" 2>/dev/null)"
+
+if echo "$REPORT_OUTPUT" | grep -q "^# "; then
+    ok "output contiene titolo markdown"
+else
+    fail "output non contiene titolo markdown"
+fi
+
+if echo "$REPORT_OUTPUT" | grep -q "station-summary"; then
+    ok "output contiene progetto noto (station-summary)"
+else
+    fail "output non contiene progetto noto (station-summary)"
+fi
+
+if echo "$REPORT_OUTPUT" | grep -q "ai-cycle.sh"; then
+    ok "output contiene helper noto (ai-cycle.sh)"
+else
+    fail "output non contiene helper noto (ai-cycle.sh)"
+fi
+echo ""
+
 # --- shellcheck (opzionale) ---
 echo "-- shellcheck (opzionale) --"
 if command -v shellcheck > /dev/null 2>&1; then

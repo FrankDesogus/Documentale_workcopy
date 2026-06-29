@@ -28,4 +28,27 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 
 ---
 
+### Review — 2026-06-29 — TASK-003 Generazione report markdown
+
+**Reviewer:** Claude Code
+**Diff / branch:** task/station-summary (post Cursor Agent TASK-003)
+**Esito:** Approvato
+
+**Osservazioni:**
+
+- `render_report(data)`: implementazione pulita, genera markdown con titolo, data, sezioni Progetti/Helper, stato sintetico. ✓
+- `main()`: rileva `station_dir` da `__file__.parent.parent.parent` — logica corretta per la struttura della stazione. ✓
+- Nessuna implementazione di `--output FILE` — TASK-004 non anticipato. ✓
+- Solo stdlib Python (`datetime`, `pathlib`, `argparse`, `sys`). ✓
+- 4 nuovi test in `test.sh`: exit code 0, titolo markdown, progetto noto, helper noto. 22/22 PASS. ✓
+- Output verificato manualmente: lista 5 progetti e 5 helper corretti. ✓
+- Nessuna operazione Git nel codice. ✓
+- 3 file modificati, tutti nello scope TASK-003. ✓
+
+**Azioni richieste prima del commit:**
+
+- Nessuna.
+
+---
+
 <!-- Aggiungi le review qui sotto in ordine cronologico -->
