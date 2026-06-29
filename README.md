@@ -13,6 +13,7 @@ Stazione locale per sviluppo software assistito da AI.
 ## Documentazione
 
 - [AI Workflow](docs/AI_WORKFLOW.md) — ciclo operativo, ruoli degli agenti, guardrail
+- [Next Steps](docs/NEXT_STEPS.md) — decisioni aperte e roadmap immediata
 - [Architecture](docs/ARCHITECTURE.md) — struttura della stazione
 - [Security](docs/SECURITY.md) — guardrail di sicurezza
 - [Runbook](docs/RUNBOOK.md) — operazioni comuni
