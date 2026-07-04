@@ -214,6 +214,34 @@ in Completati, agent timeout/failure, test failure. In tutti i casi: exit 1 con 
 
 ---
 
+## Commit locale controllato (`commit-if-approved.sh`)
+
+Crea un commit **locale** solo se la review strutturata lo consente. Non fa mai
+push né merge, non opera su `main`, non usa reset/clean.
+
+```bash
+./scripts/commit-if-approved.sh \
+  --project <nome-progetto> \
+  --task TASK-XXX \
+  --review-file /tmp/review-prompt-TASK-XXX.md \
+  [--paths "path1 path2"] \
+  [--message "messaggio esplicito"] \
+  [--dry-run]
+```
+
+Il commit è consentito **solo** se il review file contiene tutti:
+`REVIEW_VERDICT: APPROVED`, `TESTS: PASS`, `SECURITY_GUARDRAILS: OK`,
+`COMMIT_READY: YES`. Viene bloccato con messaggio chiaro su `CHANGES_REQUESTED`,
+`BLOCKED`, `TESTS: FAIL`, `TESTS: NOT_RUN`, `COMMIT_READY: NO` o marker assenti
+(le righe di legenda `A | B | C` del prompt grezzo vengono ignorate).
+
+Precondizioni: branch ≠ `main`, working tree non vuoto, review file esistente.
+Prima di committare mostra `git status` e i file staged. Con `--paths` si limita
+lo staging; senza, viene usata la cartella del progetto. `--dry-run` valida e
+mostra l'esito senza committare.
+
+---
+
 ## Flusso manuale iniziale
 
 1. Scrivere o aggiornare il requisito in `docs/ai/PROJECT_BRIEF.md`.
