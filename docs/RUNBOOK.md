@@ -242,6 +242,44 @@ mostra l'esito senza committare.
 
 ---
 
+## Log centrale dei cicli AI (`ai-cycle-log.sh`)
+
+Ogni `ai-cycle.sh --run` scrive automaticamente (STEP 8) un log Markdown sotto
+`logs/ai-cycles/` con nome `YYYYMMDD-HHMMSS-<project>-<task>.md`. La cartella
+`logs/` è gitignored: i log restano artefatti **locali**.
+
+Lo script è anche invocabile a mano per registrare o simulare un ciclo:
+
+```bash
+./scripts/ai-cycle-log.sh \
+  --project projects/<nome> --task TASK-XXX \
+  --command "..." --agent-result "..." --tests-result PASS \
+  --prompt-file /tmp/cursor-prompt-TASK-XXX.md \
+  --review-file /tmp/review-prompt-TASK-XXX.md
+```
+
+Il log contiene: data/ora, branch, progetto, task, comando, esito agente, esito
+test, prompt e review file, `git status` finale, note commit e la conferma
+esplicita che non sono stati fatti push/merge/reset. L'accesso a Git è read-only.
+
+---
+
+## Template standard TASKS.md
+
+Il template `docs/templates/TASKS.template.md` definisce il formato standard di
+`docs/ai/TASKS.md`: tabelle **In corso / Backlog / Completati** più un blocco di
+dettaglio per task.
+
+**Convenzione critica per gli strumenti:** l'heading di dettaglio è di livello
+`###` e contiene il task ID (`### TASK-XXX — Titolo — Agente`); le sotto-sezioni
+(`Obiettivo`, `Scope`, `File coinvolti`, `Acceptance criteria`, `Test richiesti`,
+`Guardrail`, `Note operative`) sono di livello `####`. Questo perché
+`prompt_builder.py` cattura il dettaglio fino al primo heading `##`/`###`: usare
+`###` per le sotto-sezioni troncherebbe l'estrazione. Il formato è validato su
+`projects/ai-cycle-dogfood` (TASK-002).
+
+---
+
 ## Flusso manuale iniziale
 
 1. Scrivere o aggiornare il requisito in `docs/ai/PROJECT_BRIEF.md`.

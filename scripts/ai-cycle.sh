@@ -182,9 +182,21 @@ run_cycle() {
 	git -C "${REPO_ROOT}" diff --stat -- "${PROJECT_REL}"
 	echo ""
 
+	echo "[STEP 8] Scrittura log ciclo..."
+	"${SCRIPT_DIR}/ai-cycle-log.sh" \
+		--project "${PROJECT_REL}" \
+		--task "${TASK_ID}" \
+		--command "ai-cycle.sh --project ${PROJECT_REL} --task ${TASK_ID} --run" \
+		--agent-result "completato (timeout 300s non raggiunto)" \
+		--tests-result "PASS" \
+		--prompt-file "${cursor_prompt_file}" \
+		--review-file "${review_prompt_file}" \
+		--commit-note "Nessun commit da questo ciclo: commit locale solo dopo review APPROVED via scripts/commit-if-approved.sh."
+	echo ""
+
 	echo "[RUN] Ciclo completato."
 	echo "[RUN] Leggi il diff e il prompt di review: ${review_prompt_file}"
-	echo "[RUN] Commit manualmente dopo review APPROVED."
+	echo "[RUN] Commit con: scripts/commit-if-approved.sh dopo review APPROVED."
 	echo "[RUN] NON è stato eseguito alcun commit, push o merge."
 }
 
@@ -225,6 +237,21 @@ if [[ "${DRY_RUN}" -eq 1 ]]; then
 [STEP 6] Snapshot git
   git status --short
   git diff --stat -- ${PROJECT_REL}
+
+[STEP 7] Scrivi log ciclo
+  ./scripts/ai-cycle-log.sh \\
+    --project ${PROJECT_REL} \\
+    --task ${TASK_ID} \\
+    --tests-result PASS \\
+    --prompt-file /tmp/cursor-prompt-${TASK_ID}.md \\
+    --review-file /tmp/review-prompt-${TASK_ID}.md
+  # → logs/ai-cycles/YYYYMMDD-HHMMSS-${TASK_ID}.md
+
+[STEP 8] (manuale) Commit locale solo se review APPROVED
+  ./scripts/commit-if-approved.sh \\
+    --project ${PROJECT_REL} \\
+    --task ${TASK_ID} \\
+    --review-file /tmp/review-prompt-${TASK_ID}.md
 
 [DRY-RUN] Fine. Nessuna modifica effettuata.
 [DRY-RUN] Eseguire i comandi mostrati nell'ordine indicato.

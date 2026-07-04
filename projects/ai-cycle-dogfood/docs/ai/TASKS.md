@@ -10,6 +10,7 @@
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
+| TASK-002 | Implementa count_by_field | media | Valida il formato TASKS standard |
 
 ## Completati
 
@@ -55,6 +56,44 @@ def summarize_status(items: list) -> dict:
 **Criteri di completamento:**
 - `python3 dogfood.py` non dà errori.
 - `scripts/test.sh` esce con codice 0.
+
+---
+
+### TASK-002 — Implementa count_by_field — Cursor Agent
+
+#### Obiettivo
+
+Aggiungere `count_by_field(items, field)` in `dogfood.py`: conta le occorrenze
+dei valori di una chiave arbitraria, generalizzando `summarize_status`.
+
+#### Scope
+
+- Solo `dogfood.py`: nuova funzione `count_by_field`.
+- Non modificare `test_dogfood.py` né `scripts/test.sh`.
+
+#### File coinvolti
+
+- `dogfood.py`
+
+#### Acceptance criteria
+
+- [ ] `count_by_field([{"k":"a"},{"k":"b"},{"k":"a"}], "k") == {"a": 2, "b": 1}`.
+- [ ] Lista vuota → `{}`; item senza la chiave o con valore `None` → ignorato.
+
+#### Test richiesti
+
+- `./scripts/test.sh` esce con codice 0.
+
+#### Guardrail
+
+- No push, no merge, no reset --hard, no git clean.
+- No dipendenze esterne, no installazioni, no rete, no commit.
+- Non modificare file fuori scope.
+
+#### Note operative
+
+Task usato per validare il formato TASKS.template.md; l'implementazione può
+essere svolta in un ciclo successivo.
 
 ---
 
