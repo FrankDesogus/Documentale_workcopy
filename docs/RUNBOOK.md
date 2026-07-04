@@ -138,6 +138,31 @@ Il prompt generato include: contesto repository/branch, file da leggere, comandi
 checklist review, istruzioni per commit locale se approvato, e divieti espliciti (no push, merge, reset).
 Lo script non chiama agenti, non modifica file e non esegue operazioni Git.
 
+### Verdetto macchina-leggibile (obbligatorio)
+
+Ogni review generata da `ai-review.sh` richiede a Claude Code di chiudere l'output
+con un blocco a valori fissi, letto poi da `scripts/commit-if-approved.sh`:
+
+```
+REVIEW_VERDICT: APPROVED | CHANGES_REQUESTED | BLOCKED
+SCOPE: OK | ISSUES
+TESTS: PASS | FAIL | NOT_RUN
+SECURITY_GUARDRAILS: OK | ISSUES
+DOCS_LOGS: OK | ISSUES | NOT_NEEDED
+COMMIT_READY: YES | NO
+```
+
+Regole di coerenza:
+
+- `COMMIT_READY: YES` solo se insieme `REVIEW_VERDICT: APPROVED`, `TESTS: PASS`,
+  `SECURITY_GUARDRAILS: OK`.
+- `REVIEW_VERDICT: APPROVED` **non basta** se `COMMIT_READY: NO`.
+- `TESTS: NOT_RUN` o `TESTS: FAIL` ⇒ `COMMIT_READY: NO` (nessun commit automatico).
+- `SCOPE: ISSUES` o `SECURITY_GUARDRAILS: ISSUES` ⇒ verdetto ≠ APPROVED e `COMMIT_READY: NO`.
+
+La review verifica concretamente scope (`git diff`/`git status`), test, guardrail di
+sicurezza (secret, comandi Git distruttivi, dipendenze), e documentazione/log.
+
 ---
 
 ## Orchestrazione del ciclo operativo

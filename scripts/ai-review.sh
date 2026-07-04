@@ -80,7 +80,7 @@ Leggi i seguenti file del progetto:
 
 ## Comandi di verifica da eseguire
 
-Esegui nell'ordine:
+Esegui nell'ordine e usa gli output per compilare il verdetto:
 
 \`\`\`bash
 git status --short
@@ -89,7 +89,20 @@ cd ${project_path} && ./scripts/test.sh
 cd -
 \`\`\`
 
-Se i test falliscono, riporta l'output completo e fermati.
+Devi verificare concretamente, in questo ordine:
+
+1. **SCOPE** — \`git diff --stat\` e \`git status --short\`: il diff tocca solo file
+   attesi per \`${task_id}\`? Nessun file fuori da \`${project_path}\`? Nessun refactoring
+   non richiesto?
+2. **TESTS** — \`./scripts/test.sh\` è stato eseguito e chiude con exit 0? Se non l'hai
+   eseguito, lo stato è \`NOT_RUN\` (non assumere PASS).
+3. **SECURITY_GUARDRAILS** — nel diff non ci sono secret/credenziali, né comandi Git
+   distruttivi o automazioni pericolose (\`push\`, \`merge\`, \`reset --hard\`,
+   \`clean\`, \`branch -D\`), né installazioni di pacchetti o accessi di rete.
+4. **DOCS_LOGS** — \`RUN_LOG.md\`, \`REVIEW_LOG.md\`, \`TASKS.md\` aggiornati se il task
+   lo richiede; \`NOT_NEEDED\` solo se il task non comporta cambi funzionali.
+
+Se i test falliscono, riporta l'output completo e fermati (TESTS: FAIL).
 
 ---
 
@@ -121,30 +134,55 @@ Verifica ogni punto prima di emettere il verdetto:
 
 ---
 
-## Esito
+## Esito — VERDETTO MACCHINA-LEGGIBILE (obbligatorio)
 
-Indica chiaramente uno dei seguenti:
+Concludi SEMPRE la review con esattamente questo blocco, come ultima cosa
+dell'output, senza testo dopo. I valori devono essere uno degli ammessi.
+Questo blocco viene letto da \`scripts/commit-if-approved.sh\` per decidere se
+un commit locale è consentito.
 
-- **APPROVED** — tutto corretto, pronto per commit locale
-- **APPROVED con osservazioni** — approvato, ma segnala punti da migliorare in futuro
-- **BLOCKED** — problemi da risolvere prima del commit; elenca cosa manca
+\`\`\`
+REVIEW_VERDICT: APPROVED | CHANGES_REQUESTED | BLOCKED
+SCOPE: OK | ISSUES
+TESTS: PASS | FAIL | NOT_RUN
+SECURITY_GUARDRAILS: OK | ISSUES
+DOCS_LOGS: OK | ISSUES | NOT_NEEDED
+COMMIT_READY: YES | NO
+\`\`\`
+
+Regole di coerenza (rispettale sempre):
+
+- \`COMMIT_READY: YES\` è ammesso **solo** se contemporaneamente
+  \`REVIEW_VERDICT: APPROVED\`, \`TESTS: PASS\` e \`SECURITY_GUARDRAILS: OK\`.
+- \`REVIEW_VERDICT: APPROVED\` **non basta**: se \`COMMIT_READY\` è \`NO\`, il commit
+  non è consentito.
+- \`TESTS: NOT_RUN\` o \`TESTS: FAIL\` ⇒ \`COMMIT_READY: NO\`.
+- \`SECURITY_GUARDRAILS: ISSUES\` o \`SCOPE: ISSUES\` ⇒ \`REVIEW_VERDICT\` diverso da
+  \`APPROVED\` e \`COMMIT_READY: NO\`.
+- Se ci sono problemi risolvibili dall'implementatore usa \`CHANGES_REQUESTED\`;
+  usa \`BLOCKED\` per problemi che impediscono di procedere.
+
+Prima del blocco, riassumi in prosa il perché di ciascun valore.
 
 ---
 
-## Se APPROVED: commit locale
+## Se COMMIT_READY: YES — commit locale controllato
 
-Esegui il commit locale (non fare push, non fare merge):
+Non fare push, non fare merge. Usa l'helper che rilegge il verdetto e blocca
+i casi non conformi:
+
+\`\`\`bash
+./scripts/commit-if-approved.sh \\
+  --project ${project_path} \\
+  --task ${task_id} \\
+  --review-file <file-di-questa-review>
+\`\`\`
+
+In alternativa, commit manuale equivalente (solo se il verdetto lo consente):
 
 \`\`\`bash
 git add ${project_path}
 git commit -m "Add implementation for ${task_id} in ${project_path}"
-\`\`\`
-
-Poi aggiorna \`TASKS.md\` con l'hash del commit in un secondo micro-commit:
-
-\`\`\`bash
-git add ${project_path}/docs/ai/TASKS.md
-git commit -m "Update TASKS.md: ${task_id} completed (<hash>)"
 \`\`\`
 
 ---
