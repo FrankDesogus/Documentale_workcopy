@@ -152,3 +152,75 @@ OK.
 2. Spostare TASK-002 in Completati dopo review positiva.
 3. Procedere con i task successivi della roadmap (`PROJECT_ANALYSIS.md`):
    TASK-003 bootstrap ambiente dev, TASK-004 migrazione permessi cartella, ecc.
+
+---
+
+### Run — 2026-07-05 — TASK-003 Preparare ambiente test dedicato Documentale
+
+**Agente:** Claude Code (con autorizzazione esplicita dell'operatore per
+installare pacchetti solo in una venv dedicata alla copia)
+**Task:** TASK-003 — Preparare ambiente test dedicato Documentale
+**Branch:** task/documentale-test-env
+
+**Operazioni eseguite:**
+
+1. Creata venv dedicata: `projects/documentale-workcopy/.venv` (Python
+   3.14.5, pip 26.1.1). Già coperta da `.gitignore` esistente (`.venv/`),
+   mai committata.
+2. Installate le dipendenze con `.venv/bin/pip install -r requirements.txt`
+   — solo in questa venv, nessun pacchetto globale, nessun `sudo`.
+3. Eseguito `scripts/test.sh` con la venv attivata.
+4. Aggiornati `docs/ai/TESTING_STATUS.md` (esito reale) e `docs/ai/TASKS.md`
+   (TASK-003 → Completati, checklist spuntata).
+5. Nessuna modifica alla logica applicativa. Nessun `.env` letto, nessun
+   database reale toccato, nessun server avviato, nessuna migrazione su
+   database reale (solo SQLite `:memory:` interno al test runner Django).
+6. Nessun commit eseguito in questo step (fatto separatamente via
+   `commit-if-approved.sh` dopo review).
+
+**Esito test (`scripts/test.sh`, con venv `.venv` attiva):**
+
+```
+== 0/3 — Verifica dipendenze Python (requirements.txt) ==
+OK — dipendenze di requirements.txt importabili.
+
+== 1/3 — Compilazione e sintassi Python ==
+OK — compilazione/sintassi Python superata.
+(1 SyntaxWarning non bloccante in documents/versioning.py:9)
+
+== 2/3 — Django manage.py check (settings di test, no .env) ==
+System check identified no issues (0 silenced).
+OK — manage.py check superato.
+
+== 3/3 — Django manage.py test (SQLite :memory:, no migrate/runserver) ==
+Ran 1207 tests in 489.755s
+OK
+Found 1207 test(s).
+System check identified no issues (0 silenced).
+OK — manage.py test superato.
+
+Tutti i controlli completati con successo.
+Exit code: 0
+```
+
+**Problemi riscontrati:**
+
+- `documents/versioning.py:9` — `SyntaxWarning` cosmetico (escape sequence
+  `\d` non raw string). Non bloccante, tutti i test passano comunque. Non
+  corretto in questo task (è codice applicativo, fuori scope di TASK-003).
+- Molti messaggi informativi "Email non inviata: ... senza indirizzo email"
+  e un messaggio "Errore durante apply: Errore simulato in test atomicità"
+  durante l'esecuzione: comportamento atteso di test che verificano
+  rollback/notifiche, non fallimenti.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Ricordare che la venv `.venv` è locale a questa macchina/sessione: va
+   ricreata (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`)
+   da chiunque riprenda il lavoro, e i cicli `ai-cycle.sh --run` futuri
+   NON la attivano automaticamente.
+2. Valutare se aprire un piccolo task dedicato per correggere il
+   `SyntaxWarning` in `documents/versioning.py:9`.
+3. Procedere con i task successivi della roadmap in
+   `docs/ai/PROJECT_ANALYSIS.md` (es. migrazione permessi cartella, pulizia
+   dipendenze inutilizzate, allineamento documentazione).
