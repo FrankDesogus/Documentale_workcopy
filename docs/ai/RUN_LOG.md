@@ -224,3 +224,62 @@ Exit code: 0
 3. Procedere con i task successivi della roadmap in
    `docs/ai/PROJECT_ANALYSIS.md` (es. migrazione permessi cartella, pulizia
    dipendenze inutilizzate, allineamento documentazione).
+
+---
+
+### Run — 2026-07-06 — TASK-004 Correggere SyntaxWarning in versioning
+
+**Agente:** Claude Code (fix diretto come orchestratore, task di una riga —
+autorizzato esplicitamente dall'operatore per micro-fix di questa entità)
+**Task:** TASK-004 — Correggere SyntaxWarning in versioning
+**Branch:** task/documentale-fix-versioning-warning
+
+**Operazioni eseguite:**
+
+1. Analizzato `documents/versioning.py`: il `SyntaxWarning` proviene dal
+   docstring di modulo (riga 1-13, stringa non raw contenente `\d` come
+   testo descrittivo), non dalla regex compilata `_RE_NUMERIC` (riga 20,
+   già `r'^\d+$'` corretta).
+2. Fix applicato: `"""` → `r"""` sul docstring di apertura. Nessun'altra
+   modifica.
+3. Verificato con `ast.parse` + `python -W error::SyntaxWarning`: nessun
+   warning residuo.
+4. Eseguita la suite Django completa con la venv `.venv` attivata:
+   1206/1207 test PASS, 1 fallimento
+   (`test_document_list_shows_approval_date`).
+5. **Verifica di indipendenza (test di controllo A/B):** ripristinato
+   temporaneamente `documents/versioning.py` alla versione originale
+   (`git stash`) e rieseguito il test isolato: fallisce **identicamente**.
+   Confermato che il fallimento è pre-esistente e indipendente dal fix.
+   Fix ripristinato (`git stash pop`).
+6. Causa del fallimento identificata: bug di fuso orario nel test stesso
+   (confronta `strftime` su datetime UTC non convertito con il rendering
+   del template, localizzato in Europe/Rome — vicino alla mezzanotte
+   CEST/UTC le due date possono differire di un giorno). Non è una
+   regressione, non è collegato al fix, non è codice applicativo di
+   produzione (il template localizza correttamente).
+7. Aggiornati `docs/ai/TESTING_STATUS.md` e `docs/ai/TASKS.md` con
+   entrambi gli esiti, documentati onestamente.
+
+**Esito test (`scripts/test.sh`, con venv `.venv` attiva):**
+
+```
+== 1/3 == OK — compilazione/sintassi Python superata. (nessun SyntaxWarning)
+== 2/3 == System check identified no issues (0 silenced).
+== 3/3 == Ran 1207 tests in 480.905s — FAILED (failures=1)
+```
+
+Test isolato di controllo (stesso test, file originale ripristinato):
+FAILED identicamente — fallimento confermato indipendente dal fix.
+
+**Problemi riscontrati:**
+
+- 1 test fragile su confine di fuso orario, pre-esistente, non corretto
+  (fuori scope di TASK-004): vedi `docs/ai/TESTING_STATUS.md`.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Valutare un piccolo task dedicato per correggere
+   `test_document_list_shows_approval_date` in `documents/tests.py`
+   (usare `timezone.localtime()` nell'assert).
+2. Procedere con i task della roadmap in `docs/ai/PROJECT_ANALYSIS.md`.
