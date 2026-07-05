@@ -278,6 +278,71 @@ else
 fi
 
 echo ""
+echo "-- File di riferimento consigliati (read_first) --"
+
+# Progetto con scaffold completo (questo stesso progetto): il prompt non deve
+# mai citare prompt_builder.py (file interno del builder, non del target) e
+# deve citare i file di scaffold che esistono davvero.
+FULL_SCAFFOLD_OUTPUT="$(python "${PROJECT_ROOT}/prompt_builder.py" \
+	--project "${PROJECT_ROOT}" --task TASK-004 2>/dev/null || true)"
+
+if ! echo "${FULL_SCAFFOLD_OUTPUT}" | grep -q "prompt_builder.py"; then
+	pass "scaffold completo → prompt non cita mai prompt_builder.py"
+else
+	fail "scaffold completo → prompt non cita mai prompt_builder.py"
+fi
+
+if echo "${FULL_SCAFFOLD_OUTPUT}" | grep -q "AGENTS.md"; then
+	pass "scaffold completo → prompt cita AGENTS.md (esiste davvero)"
+else
+	fail "scaffold completo → prompt cita AGENTS.md (esiste davvero)"
+fi
+
+if echo "${FULL_SCAFFOLD_OUTPUT}" | grep -q "^TASKS.md: .*docs/ai/TASKS.md"; then
+	pass "scaffold completo → header TASKS.md sempre presente"
+else
+	fail "scaffold completo → header TASKS.md sempre presente"
+fi
+
+# Progetto con scaffold minimo (solo docs/ai/TASKS.md, come new-ai-project.sh
+# o onboard-existing-project.sh): il prompt non deve inventare file che non
+# esistono, e non deve mai citare prompt_builder.py.
+MINIMAL_PROJECT_DIR="$(mktemp -d)"
+mkdir -p "${MINIMAL_PROJECT_DIR}/docs/ai"
+cat >"${MINIMAL_PROJECT_DIR}/docs/ai/TASKS.md" <<'EOF'
+# Tasks
+
+## Backlog
+
+| ID | Titolo | Priorità | Note |
+| -- | ------ | -------- | ---- |
+| TASK-001 | Task di prova | media | nota |
+EOF
+
+MINIMAL_OUTPUT="$(python "${PROJECT_ROOT}/prompt_builder.py" \
+	--project "${MINIMAL_PROJECT_DIR}" --task TASK-001 2>/dev/null || true)"
+
+if ! echo "${MINIMAL_OUTPUT}" | grep -q "AGENTS.md"; then
+	pass "scaffold minimo → prompt non inventa AGENTS.md (non esiste)"
+else
+	fail "scaffold minimo → prompt non inventa AGENTS.md (non esiste)"
+fi
+
+if ! echo "${MINIMAL_OUTPUT}" | grep -q "prompt_builder.py"; then
+	pass "scaffold minimo → prompt non cita mai prompt_builder.py"
+else
+	fail "scaffold minimo → prompt non cita mai prompt_builder.py"
+fi
+
+if echo "${MINIMAL_OUTPUT}" | grep -q "docs/ai/TASKS.md"; then
+	pass "scaffold minimo → prompt cita comunque docs/ai/TASKS.md"
+else
+	fail "scaffold minimo → prompt cita comunque docs/ai/TASKS.md"
+fi
+
+rm -rf "${MINIMAL_PROJECT_DIR}"
+
+echo ""
 echo "-- Qualità script bash --"
 if command -v shellcheck >/dev/null 2>&1; then
 	if shellcheck "${PROJECT_ROOT}/scripts/test.sh" >/dev/null 2>&1; then

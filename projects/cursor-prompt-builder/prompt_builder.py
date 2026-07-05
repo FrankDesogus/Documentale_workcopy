@@ -116,7 +116,34 @@ def extract_task_detail(tasks_md: str, task_id: str) -> Optional[str]:
     return content if content else None
 
 
-def build_prompt(task: Dict[str, str], project_dir: Path, task_id: str, tasks_md: str = "") -> str:
+def build_read_first(project_dir: Path, project_rel: str) -> List[str]:
+    """
+    File da consigliare per la lettura, relativi al progetto TARGET (mai al
+    builder stesso). docs/ai/TASKS.md è sempre incluso perché è la fonte del
+    task; gli altri documenti di scaffold sono inclusi solo se esistono
+    davvero sul disco, per non inventare file su progetti con scaffold
+    leggero (es. new-ai-project.sh, onboard-existing-project.sh).
+    """
+    read_first = [f"{project_rel}/docs/ai/TASKS.md"]
+    optional_docs = [
+        "AGENTS.md",
+        "docs/ai/PROJECT_BRIEF.md",
+        "docs/ai/ARCHITECTURE.md",
+        "scripts/test.sh",
+    ]
+    read_first.extend(
+        f"{project_rel}/{doc}" for doc in optional_docs if (project_dir / doc).exists()
+    )
+    return read_first
+
+
+def build_prompt(
+    task: Dict[str, str],
+    project_dir: Path,
+    task_id: str,
+    tasks_md: str = "",
+    tasks_path: Optional[Path] = None,
+) -> str:
     project_dir = Path(project_dir).resolve()
     repo_root = find_repo_root(project_dir)
     repository = str(repo_root)
@@ -128,14 +155,12 @@ def build_prompt(task: Dict[str, str], project_dir: Path, task_id: str, tasks_md
     notes = task.get("Note", "").strip()
     task_detail = extract_task_detail(tasks_md, task_id) if tasks_md else None
 
-    read_first = [
-        f"{project_rel}/AGENTS.md",
-        f"{project_rel}/docs/ai/PROJECT_BRIEF.md",
-        f"{project_rel}/docs/ai/ARCHITECTURE.md",
-        f"{project_rel}/docs/ai/TASKS.md",
-        f"{project_rel}/prompt_builder.py",
-        f"{project_rel}/scripts/test.sh",
-    ]
+    if tasks_path is not None:
+        tasks_md_display = project_rel_path(tasks_path, repo_root)
+    else:
+        tasks_md_display = f"{project_rel}/docs/ai/TASKS.md"
+
+    read_first = build_read_first(project_dir, project_rel)
 
     extra_fields = []
     skip_keys = {"ID", "Titolo", "Agente previsto", "Agente", "Note", "Branch", "Branch atteso", "branch"}
@@ -148,6 +173,7 @@ def build_prompt(task: Dict[str, str], project_dir: Path, task_id: str, tasks_md
         f"Repository: {repository}",
         f"Branch atteso: {branch}",
         f"Progetto: {project_rel}",
+        f"TASKS.md: {tasks_md_display}",
         f"Task ID: {task_id}",
         f"Titolo task: {title}",
         f"Agente previsto: {agent}",
@@ -299,7 +325,7 @@ def main() -> None:
         sys.exit(1)
 
     project_dir = resolve_project_dir(args.project, tasks_path)
-    prompt = build_prompt(task, project_dir, args.task, tasks_md)
+    prompt = build_prompt(task, project_dir, args.task, tasks_md, tasks_path)
 
     if args.output:
         output_path = Path(args.output)
