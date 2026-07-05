@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Nuova baseline — {{ project.code }} — Documentale{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb">
+  <a href="{% url 'project_detail' project.pk %}">{{ project.code }} – {{ project.name }}</a>
+  <span class="breadcrumb-sep">›</span>
+  <span>Nuova baseline</span>
+</nav>
+
+<div class="page-header">
+  <h1>Nuova baseline</h1>
+  <p class="page-header-sub">{{ project.code }} — {{ project.name }}</p>
+</div>
+
+<div class="alert-info mb-4">
+  La baseline verrà popolata con le revisioni approvate correnti dei documenti presenti
+  nella cartella del progetto e nelle sue sottocartelle.
+</div>
+
+<form method="post">
+  {% csrf_token %}
+
+  <div class="form-section">
+    <div class="form-section-title">Dati baseline</div>
+
+    {% for field in form %}
+    <div class="form-group {% if forloop.last %}mb-0{% endif %}">
+      <label class="form-label" for="{{ field.id_for_label }}">
+        {{ field.label }}
+        {% if field.field.required %}<span class="text-red-500"> *</span>{% endif %}
+      </label>
+      {{ field }}
+      {% if field.help_text %}
+      <p class="form-help">{{ field.help_text }}</p>
+      {% endif %}
+      {% for error in field.errors %}
+      <p class="form-error">{{ error }}</p>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn-primary">Crea baseline</button>
+    <a href="{% url 'project_detail' project.pk %}" class="btn-secondary">Annulla</a>
+  </div>
+</form>
+{% endblock %}

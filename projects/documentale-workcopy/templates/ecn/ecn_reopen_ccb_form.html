@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Riapri CCB {{ ecn.code }} — ECN — Documentale{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb">
+  <a href="{% url 'ecn:ecn_detail' ecn.pk %}">{{ ecn.code }}</a>
+  <span class="breadcrumb-sep">›</span>
+  <span>Riapri configurazione CCB</span>
+</nav>
+
+<div class="page-header">
+  <h1>Riapri configurazione CCB</h1>
+  <p class="page-header-sub">{{ ecn.code }} — {{ ecn.title }}</p>
+</div>
+
+<div class="alert-danger mb-4">
+  <strong>Attenzione: operazione irreversibile.</strong>
+  <p class="mt-1">
+    Questa operazione annullerà <strong>tutte le decisioni CCB già espresse</strong>
+    per questo ECN e riporterà lo stato a <em>Bozza</em>.
+    Le decisioni annullate vengono registrate nell'audit trail.
+  </p>
+  <p class="mt-1">
+    Dovrai riconfigurare gli approvatori e reinviare l'ECN alla CCB.
+  </p>
+</div>
+
+<!-- Riepilogo -->
+<div class="form-section">
+  <div class="form-section-title">Riepilogo ECN</div>
+  <dl class="dl-grid">
+    <dt>ECN</dt>
+    <dd class="font-mono font-semibold text-brand-800">{{ ecn.code }} — {{ ecn.title }}</dd>
+    <dt>Documento</dt>
+    <dd>{{ ecn.document.code }} — {{ ecn.document.title }}</dd>
+    <dt>Stato attuale</dt>
+    <dd><span class="badge-ecn-under_review">{{ ecn.get_status_display }}</span></dd>
+    <dt>Decisioni da annullare</dt>
+    <dd>
+      {% with dec_count=ecn.decisions.count %}
+        <span class="font-semibold text-red-700">{{ dec_count }}</span>
+        decisione{% if dec_count != 1 %}i{% endif %}
+      {% endwith %}
+    </dd>
+  </dl>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+
+  <div class="form-section">
+    <div class="form-section-title">Motivazione riapertura</div>
+    <div class="form-group mb-0">
+      <label class="form-label" for="id_reason">{{ form.reason.label }}</label>
+      {% if form.reason.help_text %}
+      <p class="form-help">{{ form.reason.help_text }}</p>
+      {% endif %}
+      {{ form.reason }}
+      {% if form.reason.errors %}
+      <p class="form-error">{{ form.reason.errors|join:", " }}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn-danger"
+            onclick="return confirm('Confermi la riapertura? Tutte le decisioni CCB saranno annullate.')">
+      Riapri configurazione CCB
+    </button>
+    <a href="{% url 'ecn:ecn_detail' ecn.pk %}" class="btn-secondary">Annulla</a>
+  </div>
+</form>
+{% endblock %}

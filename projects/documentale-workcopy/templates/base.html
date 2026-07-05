@@ -1,0 +1,244 @@
+{% load ecn_tags %}{% load nav_tags %}{% load static %}
+<!DOCTYPE html>
+<html lang="it" class="h-full">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Documentale{% endblock %} — Documentale</title>
+<script>
+  (function () {
+    try {
+      if (localStorage.getItem('documentale-theme') === 'dark') {
+        document.documentElement.classList.add('dark');
+      }
+    } catch (err) {}
+  })();
+</script>
+<link rel="stylesheet" href="{% static 'css/tailwind.css' %}">
+{% block extra_head %}{% endblock %}
+</head>
+<body class="theme-elt h-full">
+
+<div class="flex h-screen overflow-hidden">
+
+  <!-- ─── Sidebar ──────────────────────────────────── -->
+  <aside class="sidebar-shell">
+
+    <!-- Brand -->
+    <a href="{% url 'dashboard' %}" class="sidebar-brand hover:opacity-95 transition-opacity">
+      <div class="flex items-center gap-3">
+        <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-elt-cyan-500/18 ring-1 ring-elt-cyan-300/25 text-lg">📋</span>
+        <div>
+          <div class="text-sm font-bold tracking-wide">Documentale</div>
+          <div class="text-xs text-elt-cyan-300/80">ELT Group workflow</div>
+        </div>
+      </div>
+    </a>
+
+    <!-- Navigation -->
+    {% if user.is_authenticated %}
+    {% nav_pending_approvals user as sb_n_appr %}
+    {% nav_pending_ccb user as sb_n_ccb %}
+    {% nav_my_drafts user as sb_n_drafts %}
+    {% nav_my_ecn_open user as sb_n_ecn %}
+    {% nav_ecn_to_review user as sb_n_ecn_review %}
+    {% nav_ecn_to_close user as sb_n_ecn_close %}
+    {% user_can_quality_workspace user as sb_can_quality %}
+
+    {% with p=request.path %}
+    <nav class="flex-1 py-3 px-3">
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Dashboard</div>
+        <a href="{% url 'dashboard' %}"
+           class="sidebar-link {% if p == '/' or p == '/dashboard/' %}sidebar-link-active{% endif %}">
+          <span>🏠</span> Dashboard
+        </a>
+      </div>
+
+      <div class="sidebar-section border-t border-white/[0.06] pt-4">
+        <div class="sidebar-section-title">Archivio</div>
+        <a href="{% url 'document_list' %}"
+           class="sidebar-link {% if p|slice:':11' == '/documents/' %}sidebar-link-active{% endif %}">
+          <span>📄</span> Documenti
+        </a>
+
+        <a href="{% url 'folder_list' %}"
+           class="sidebar-link {% if p|slice:':9' == '/folders/' %}sidebar-link-active{% endif %}">
+          <span>📁</span> Cartelle
+        </a>
+
+        <a href="{% url 'project_list' %}"
+           class="sidebar-link {% if p|slice:':10' == '/projects/' %}sidebar-link-active{% endif %}">
+          <span>🗂️</span> Progetti
+        </a>
+      </div>
+
+      <div class="sidebar-section border-t border-white/[0.06] pt-4">
+        <div class="sidebar-section-title">Workflow</div>
+
+      <a href="{% url 'approval_queue' %}"
+         class="sidebar-link justify-between {% if p|slice:':11' == '/approvals/' %}sidebar-link-active{% endif %}">
+        <span class="flex items-center gap-2.5"><span>✅</span> Approvazioni</span>
+        {% if sb_n_appr %}<span class="sidebar-count sidebar-count-warn">{{ sb_n_appr }}</span>{% endif %}
+      </a>
+
+      <a href="{% url 'ecn:ecn_list' %}"
+         class="sidebar-link justify-between {% if p|slice:':5' == '/ecn/' %}sidebar-link-active{% endif %}">
+        <span class="flex items-center gap-2.5"><span>🔄</span> ECN / Varianti</span>
+        {% if sb_n_ecn %}<span class="sidebar-count">{{ sb_n_ecn }}</span>{% endif %}
+      </a>
+      </div>
+
+      <div class="sidebar-section border-t border-white/[0.06] pt-4">
+        <div class="sidebar-section-title">Attività</div>
+
+      <a href="{% url 'workspace_my_work' %}"
+         class="sidebar-link justify-between {% if p == '/workspace/my-work/' %}sidebar-link-active{% endif %}">
+        <span class="flex items-center gap-2.5"><span>✏️</span> Il mio lavoro</span>
+        {% with sb_n_tot=sb_n_appr|add:sb_n_ccb|add:sb_n_drafts %}
+          {% if sb_n_tot %}<span class="sidebar-count sidebar-count-warn">{{ sb_n_tot }}</span>{% endif %}
+        {% endwith %}
+      </a>
+
+      <a href="{% url 'my_drafts' %}"
+         class="sidebar-link justify-between {% if p == '/my-drafts/' %}sidebar-link-active{% endif %}">
+        <span class="flex items-center gap-2.5"><span>📝</span> Mie bozze</span>
+        {% if sb_n_drafts %}<span class="sidebar-count sidebar-count-warn">{{ sb_n_drafts }}</span>{% endif %}
+      </a>
+      </div>
+
+      {% if sb_can_quality %}
+      <div class="sidebar-section border-t border-white/[0.06] pt-4">
+      <div class="sidebar-section-title">Qualità</div>
+      <a href="{% url 'workspace_quality' %}"
+         class="sidebar-link justify-between {% if p == '/workspace/quality/' %}sidebar-link-active{% endif %}">
+        <span class="flex items-center gap-2.5"><span>⚙️</span> Workspace Qualità</span>
+        {% with sb_n_q=sb_n_ecn_review|add:sb_n_ecn_close|add:sb_n_ccb %}
+          {% if sb_n_q %}<span class="sidebar-count sidebar-count-warn">{{ sb_n_q }}</span>{% endif %}
+        {% endwith %}
+      </a>
+      <a href="{% url 'ecn:ecn_dashboard' %}"
+         class="sidebar-link {% if p == '/ecn/dashboard/' %}sidebar-link-active{% endif %}">
+        <span>📊</span> Cruscotto ECN
+      </a>
+      </div>
+      {% endif %}
+
+      {% if user.is_staff %}
+      <div class="sidebar-section border-t border-white/[0.06] pt-4">
+      <div class="sidebar-section-title">Sistema</div>
+      <a href="/admin/" class="sidebar-link">
+        <span>🔧</span> Amministrazione
+      </a>
+      </div>
+      {% endif %}
+
+    </nav>
+    {% endwith %}
+
+    <!-- Footer utente -->
+    <div class="px-4 py-3 border-t border-white/10 text-xs text-slate-400 bg-black/10">
+      <div class="font-medium text-white truncate">{{ user.get_full_name|default:user.username }}</div>
+      <form method="post" action="{% url 'logout' %}" class="inline m-0">
+        {% csrf_token %}
+        <button type="submit" class="mt-1 text-elt-cyan-300 hover:text-white transition-colors bg-transparent border-0 cursor-pointer p-0 text-xs">Esci →</button>
+      </form>
+    </div>
+    {% endif %}
+
+  </aside>
+
+  <!-- ─── Area principale ──────────────────────────── -->
+  <div class="flex-1 flex flex-col min-w-0 overflow-y-auto bg-elt-app">
+
+    <!-- Topbar -->
+    <header class="topbar">
+
+      {% if user.is_authenticated %}
+      <!-- Campanella notifiche -->
+      <div class="relative">
+        <a href="{% url 'notifications:list' %}" class="notification-button" title="Notifiche">
+          <span class="text-base">🔔</span>
+          {% if unread_notifications_count > 0 %}
+          <span class="notification-badge">
+            {{ unread_notifications_count }}
+          </span>
+          {% endif %}
+        </a>
+      </div>
+
+      <button type="button"
+              id="theme-toggle"
+              class="topbar-action"
+              aria-label="Attiva modalità notte"
+              title="Attiva modalità notte">
+        <span class="theme-toggle-light" aria-hidden="true">☀️</span>
+        <span class="theme-toggle-dark hidden" aria-hidden="true">🌙</span>
+      </button>
+
+      <span class="h-5 w-px bg-slate-200 dark:bg-white/10"></span>
+      <span>{{ user.get_full_name|default:user.username }}</span>
+      {% else %}
+      <a href="{% url 'login' %}" class="hover:text-white transition-colors">Accedi</a>
+      {% endif %}
+    </header>
+
+    <!-- Contenuto -->
+    <main class="flex-1 max-w-6xl w-full mx-auto px-6 py-6">
+
+      {% if messages %}
+      <div class="mb-4 space-y-2">
+        {% for message in messages %}
+        <div class="{% if message.tags == 'error' %}alert-danger{% elif message.tags == 'success' %}alert-success{% elif message.tags == 'warning' %}alert-warning{% else %}alert-info{% endif %}">
+          {{ message }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+</div>
+
+{% block extra_js %}{% endblock %}
+<script>
+  (function () {
+    var key = 'documentale-theme';
+    var root = document.documentElement;
+    var button = document.getElementById('theme-toggle');
+    if (!button) return;
+
+    var lightIcon = button.querySelector('.theme-toggle-light');
+    var darkIcon = button.querySelector('.theme-toggle-dark');
+
+    function applyTheme(theme) {
+      var isDark = theme === 'dark';
+      root.classList.toggle('dark', isDark);
+      button.setAttribute('aria-label', isDark ? 'Attiva modalità chiara' : 'Attiva modalità notte');
+      button.setAttribute('title', isDark ? 'Attiva modalità chiara' : 'Attiva modalità notte');
+      if (lightIcon && darkIcon) {
+        lightIcon.classList.toggle('hidden', isDark);
+        darkIcon.classList.toggle('hidden', !isDark);
+      }
+    }
+
+    var stored = 'light';
+    try {
+      stored = localStorage.getItem(key) === 'dark' ? 'dark' : 'light';
+    } catch (err) {}
+    applyTheme(stored);
+
+    button.addEventListener('click', function () {
+      var next = root.classList.contains('dark') ? 'light' : 'dark';
+      try {
+        localStorage.setItem(key, next);
+      } catch (err) {}
+      applyTheme(next);
+    });
+  })();
+</script>
+</body>
+</html>

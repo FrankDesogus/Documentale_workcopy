@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}{{ folder.name }} — Cartelle — Documentale{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb + azioni -->
+<div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+  <nav class="breadcrumb mb-0">
+    <a href="{% url 'folder_list' %}">Cartelle</a>
+    {% if folder.parent %}
+    <span class="breadcrumb-sep">›</span>
+    <a href="{% url 'folder_detail' folder.parent.pk %}">{{ folder.parent.name }}</a>
+    {% endif %}
+    <span class="breadcrumb-sep">›</span>
+    <span class="font-semibold text-slate-200">{{ folder.name }}</span>
+  </nav>
+  <div class="flex gap-2 flex-wrap">
+    {% if can_create %}
+    <a href="{% url 'folder_create' %}?parent={{ folder.pk }}" class="btn-secondary btn-sm">+ Sottocartella</a>
+    {% endif %}
+    {% if can_create_project %}
+    <a href="{% url 'project_create' %}?parent_folder={{ folder.pk }}" class="btn-primary btn-sm">+ Nuovo progetto</a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Header cartella -->
+<div class="flex items-center gap-3 mb-4">
+  <span class="text-3xl">📁</span>
+  <div>
+    <h1 class="text-2xl font-bold text-elt-white mb-0">{{ folder.name }}</h1>
+    <div class="flex items-center gap-3 mt-1 text-sm text-slate-400 flex-wrap">
+      <span class="font-mono">{{ folder.code }}</span>
+      <span class="badge badge-folder">{{ folder.get_folder_kind_display }}</span>
+      {% with s=folder.status %}
+      {% if s == 'active' %}<span class="badge-status-approved">Attiva</span>
+      {% elif s == 'archived' %}<span class="badge-status-archived">Archiviata</span>
+      {% else %}<span class="badge">{{ folder.get_status_display }}</span>
+      {% endif %}
+      {% endwith %}
+      {% if folder.parent %}
+      <a href="{% url 'folder_detail' folder.parent.pk %}" class="text-brand-600 hover:underline">
+        ← {{ folder.parent.code }} — {{ folder.parent.name }}
+      </a>
+      {% endif %}
+    </div>
+    {% if folder.description %}
+    <p class="text-sm text-slate-300 mt-1">{{ folder.description }}</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if is_navigation_only %}
+<div class="alert-warning mb-4">
+  <strong>Accesso di navigazione:</strong> questa cartella è visibile come contenitore. Apri una sottocartella per accedere ai documenti.
+</div>
+{% endif %}
+
+{% if not is_navigation_only %}
+<!-- Ricerca contestuale -->
+<form method="get" class="filter-bar">
+  <div class="filter-group">
+    <label class="form-label">Cerca</label>
+    <input type="text" name="q" value="{{ search_q }}" placeholder="Codice, nome, titolo…" class="min-w-[200px]">
+  </div>
+  <div class="filter-group flex-row items-center gap-2 flex pt-4">
+    <input type="checkbox" name="recursive" value="1" id="id_recursive"
+           class="rounded"
+           {% if recursive %}checked{% endif %}>
+    <label for="id_recursive" class="text-sm text-slate-300 cursor-pointer font-normal">Cerca nelle sottocartelle</label>
+  </div>
+  <div class="filter-actions">
+    <button type="submit" class="btn-primary btn-sm">🔍 Cerca</button>
+    {% if search_q %}
+    <a href="{% url 'folder_detail' folder.pk %}" class="btn-secondary btn-sm">✕ Azzera filtri</a>
+    {% endif %}
+  </div>
+</form>
+{% endif %}
+
+{% if search_q and not is_navigation_only %}
+<!-- Risultati ricerca -->
+<div class="flex items-center gap-2 mb-3">
+  <h2 class="section-title mb-0">Risultati{% if recursive %} (ricorsiva){% endif %} per "{{ search_q }}"</h2>
+  {% if search_page_obj %}
+  <span class="meta">{{ search_page_obj.paginator.count }} risultat{% if search_page_obj.paginator.count == 1 %}o{% else %}i{% endif %}</span>
+  {% endif %}
+</div>
+{% if search_results %}
+<div class="table-container">
+  <table class="data-table">
+    <thead><tr>
+      <th>Tipo</th>
+      <th>Codice</th>
+      <th>Nome / Titolo</th>
+      <th>Dettagli</th>
+      <th class="w-20"></th>
+    </tr></thead>
+    <tbody>
+      {% for kind, item in search_results %}
+      <tr>
+        <td>
+          {% if kind == 'folder' %}<span>📁 Cartella</span>
+          {% elif kind == 'project' %}<span>🗂️ Progetto</span>
+          {% elif kind == 'document' %}<span>📄 Documento</span>
+          {% endif %}
+        </td>
+        <td class="font-mono font-semibold">
+          {% if kind == 'folder' %}<a href="{% url 'folder_detail' item.pk %}" class="text-brand-800 hover:underline">{{ item.code }}</a>
+          {% elif kind == 'project' %}<a href="{% url 'project_detail' item.pk %}" class="text-brand-800 hover:underline">{{ item.code }}</a>
+          {% elif kind == 'document' %}<a href="{% url 'document_detail' item.pk %}" class="text-brand-800 hover:underline">{{ item.code }}</a>
+          {% endif %}
+        </td>
+        <td>{% if kind == 'document' %}{{ item.title }}{% else %}{{ item.name }}{% endif %}</td>
+        <td class="meta text-xs">
+          {% if kind == 'document' and item.project_folder %}{{ item.project_folder.name }}
+          {% elif kind == 'folder' %}{{ item.get_folder_kind_display }}
+          {% elif kind == 'project' and item.root_folder and item.root_folder.parent %}{{ item.root_folder.parent.name }}
+          {% endif %}
+        </td>
+        <td>
+          {% if kind == 'folder' %}
+          <a href="{% url 'folder_detail' item.pk %}" class="btn-secondary btn-sm">Apri</a>
+          {% elif kind == 'project' %}
+          <a href="{% url 'project_detail' item.pk %}" class="btn-primary btn-sm">Apri</a>
+          {% elif kind == 'document' %}
+          <a href="{% url 'document_detail' item.pk %}" class="btn-primary btn-sm">Apri</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% include "_pagination.html" with page_obj=search_page_obj %}
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <div class="empty-state-icon">🔍</div>
+    <div class="empty-state-title">Nessun risultato</div>
+    <div class="empty-state-desc">
+      Nessun risultato per "{{ search_q }}"{% if not recursive %}. Prova con "Cerca nelle sottocartelle".{% else %}.{% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% else %}
+
+<!-- Explorer: sottocartelle + progetti + documenti -->
+{% if explorer_items %}
+<h2 class="section-title">Contenuto</h2>
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
+  {% for kind, item in explorer_items %}
+
+  {% if kind == 'project' %}
+  <!-- Tile PROGETTO -->
+  <a href="{% url 'project_detail' item.pk %}" class="no-underline block">
+    <div class="project-tile border-l-4 border-l-elt-cyan-500 p-3.5 flex items-start gap-2.5">
+      <span class="text-2xl flex-shrink-0">🗂️</span>
+      <div class="min-w-0 flex-1">
+        <div class="font-bold text-elt-white text-sm mb-0.5">{{ item.code }}</div>
+        <div class="text-sm text-slate-300 leading-snug break-words">{{ item.name }}</div>
+        <span class="badge badge-project mt-1.5">Progetto</span>
+        {% if item.manager %}
+        <div class="text-xs text-slate-400 mt-1">{{ item.manager.get_full_name|default:item.manager.username }}</div>
+        {% endif %}
+        <div class="text-xs text-slate-500 mt-0.5 font-mono">Rev. {{ item.revision }}</div>
+      </div>
+    </div>
+  </a>
+
+  {% elif kind == 'orphan_project_folder' %}
+  <!-- Tile cartella PROJECT orfana -->
+  <a href="{% url 'folder_detail' item.pk %}" class="no-underline block">
+    <div class="project-tile border-l-4 border-l-amber-300/60 p-3.5 flex items-start gap-2.5">
+      <span class="text-2xl flex-shrink-0">🗂️</span>
+      <div class="min-w-0">
+        <div class="font-semibold text-amber-100 text-sm mb-0.5">{{ item.code }}</div>
+        <div class="text-xs text-amber-200/80 mb-1">{{ item.name }}</div>
+        <span class="badge badge-orphan">Progetto non collegato</span>
+      </div>
+    </div>
+  </a>
+
+  {% else %}
+  <!-- Tile cartella ordinaria -->
+  <a href="{% url 'folder_detail' item.pk %}" class="folder-tile no-underline block">
+    <div class="folder-tile-icon">📁</div>
+    <div class="folder-tile-name">{{ item.name }}</div>
+    <div class="folder-tile-meta">{{ item.code }}</div>
+    <span class="badge badge-folder mt-1.5">{{ item.get_folder_kind_display }}</span>
+  </a>
+  {% endif %}
+
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if not is_navigation_only %}
+<!-- Sezione Documenti -->
+<div class="flex items-center justify-between mb-3">
+  <h2 class="section-title mb-0">Documenti</h2>
+  {% if can_create %}
+  <a href="{% url 'document_new' %}" class="btn-primary btn-sm">+ Nuovo documento</a>
+  {% endif %}
+</div>
+{% if documents %}
+<div class="table-container">
+  <table class="data-table">
+    <thead><tr>
+      <th>Codice</th>
+      <th>Titolo</th>
+      <th>Categoria</th>
+      <th>Revisione</th>
+      <th>Stato</th>
+      <th class="w-20"></th>
+    </tr></thead>
+    <tbody>
+      {% for doc in documents %}
+      <tr>
+        <td class="font-mono font-semibold"><a href="{% url 'document_detail' doc.pk %}" class="text-brand-800 hover:underline">{{ doc.code }}</a></td>
+        <td>{{ doc.title }}</td>
+        <td class="meta">{{ doc.get_category_display }}</td>
+        <td>
+          {% if doc.current_version %}<a href="{% url 'version_detail' doc.current_version.pk %}" class="text-brand-600 hover:underline">Rev. {{ doc.current_version.revision_label }}</a>
+          {% else %}<span class="meta">—</span>{% endif %}
+        </td>
+        <td>
+          {% if doc.current_version %}
+            {% with s=doc.current_version.status %}
+            {% if s == 'approved' %}<span class="badge-status-approved">Approvato</span>
+            {% elif s == 'draft' %}<span class="badge-status-draft">Bozza</span>
+            {% elif s == 'in_approval' %}<span class="badge-status-in_approval">In approvazione</span>
+            {% else %}<span>{{ doc.current_version.get_status_display }}</span>
+            {% endif %}
+            {% endwith %}
+          {% else %}
+            <span class="badge-status-draft">Nessuna approvata</span>
+          {% endif %}
+        </td>
+        <td><a href="{% url 'document_detail' doc.pk %}" class="btn-primary btn-sm">Apri</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <div class="empty-state-icon">📄</div>
+    <div class="empty-state-title">Nessun documento</div>
+    <div class="empty-state-desc">Nessun documento associato a questa cartella.</div>
+    {% if can_create %}
+    <a href="{% url 'document_new' %}" class="btn-primary mt-4 btn-sm">+ Nuovo documento</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endif %}{# /not is_navigation_only #}
+{% endif %}{# /search or explorer #}
+{% endblock %}

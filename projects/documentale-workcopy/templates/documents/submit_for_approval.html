@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% block title %}Invia in approvazione — {{ document.code }} rev.{{ version.revision_label }} — Documentale{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb">
+  <a href="{% url 'my_drafts' %}">Il mio lavoro</a>
+  <span class="breadcrumb-sep">›</span>
+  <span>Richiedi approvazione</span>
+</nav>
+
+<div class="page-header">
+  <h1>Richiedi approvazione</h1>
+  <p class="page-header-sub">{{ document.code }} rev.{{ version.revision_label }}</p>
+</div>
+
+<!-- Riepilogo documento (read-only) -->
+<div class="form-section">
+  <div class="form-section-title">Documento</div>
+  <dl class="dl-grid">
+    <dt>Codice</dt>
+    <dd class="font-mono font-semibold text-brand-800">{{ document.code }}</dd>
+    <dt>Titolo</dt>
+    <dd>{{ document.title }}</dd>
+    <dt>Revisione</dt>
+    <dd>Rev. {{ version.revision_label }} (n. {{ version.revision_number }})</dd>
+    <dt>Stato</dt>
+    <dd>
+      {% if version.status == 'draft' %}
+      <span class="badge-status-draft">{{ version.get_status_display }}</span>
+      {% elif version.status == 'rejected' %}
+      <span class="badge-status-rejected">{{ version.get_status_display }}</span>
+      {% else %}
+      <span class="badge-status-draft">{{ version.get_status_display }}</span>
+      {% endif %}
+    </dd>
+    {% if version.change_summary %}
+    <dt>Sommario</dt>
+    <dd>{{ version.change_summary }}</dd>
+    {% endif %}
+    {% if version.rejection_reason %}
+    <dt>Motivo rifiuto precedente</dt>
+    <dd class="text-red-700 font-medium">{{ version.rejection_reason }}</dd>
+    {% endif %}
+  </dl>
+</div>
+
+<form method="post" enctype="multipart/form-data" id="submit-form">
+  {% csrf_token %}
+
+  <!-- Policy approvazione -->
+  <div class="form-section">
+    <div class="form-section-title">Policy approvazione</div>
+    <div class="form-group mb-0">
+      <label class="form-label" for="{{ form.approval_policy.id_for_label }}">
+        {{ form.approval_policy.label }}
+      </label>
+      {{ form.approval_policy }}
+      {% for error in form.approval_policy.errors %}
+      <p class="form-error mt-1">{{ error }}</p>
+      {% endfor %}
+      <div class="mt-3 space-y-1 text-sm text-gray-600">
+        <p><strong class="text-gray-700">ANY</strong> — Basta un voto: la prima approvazione è sufficiente</p>
+        <p><strong class="text-gray-700">ALL</strong> — Tutti devono approvare</p>
+        <p><strong class="text-gray-700">SEQUENTIAL</strong> — Voto in ordine: gli approvatori votano in sequenza</p>
+      </div>
+    </div>
+
+    <div id="sequential-hint" class="alert-warning mt-3" style="display:none">
+      In modalità sequenziale gli approvatori firmeranno nell'ordine mostrato nella tabella sottostante.
+    </div>
+  </div>
+
+  <!-- Approvatori -->
+  <div class="form-section">
+    <div class="form-section-title">Approvatori <span class="text-red-500">*</span></div>
+
+    {{ approver_formset.management_form }}
+
+    {% if approver_formset.non_form_errors %}
+    <div class="alert-danger mb-3">
+      {% for error in approver_formset.non_form_errors %}
+      <p>{{ error }}</p>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="table-container mb-3">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="w-10">#</th>
+            <th>Approvatore</th>
+            <th class="w-28">Azioni</th>
+          </tr>
+        </thead>
+        <tbody id="approver-rows">
+          {% for approver_form in approver_formset %}
+          <tr class="approver-row">
+            <td class="row-number text-gray-500">{{ forloop.counter }}.</td>
+            <td>
+              {{ approver_form.approver }}
+              {% for error in approver_form.approver.errors %}
+              <p class="form-error">{{ error }}</p>
+              {% endfor %}
+            </td>
+            <td class="whitespace-nowrap">
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="moveRowUp(this)" title="Sposta su" class="btn-ghost btn-sm px-2 py-1">↑</button>
+                <button type="button" onclick="moveRowDown(this)" title="Sposta giù" class="btn-ghost btn-sm px-2 py-1">↓</button>
+                <button type="button" onclick="removeRow(this)" title="Rimuovi" class="btn-danger btn-sm px-2 py-1">✕</button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <button type="button" onclick="addRow()" class="btn-secondary btn-sm">
+      + Aggiungi approvatore
+    </button>
+  </div>
+
+  <!-- Scadenza -->
+  <div class="form-section">
+    <div class="form-section-title">Scadenza <span class="text-gray-400 font-normal text-xs">(opzionale)</span></div>
+    <div class="form-group mb-0" style="max-width:220px">
+      <label class="form-label" for="{{ form.due_date.id_for_label }}">
+        {{ form.due_date.label }}
+      </label>
+      {{ form.due_date }}
+      {% for error in form.due_date.errors %}
+      <p class="form-error">{{ error }}</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Allegati -->
+  <div class="form-section">
+    <div class="form-section-title">Allegati <span class="text-gray-400 font-normal text-xs">(opzionale)</span></div>
+    <div class="form-group mb-0">
+      <label class="form-label" for="{{ form.signature_template_file.id_for_label }}">
+        {{ form.signature_template_file.label }}
+      </label>
+      {% if form.signature_template_file.help_text %}
+      <p class="form-help">{{ form.signature_template_file.help_text }}</p>
+      {% endif %}
+      {{ form.signature_template_file }}
+      {% for error in form.signature_template_file.errors %}
+      <p class="form-error">{{ error }}</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% include "auditlog/sanatoria_fields.html" %}
+
+  <div class="form-actions">
+    <button type="submit" class="btn-primary">Invia richiesta</button>
+    <a href="{% url 'my_drafts' %}" class="btn-secondary">Annulla</a>
+  </div>
+</form>
+
+{# Template per nuove righe: il server renderizza il widget con __prefix__; il JS lo clona e rimpiazza #}
+<script type="text/x-approver-template" id="empty-approver-row">
+  <td class="row-number text-gray-500"></td>
+  <td>{{ approver_formset.empty_form.approver }}</td>
+  <td class="whitespace-nowrap">
+    <div class="flex items-center gap-1">
+      <button type="button" onclick="moveRowUp(this)" title="Sposta su" class="btn-ghost btn-sm px-2 py-1">↑</button>
+      <button type="button" onclick="moveRowDown(this)" title="Sposta giù" class="btn-ghost btn-sm px-2 py-1">↓</button>
+      <button type="button" onclick="removeRow(this)" title="Rimuovi" class="btn-danger btn-sm px-2 py-1">✕</button>
+    </div>
+  </td>
+</script>
+
+<script>
+(function () {
+  var PREFIX = 'approver';
+
+  function rows() {
+    return Array.from(document.querySelectorAll('#approver-rows tr.approver-row'));
+  }
+
+  function updateFormset() {
+    var allRows = rows();
+    document.getElementById('id_' + PREFIX + '-TOTAL_FORMS').value = allRows.length;
+    allRows.forEach(function (row, idx) {
+      var numCell = row.querySelector('.row-number');
+      if (numCell) numCell.textContent = (idx + 1) + '.';
+      row.querySelectorAll('select, input, label, textarea').forEach(function (el) {
+        if (el.name) el.name = el.name.replace(new RegExp(PREFIX + '-\\d+-'), PREFIX + '-' + idx + '-');
+        if (el.id)   el.id   = el.id.replace(new RegExp('id_' + PREFIX + '-\\d+-'), 'id_' + PREFIX + '-' + idx + '-');
+        if (el.htmlFor) el.htmlFor = el.htmlFor.replace(new RegExp('id_' + PREFIX + '-\\d+-'), 'id_' + PREFIX + '-' + idx + '-');
+      });
+    });
+  }
+
+  window.addRow = function () {
+    var tbody = document.getElementById('approver-rows');
+    var count = rows().length;
+    var tplHtml = document.getElementById('empty-approver-row').innerHTML
+      .replace(/__prefix__/g, String(count));
+    var tr = document.createElement('tr');
+    tr.className = 'approver-row';
+    tr.innerHTML = tplHtml;
+    tbody.appendChild(tr);
+    updateFormset();
+  };
+
+  window.removeRow = function (btn) {
+    var row = btn.closest('tr.approver-row');
+    row.parentNode.removeChild(row);
+    updateFormset();
+  };
+
+  window.moveRowUp = function (btn) {
+    var row = btn.closest('tr.approver-row');
+    var prev = row.previousElementSibling;
+    if (prev && prev.classList.contains('approver-row')) {
+      row.parentNode.insertBefore(row, prev);
+      updateFormset();
+    }
+  };
+
+  window.moveRowDown = function (btn) {
+    var row = btn.closest('tr.approver-row');
+    var next = row.nextElementSibling;
+    if (next && next.classList.contains('approver-row')) {
+      row.parentNode.insertBefore(next, row);
+      updateFormset();
+    }
+  };
+
+  // Mostra/nascondi hint SEQUENTIAL
+  var policySelect = document.getElementById('id_approval_policy');
+  var hint = document.getElementById('sequential-hint');
+  function syncHint() {
+    hint.style.display = policySelect.value === 'sequential' ? 'block' : 'none';
+  }
+  if (policySelect) {
+    policySelect.addEventListener('change', syncHint);
+    syncHint();
+  }
+}());
+</script>
+{% endblock %}

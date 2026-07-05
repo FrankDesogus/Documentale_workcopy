@@ -1,0 +1,423 @@
+{% extends "base.html" %}
+{% block title %}{{ ecn.code }} — ECN{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav class="breadcrumb">
+  <a href="{% url 'ecn:ecn_list' %}">ECN / Varianti</a>
+  <span class="breadcrumb-sep">›</span>
+  <a href="{% url 'document_detail' ecn.document_id %}">{{ ecn.document.code }}</a>
+  <span class="breadcrumb-sep">›</span>
+  <span>{{ ecn.code }}</span>
+</nav>
+
+<div class="flex items-start gap-3 mb-4 flex-wrap">
+  <h1 class="text-2xl font-bold text-brand-900 flex-1">{{ ecn.code }} — {{ ecn.title }}</h1>
+  <div>
+    {% if ecn.status == 'draft' %}
+    <span class="badge-ecn-draft">Bozza</span>
+    {% elif ecn.status == 'ccb_preparation' %}
+    <span class="badge-ecn-ccb_prep">Istruttoria CCB</span>
+    {% elif ecn.status == 'under_review' %}
+    <span class="badge-ecn-under_review">In revisione CCB</span>
+    {% elif ecn.status == 'approved' %}
+    <span class="badge-ecn-approved">Approvata</span>
+    {% elif ecn.status == 'rejected' %}
+    <span class="badge-ecn-rejected">Rifiutata</span>
+    {% elif ecn.status == 'closed' %}
+    <span class="badge-ecn-closed">Chiusa</span>
+    {% else %}
+    <span class="badge-ecn-draft">{{ ecn.get_status_display }}</span>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Box prossima azione ── #}
+{% if ecn.status == 'draft' %}
+  {% if not has_ccb_configured %}
+    {% if can_configure_ccb %}
+    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+      <div class="text-sm font-semibold text-amber-900 mb-1">📋 Valutazione preliminare Qualità</div>
+      <p class="text-sm text-amber-800 mb-2">
+        La richiesta è stata inviata da
+        <strong>{{ ecn.proposed_by.get_full_name|default:ecn.proposed_by.username }}</strong>.
+        Prima di configurare la CCB, verifica:
+      </p>
+      <ul class="text-sm text-amber-800 list-disc ml-5 mb-2 leading-relaxed">
+        <li>Descrizione della modifica e motivazione</li>
+        <li>Allegati tecnici presenti (vedi sezione Allegati)</li>
+        <li>Impatti stimati su documenti correlati</li>
+        <li>Eventuale commessa o progetto associato</li>
+      </ul>
+      <p class="text-sm text-amber-800">Quando sei pronto, configura i componenti CCB, il responsabile istruttoria e la policy.</p>
+    </div>
+    {% else %}
+    <div class="alert-warning mb-4">
+      <strong>In attesa di valutazione Qualità:</strong>
+      La richiesta è stata ricevuta. Il Responsabile Qualità la analizzerà e configurerà la CCB prima dell'invio.
+    </div>
+    {% endif %}
+  {% else %}
+  <div class="next-action-box mb-4">
+    <div class="next-action-box-title">Prossima azione</div>
+    <p class="next-action-box-text">CCB configurata. Il responsabile istruttoria deve compilare il dossier, poi inviarlo alla CCB.</p>
+  </div>
+  {% endif %}
+{% elif ecn.status == 'ccb_preparation' %}
+  {% if can_compile_dossier %}
+  <div class="next-action-box mb-4">
+    <div class="next-action-box-title">Prossima azione</div>
+    <p class="next-action-box-text">Compila il dossier istruttorio, poi invia alla CCB per la votazione.</p>
+  </div>
+  {% else %}
+  <div class="alert-info mb-4">
+    <strong>Istruttoria in corso:</strong> Il responsabile istruttoria sta compilando il dossier CCB.
+  </div>
+  {% endif %}
+{% elif ecn.status == 'under_review' %}
+  {% if can_review %}
+  <div class="next-action-box mb-4">
+    <div class="next-action-box-title">Prossima azione</div>
+    <p class="next-action-box-text">La tua decisione CCB è richiesta. Esprimi la tua valutazione.</p>
+  </div>
+  {% else %}
+  <div class="alert-info mb-4">
+    <strong>In revisione:</strong> L'ECN è in corso di revisione da parte della CCB.
+  </div>
+  {% endif %}
+{% elif ecn.status == 'approved' %}
+  {% if ecn.executed_version %}
+  <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+    <div class="text-sm font-semibold text-green-900 mb-1">Prossima azione</div>
+    <p class="text-sm text-green-800">
+      {% if can_close %}Revisione documento eseguita. Procedi con la chiusura formale dell'ECN.
+      {% else %}Revisione documento eseguita. Il Responsabile Qualità procederà con la chiusura.{% endif %}
+    </p>
+  </div>
+  {% else %}
+  <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+    <div class="text-sm font-semibold text-green-900 mb-1">Prossima azione</div>
+    <p class="text-sm text-green-800">
+      {% if can_create_rev_from_ecn %}ECN approvato. Crea la nuova revisione del documento per implementare la variante.
+      {% else %}ECN approvato. In attesa della creazione della nuova revisione del documento.{% endif %}
+    </p>
+  </div>
+  {% endif %}
+{% elif ecn.status == 'closed' %}
+<div class="alert-info mb-4">
+  <strong>Completato:</strong> ECN chiuso il {{ ecn.closed_at|date:"d/m/Y" }}.
+</div>
+{% elif ecn.status == 'rejected' %}
+<div class="alert-danger mb-4">
+  <strong>Rifiutato:</strong> Questo ECN è stato rifiutato dalla CCB.{% if ecn.ccb_notes %} Motivo: {{ ecn.ccb_notes }}{% endif %}
+</div>
+{% endif %}
+
+{# Avviso decisioni esistenti in under_review #}
+{% if ecn.status == 'under_review' and has_decisions and can_reopen %}
+<div class="alert-warning mb-4">
+  <strong>Nota:</strong>
+  Esistono già decisioni CCB espresse. Per modificare gli approvatori o la policy
+  è necessario riaprire la configurazione (le decisioni verranno annullate).
+</div>
+{% endif %}
+
+{# Messaggio read-only per stati terminali #}
+{% if ecn.status == 'approved' or ecn.status == 'rejected' or ecn.status == 'closed' %}
+<div class="alert-info mb-4">
+  <strong>Sola lettura:</strong>
+  Questo ECN è nello stato <em>{{ ecn.get_status_display }}</em> e non è più modificabile.
+</div>
+{% endif %}
+
+{# ── Azioni principali ── #}
+<div class="flex flex-wrap gap-2 mb-5">
+  {% if can_edit %}
+  <a href="{% url 'ecn:ecn_edit' ecn.pk %}" class="btn-secondary">Modifica richiesta</a>
+  {% endif %}
+
+  {% if ecn.status == 'draft' and can_configure_ccb %}
+  <a href="{% url 'ecn:ecn_configure_ccb' ecn.pk %}" class="btn-secondary">
+    {% if has_ccb_configured %}Modifica CCB{% else %}Configura CCB{% endif %}
+  </a>
+  {% endif %}
+
+  {% if ecn.status == 'ccb_preparation' and can_configure_ccb %}
+  <a href="{% url 'ecn:ecn_configure_ccb' ecn.pk %}" class="btn-secondary">Modifica CCB</a>
+  {% endif %}
+
+  {% if ecn.status == 'under_review' and can_reconfigure and not has_decisions %}
+  <a href="{% url 'ecn:ecn_configure_ccb' ecn.pk %}" class="btn-secondary">Modifica CCB</a>
+  {% endif %}
+
+  {% if ecn.status == 'under_review' and can_reopen %}
+  <a href="{% url 'ecn:ecn_reopen_ccb' ecn.pk %}" class="btn-danger">Riapri configurazione CCB</a>
+  {% endif %}
+
+  {% if ecn.status == 'ccb_preparation' and can_compile_dossier %}
+  <a href="{% url 'ecn:ecn_ccb_dossier' ecn.pk %}" class="btn-primary">Istruttoria CCB</a>
+  {% endif %}
+
+  {% if ecn.status == 'draft' and can_submit and has_ccb_configured %}
+  <form method="post" action="{% url 'ecn:ecn_submit' ecn.pk %}">
+    {% csrf_token %}
+    <button type="submit" class="btn-primary"
+            onclick="return confirm('Inviare questo ECN alla CCB?')">
+      Invia alla CCB
+    </button>
+  </form>
+  {% endif %}
+
+  {% if ecn.status == 'under_review' and can_review %}
+  <a href="{% url 'ecn:ecn_review' ecn.pk %}" class="btn-primary">Decisione CCB</a>
+  {% endif %}
+
+  {% if ecn.status == 'approved' and can_close %}
+  <a href="{% url 'ecn:ecn_close' ecn.pk %}" class="btn-success">Chiudi ECN</a>
+  {% endif %}
+
+  {% if can_attach %}
+  <a href="{% url 'ecn:ecn_add_attachment' ecn.pk %}" class="btn-secondary">+ Allegato</a>
+  {% endif %}
+
+  {% if can_create_rev_from_ecn %}
+  <a href="{% url 'document_new_revision' ecn.document_id %}?ecn={{ ecn.pk }}" class="btn-success">
+    Crea revisione da ECN
+  </a>
+  {% endif %}
+</div>
+
+{# ── Scheda ECN ── #}
+<div class="card">
+  <h2 class="text-base font-semibold text-brand-900 mb-3 card-header">Dati generali</h2>
+  <dl class="dl-grid">
+    <dt>Codice</dt>         <dd>{{ ecn.code }}</dd>
+    <dt>Documento</dt>      <dd><a href="{% url 'document_detail' ecn.document_id %}" class="text-brand-600 hover:underline">{{ ecn.document.code }} — {{ ecn.document.title }}</a></dd>
+    <dt>Rev. riferimento</dt><dd><a href="{% url 'version_detail' ecn.document_version.pk %}" class="text-brand-600 hover:underline">Rev. {{ ecn.document_version.revision_label }}</a></dd>
+    {% if ecn.project %}
+    <dt>Progetto</dt>       <dd>{{ ecn.project }}</dd>
+    {% endif %}
+    <dt>Proponente</dt>     <dd>{{ ecn.proposed_by.get_full_name|default:ecn.proposed_by.username }}</dd>
+    {% if ecn.created_by_id != ecn.proposed_by_id %}
+    <dt>Creato da</dt>      <dd>{{ ecn.created_by.get_full_name|default:ecn.created_by.username }}</dd>
+    {% endif %}
+    <dt>Data proposta</dt>  <dd>{{ ecn.proposed_at|date:"d/m/Y H:i" }}</dd>
+    {% if ecn.submitted_at %}
+    <dt>Inviato a CCB</dt>  <dd>{{ ecn.submitted_at|date:"d/m/Y H:i" }}</dd>
+    {% endif %}
+    {% if ecn.commessa %}
+    <dt>Commessa</dt>       <dd>{{ ecn.commessa }}</dd>
+    {% endif %}
+  </dl>
+</div>
+
+{# ── Proposta di variante ── #}
+<div class="card">
+  <h2 class="text-base font-semibold text-brand-900 mb-3 card-header">Proposta di variante</h2>
+  <dl class="dl-grid">
+    <dt>Categoria motivazione</dt>
+    <dd>{{ ecn.get_motivation_display }}</dd>
+    {% if ecn.motivation_detail %}
+    <dt>Motivazione (dettaglio)</dt>
+    <dd class="whitespace-pre-wrap">{{ ecn.motivation_detail }}</dd>
+    {% endif %}
+    {% if ecn.description %}
+    <dt>Descrizione modifica</dt>
+    <dd class="whitespace-pre-wrap">{{ ecn.description }}</dd>
+    {% endif %}
+  </dl>
+</div>
+
+{# ── Valutazione CCB ── #}
+{% if ecn.status == 'approved' or ecn.status == 'rejected' or ecn.status == 'closed' or ecn.ccb_reviewed_by %}
+<div class="card">
+  <h2 class="text-base font-semibold text-brand-900 mb-3 card-header">Valutazione CCB</h2>
+  <dl class="dl-grid">
+    {% if ecn.ccb_reviewed_by %}
+    <dt>Revisore</dt>       <dd>{{ ecn.ccb_reviewed_by.get_full_name|default:ecn.ccb_reviewed_by.username }}</dd>
+    {% endif %}
+    {% if ecn.ccb_reviewed_at %}
+    <dt>Revisionato il</dt> <dd>{{ ecn.ccb_reviewed_at|date:"d/m/Y H:i" }}</dd>
+    {% endif %}
+    {% if ecn.ccb_class %}
+    <dt>Classe variante</dt><dd>{{ ecn.get_ccb_class_display }}</dd>
+    {% endif %}
+    {% if ecn.ccb_requirements %}
+    <dt>Analisi requisiti</dt><dd class="whitespace-pre-wrap">{{ ecn.ccb_requirements }}</dd>
+    {% endif %}
+    {% if ecn.ccb_technical_impact %}
+    <dt>Impatto tecnico</dt><dd class="whitespace-pre-wrap">{{ ecn.ccb_technical_impact }}</dd>
+    {% endif %}
+    {% if ecn.ccb_cost_impact %}
+    <dt>Impatto costi</dt>  <dd class="whitespace-pre-wrap">{{ ecn.ccb_cost_impact }}</dd>
+    {% endif %}
+    {% if ecn.ccb_time_impact %}
+    <dt>Impatto tempi</dt>  <dd class="whitespace-pre-wrap">{{ ecn.ccb_time_impact }}</dd>
+    {% endif %}
+    {% if ecn.ccb_quality_impact %}
+    <dt>Impatto qualità</dt><dd class="whitespace-pre-wrap">{{ ecn.ccb_quality_impact }}</dd>
+    {% endif %}
+    {% if ecn.ccb_other_impact %}
+    <dt>Impatto altri doc.</dt><dd class="whitespace-pre-wrap">{{ ecn.ccb_other_impact }}</dd>
+    {% endif %}
+    {% if ecn.ccb_notes %}
+    <dt>Note CCB</dt>       <dd class="whitespace-pre-wrap">{{ ecn.ccb_notes }}</dd>
+    {% endif %}
+  </dl>
+</div>
+{% endif %}
+
+{# ── Componenti CCB ── #}
+<div class="card">
+  <h2 class="text-base font-semibold text-brand-900 mb-3 card-header">Componenti CCB</h2>
+  <dl class="dl-grid mb-4">
+    <dt>Politica</dt><dd>{{ ecn.get_ccb_policy_display }}</dd>
+    {% if ecn.ccb_coordinator %}
+    <dt>Resp. istruttoria</dt>
+    <dd>{{ ecn.ccb_coordinator.get_full_name|default:ecn.ccb_coordinator.username }}</dd>
+    {% endif %}
+  </dl>
+  {% if approvers %}
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Approvatore</th>
+        <th>Decisione</th>
+        <th>Commento</th>
+        <th>Data</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for app in approvers %}
+      {% with dec=app.decisions.first %}
+      <tr>
+        <td class="text-gray-500">{{ app.order }}</td>
+        <td>{{ app.user.get_full_name|default:app.user.username }}</td>
+        <td>
+          {% if dec %}
+            {% if dec.decision == 'approve' %}
+            <span class="badge-ecn-approved">{{ dec.get_decision_display }}</span>
+            {% else %}
+            <span class="badge-ecn-rejected">{{ dec.get_decision_display }}</span>
+            {% endif %}
+          {% else %}
+            <span class="badge-ecn-under_review">In attesa</span>
+          {% endif %}
+        </td>
+        <td class="meta">{{ dec.comment|default:"—" }}</td>
+        <td class="meta whitespace-nowrap">{% if dec %}{{ dec.decided_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</td>
+      </tr>
+      {% endwith %}
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="meta">Nessun approvatore assegnato.</p>
+  {% endif %}
+</div>
+
+{# ── Esecuzione ── #}
+{% if ecn.status == 'approved' or ecn.status == 'closed' %}
+<div class="card">
+  <h2 class="text-base font-semibold text-brand-900 mb-3 card-header">Esecuzione</h2>
+  {% if ecn.executed_version %}
+  <dl class="dl-grid">
+    <dt>Revisione eseguita</dt>
+    <dd>
+      <a href="{% url 'version_detail' ecn.executed_version.pk %}" class="text-brand-600 hover:underline">Rev. {{ ecn.executed_version.revision_label }}</a>
+      — <span class="badge-status-{{ ecn.executed_version.status }}">{{ ecn.executed_version.get_status_display }}</span>
+    </dd>
+  </dl>
+  {% else %}
+  <p class="text-amber-700 text-sm">
+    Nessuna revisione di esecuzione collegata. La nuova revisione del documento verrà collegata a questo ECN nel passo successivo.
+  </p>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ── Chiusura ── #}
+{% if ecn.status == 'closed' %}
+<div class="card">
+  <h2 class="text-base font-semibold text-brand-900 mb-3 card-header">Chiusura</h2>
+  <dl class="dl-grid">
+    {% if ecn.closed_by %}
+    <dt>Chiuso da</dt>    <dd>{{ ecn.closed_by.get_full_name|default:ecn.closed_by.username }}</dd>
+    {% endif %}
+    {% if ecn.closed_at %}
+    <dt>Chiuso il</dt>    <dd>{{ ecn.closed_at|date:"d/m/Y H:i" }}</dd>
+    {% endif %}
+    {% if ecn.close_notes %}
+    <dt>Note chiusura</dt><dd class="whitespace-pre-wrap">{{ ecn.close_notes }}</dd>
+    {% endif %}
+  </dl>
+</div>
+{% endif %}
+
+{# ── Dati storici sanatoria ── #}
+{% if historical_records %}
+<div class="card">
+  <div class="card-header">
+    <h2 class="section-title mb-0">Dati storici (sanatoria)</h2>
+  </div>
+  <div class="table-container mt-0 mb-0">
+    <table class="data-table">
+      <thead><tr>
+        <th>Data dichiarata</th>
+        <th>Evento</th>
+        <th>Attore storico</th>
+        <th>Fonte</th>
+        <th>Registrato da</th>
+        <th>Note</th>
+      </tr></thead>
+      <tbody>
+        {% for hr in historical_records %}
+        <tr>
+          <td class="meta whitespace-nowrap">{{ hr.historical_date|date:"d/m/Y"|default:"—" }}</td>
+          <td>{{ hr.get_event_type_display }}</td>
+          <td>{{ hr.get_actor_display }}</td>
+          <td class="meta text-xs">{{ hr.source_description|default:"—" }}</td>
+          <td class="meta">{{ hr.recorded_by.get_full_name|default:hr.recorded_by.username|default:"—" }}</td>
+          <td class="meta text-xs">{{ hr.notes|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Allegati ── #}
+<div class="card">
+  <h2 class="text-base font-semibold text-brand-900 mb-3 card-header">Allegati</h2>
+  {% if attachments %}
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>File</th>
+        <th>Titolo</th>
+        <th>Caricato da</th>
+        <th>Data</th>
+        <th class="w-20"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for att in attachments %}
+      <tr>
+        <td>{{ att.original_filename|default:att.file.name }}</td>
+        <td>{{ att.title|default:"—" }}</td>
+        <td class="meta">{{ att.uploaded_by.get_full_name|default:att.uploaded_by.username }}</td>
+        <td class="meta whitespace-nowrap">{{ att.uploaded_at|date:"d/m/Y" }}</td>
+        <td>
+          <a href="{% url 'ecn:ecn_attachment_download' att.pk %}" class="btn-secondary btn-sm">Scarica</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="meta">Nessun allegato.</p>
+  {% endif %}
+</div>
+{% endblock %}
