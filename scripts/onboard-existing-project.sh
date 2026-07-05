@@ -11,8 +11,32 @@ PROJECTS_DIR="${REPO_ROOT}/projects"
 ONBOARD_TASKS_TEMPLATE="${REPO_ROOT}/docs/templates/PROJECT_ANALYSIS_TASK.md"
 
 # Nomi di directory escluse dalla copia, ovunque si trovino nell'albero
-# sorgente (case-sensitive, match sul nome esatto della directory).
-EXCLUDE_DIR_NAMES=(.git .venv venv node_modules __pycache__ .pytest_cache dist build)
+# sorgente (case-sensitive, match sul nome esatto della directory):
+#   - version control, ambienti virtuali, cache di build/lint/test;
+#   - cartelle di upload/media con probabili dati reali di utenti.
+# "files/" è deliberatamente ESCLUSA da questa lista: nome troppo generico,
+# alto rischio di rimuovere codice sorgente legittimo. Se un progetto reale
+# tiene upload reali in una cartella dal nome non standard, va rimossa
+# manualmente dopo l'onboarding (vedi RUNBOOK).
+EXCLUDE_DIR_NAMES=(
+	.git .venv venv env node_modules __pycache__ .pytest_cache
+	.mypy_cache .ruff_cache .tox dist build
+	media uploads upload attachments
+)
+
+# Pattern di FILE esclusi dalla copia, ovunque si trovino nell'albero
+# sorgente: segreti locali e database SQLite reali. ".env.example" è
+# l'unica eccezione esplicita (template, nessun segreto reale).
+EXCLUDE_FILE_PATTERNS=(".env" ".env.*" "*.sqlite" "*.sqlite3" "*.db")
+EXCLUDE_FILE_EXCEPTIONS=(".env.example")
+
+is_excluded_file_exception() {
+	local base="$1" exc
+	for exc in "${EXCLUDE_FILE_EXCEPTIONS[@]}"; do
+		[[ "${base}" == "${exc}" ]] && return 0
+	done
+	return 1
+}
 
 usage() {
 	cat <<EOF
@@ -31,6 +55,8 @@ Options:
 Comportamento:
   - Copia il contenuto di --source in projects/NAME/, escludendo ricorsivamente
     le directory: ${EXCLUDE_DIR_NAMES[*]}
+  - Esclude inoltre ricorsivamente i file: ${EXCLUDE_FILE_PATTERNS[*]}
+    (eccetto: ${EXCLUDE_FILE_EXCEPTIONS[*]}, sempre copiato se presente).
   - Non sovrascrive un progetto già esistente in projects/NAME/.
   - Crea docs/ai/TASKS.md (da docs/templates/PROJECT_ANALYSIS_TASK.md) solo se
     non è già presente nel progetto importato.
@@ -135,6 +161,23 @@ for dir_name in "${EXCLUDE_DIR_NAMES[@]}"; do
 	done < <(find "${DEST}" -type d -name "${dir_name}" -prune -print0)
 	if [[ "${found}" -eq 1 ]]; then
 		printf "  rimossa: %s (ovunque nell'albero copiato)\n" "${dir_name}"
+	fi
+done
+
+printf "\nEsclusione file sensibili (se presenti):\n"
+for pattern in "${EXCLUDE_FILE_PATTERNS[@]}"; do
+	removed=0
+	while IFS= read -r -d '' match; do
+		base="$(basename "${match}")"
+		if is_excluded_file_exception "${base}"; then
+			continue
+		fi
+		rm -f -- "${match}"
+		removed=1
+	done < <(find "${DEST}" -type f -name "${pattern}" -print0)
+	if [[ "${removed}" -eq 1 ]]; then
+		printf "  rimossi file corrispondenti a: %s (eccetto %s)\n" \
+			"${pattern}" "${EXCLUDE_FILE_EXCEPTIONS[*]}"
 	fi
 done
 

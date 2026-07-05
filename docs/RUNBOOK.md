@@ -324,14 +324,36 @@ pilota nato qui) e prepararlo al workflow AI:
 ```
 
 Copia il contenuto di `--source` in `projects/<name>/`, escludendo
-ricorsivamente le directory `.git`, `.venv`, `venv`, `node_modules`,
-`__pycache__`, `.pytest_cache`, `dist`, `build` (match sul nome, ovunque si
-trovino nell'albero). Non sovrascrive un progetto già esistente. Crea
-`docs/ai/TASKS.md` (da `docs/templates/PROJECT_ANALYSIS_TASK.md`, con un
-solo task iniziale — TASK-001, analisi del progetto) e `scripts/test.sh`
+ricorsivamente (match sul nome esatto, ovunque si trovino nell'albero):
+
+- **Version control / ambienti / cache:** `.git`, `.venv`, `venv`, `env`,
+  `node_modules`, `__pycache__`, `.pytest_cache`, `.mypy_cache`,
+  `.ruff_cache`, `.tox`, `dist`, `build`.
+- **Cartelle upload/media con probabili dati reali:** `media`, `uploads`,
+  `upload`, `attachments`. **Nota:** `files/` è deliberatamente esclusa da
+  questa lista (nome troppo generico, alto rischio di rimuovere codice
+  sorgente legittimo) — se un progetto reale tiene upload in una cartella
+  dal nome non standard, va rimossa manualmente dopo l'onboarding.
+- **File di segreti locali:** `.env` e ogni `.env.*` (es. `.env.local`,
+  `.env.production`), **eccetto `.env.example`** (template, sempre copiato
+  se presente).
+- **Database locali:** `*.sqlite`, `*.sqlite3` (copre anche `db.sqlite3`),
+  `*.db`.
+
+Queste esclusioni sono pensate per progetti reali con dati/segreti veri
+(es. il primo import reale della Station, `documentale-workcopy`, conteneva
+`.env`, `db.sqlite3` e 235 file reali in `media/`, rimossi manualmente prima
+che questo hardening esistesse). Non sovrascrive un progetto già esistente.
+Crea `docs/ai/TASKS.md` (da `docs/templates/PROJECT_ANALYSIS_TASK.md`, con
+un solo task iniziale — TASK-001, analisi del progetto) e `scripts/test.sh`
 (placeholder eseguibile) **solo se non già presenti** nel progetto sorgente.
 Non modifica la sorgente, non installa dipendenze, non esegue codice del
 progetto importato, non fa `git add` né commit.
+
+**Se serve includere intenzionalmente contenuto media/upload reale** (non
+supportato oggi): rimuovere a mano l'esclusione desiderata dallo script o
+copiare manualmente il contenuto dopo l'onboarding — nessuna opzione
+`--include-*` è prevista, per non rendere facile un errore pericoloso.
 
 Flusso operativo completo consigliato:
 
