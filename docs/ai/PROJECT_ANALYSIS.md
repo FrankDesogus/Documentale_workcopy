@@ -339,6 +339,13 @@ Solo elenco percorsi — **nessun valore letto o riportato**.
 
 ## Roadmap proposta in task piccoli
 
+> **Nota (2026-07-06):** roadmap operativa trasferita e raffinata in
+> `docs/ai/TASKS.md` (Backlog TASK-006..TASK-012). Gli ID qui sotto sono la
+> proposta originale di TASK-001; la numerazione reale è divergente perché
+> TASK-002..005 sono stati assorbiti da bootstrap test runner e da due bug
+> reali trovati e corretti lungo il percorso. `docs/ai/TASKS.md` è la fonte
+> di verità aggiornata.
+
 Task pensati per trascrizione manuale nel Backlog di `docs/ai/TASKS.md` dopo review
 operatore.
 
