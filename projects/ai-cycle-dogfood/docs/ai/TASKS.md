@@ -64,25 +64,49 @@ def summarize_status(items: list) -> dict:
 #### Obiettivo
 
 Aggiungere `count_by_field(items, field)` in `dogfood.py`: conta le occorrenze
-dei valori di una chiave arbitraria, generalizzando `summarize_status`.
+dei valori di un campo arbitrario, generalizzando `summarize_status`.
 
 #### Scope
 
 - Solo `dogfood.py`: nuova funzione `count_by_field`.
-- Non modificare `test_dogfood.py` né `scripts/test.sh`.
+- Aggiungere/aggiornare test in `test_dogfood.py` per la nuova funzione (senza
+  toccare i test esistenti di `summarize_status`).
+- Non modificare `scripts/test.sh`.
 
 #### File coinvolti
 
 - `dogfood.py`
+- `test_dogfood.py`
+
+#### Specifica
+
+```python
+def count_by_field(items: list, field: str) -> dict:
+    """
+    Riceve una lista di dizionari e il nome di un campo.
+    Restituisce un dizionario che mappa ogni valore del campo al suo conteggio.
+
+    Comportamenti da gestire:
+    - lista vuota → ritorna {}
+    - item senza il campo richiesto → conta sotto la chiave None
+    - item con valore None per il campo → conta sotto la chiave None
+      (stesso bucket dei campi mancanti)
+    """
+```
 
 #### Acceptance criteria
 
 - [ ] `count_by_field([{"k":"a"},{"k":"b"},{"k":"a"}], "k") == {"a": 2, "b": 1}`.
-- [ ] Lista vuota → `{}`; item senza la chiave o con valore `None` → ignorato.
+- [ ] Lista vuota → `{}`.
+- [ ] Item senza la chiave `field` → conteggiato sotto `None`.
+- [ ] Item con valore `None` per `field` → conteggiato sotto `None` (stesso
+      bucket dei campi mancanti, non ignorato).
+- [ ] Nessuna dipendenza esterna.
 
 #### Test richiesti
 
 - `./scripts/test.sh` esce con codice 0.
+- Nuovi test in `test_dogfood.py` per `count_by_field` che coprono i casi sopra.
 
 #### Guardrail
 
@@ -92,8 +116,9 @@ dei valori di una chiave arbitraria, generalizzando `summarize_status`.
 
 #### Note operative
 
-Task usato per validare il formato TASKS.template.md; l'implementazione può
-essere svolta in un ciclo successivo.
+Comportamento deliberatamente diverso da `summarize_status` (che ignora
+None/campo mancante): qui None/mancante sono un bucket valido, per validare
+che il workflow gestisca una spec puntuale e non solo un pattern ricalcato.
 
 ---
 
