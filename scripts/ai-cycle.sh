@@ -152,8 +152,7 @@ run_cycle() {
 	echo ""
 
 	echo "[STEP 4] Lancio Cursor Agent (timeout 300s)..."
-	if ! timeout 300s claude -p --allowedTools "Read,Edit,Write,Bash" \
-		<"${cursor_prompt_file}"; then
+	if ! (cd "${REPO_ROOT}" && timeout 300s agent --trust --print "$(cat "${cursor_prompt_file}")"); then
 		printf "ERROR: Cursor Agent fallito o timeout.\n" >&2
 		exit 1
 	fi
