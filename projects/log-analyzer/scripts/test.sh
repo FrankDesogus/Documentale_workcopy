@@ -174,10 +174,11 @@ fi
 MULTI_OUT="$(python "${PROJECT_ROOT}/log_analyzer.py" \
 	--projects-dir "${PROJECTS_DIR}" 2>/dev/null || true)"
 
-if echo "${MULTI_OUT}" | grep -c "^== " | grep -q "[2-9]"; then
-	pass "scanning multi-progetto → almeno 2 progetti trovati"
+PROJECT_COUNT="$(echo "${MULTI_OUT}" | grep -c "^== " || true)"
+if [[ "${PROJECT_COUNT}" -ge 2 ]]; then
+	pass "scanning multi-progetto → almeno 2 progetti trovati (${PROJECT_COUNT})"
 else
-	fail "scanning multi-progetto → almeno 2 progetti trovati"
+	fail "scanning multi-progetto → almeno 2 progetti trovati (trovati: ${PROJECT_COUNT})"
 fi
 
 OUTPUT_TMP="$(mktemp)"
