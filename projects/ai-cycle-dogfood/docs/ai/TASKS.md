@@ -16,7 +16,7 @@
 | ID | Titolo | Commit | Data |
 | -- | ------ | ------ | ---- |
 | TASK-001 | Implementa summarize_status | — | 2026-06-29 |
-| TASK-002 | Implementa count_by_field | <da aggiornare col commit> | 2026-07-05 |
+| TASK-002 | Implementa count_by_field | `6fc2639` | 2026-07-05 |
 
 ---
 
