@@ -264,6 +264,53 @@ esplicita che non sono stati fatti push/merge/reset. L'accesso a Git è read-onl
 
 ---
 
+## Fotografia rapida della Station (`station-status.sh`)
+
+Per una vista d'insieme veloce dello stato della Station (branch, working
+tree, ultimi commit, helper disponibili, progetti e task, ultimi log):
+
+```bash
+./scripts/station-status.sh
+```
+
+Read-only: non modifica file, non fa commit, non fa push, non fa merge.
+
+---
+
+## Prossimo task suggerito (`station-next-task.sh`)
+
+Per farsi suggerire il prossimo task da eseguire su un progetto, con il
+comando `ai-cycle.sh` già pronto:
+
+```bash
+./scripts/station-next-task.sh --project <nome-progetto>
+```
+
+Legge `docs/ai/TASKS.md` del progetto: preferisce un task già "In corso";
+in mancanza, propone il primo task in "Backlog". Se non trova nessun task
+disponibile, si ferma con un messaggio chiaro (nessun task in "In corso" o
+"Backlog"). Read-only: non modifica file.
+
+---
+
+## Scaffold leggero nuovo progetto (`new-ai-project.sh`)
+
+Per creare rapidamente un nuovo progetto AI-ready con struttura minima:
+
+```bash
+./scripts/new-ai-project.sh --name <nome-progetto> --title "Titolo leggibile"
+```
+
+Crea `README.md`, `docs/ai/TASKS.md` (da `docs/templates/TASKS.template.md`)
+e `scripts/test.sh` (placeholder eseguibile che segnala "nessun test ancora
+configurato" ed esce con codice 0). Non sovrascrive un progetto già
+esistente. Non esegue `git add` né commit.
+
+Per uno scaffold completo (AGENTS.md, CLAUDE.md, cursor rules, ecc.) usare
+invece `scripts/new-project.sh`, già esistente.
+
+---
+
 ## Template standard TASKS.md
 
 Il template `docs/templates/TASKS.template.md` definisce il formato standard di
