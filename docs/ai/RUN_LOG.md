@@ -283,3 +283,50 @@ FAILED identicamente — fallimento confermato indipendente dal fix.
    `test_document_list_shows_approval_date` in `documents/tests.py`
    (usare `timezone.localtime()` nell'assert).
 2. Procedere con i task della roadmap in `docs/ai/PROJECT_ANALYSIS.md`.
+
+---
+
+### Run — 2026-07-06 — TASK-005 Correggere test approval date timezone
+
+**Agente:** Claude Code (fix diretto come orchestratore, task di una riga)
+**Task:** TASK-005 — Correggere test approval date timezone
+**Branch:** task/documentale-fix-approval-date-test
+
+**Operazioni eseguite:**
+
+1. Analizzata la causa esatta: `approved_at` impostato con `timezone.now()`
+   in `approvals/services.py` (datetime UTC-aware); il template
+   `templates/documents/document_list.html` lo renderizza con
+   `|date:"d/m/Y"`, che converte automaticamente in `Europe/Rome`; il test
+   confrontava invece con `strftime` diretto sul datetime UTC (nessuna
+   conversione) — mismatch possibile vicino alla mezzanotte CEST.
+2. Fix applicato in `documents/tests.py`,
+   `test_document_list_shows_approval_date`:
+   `v.approved_at.strftime('%d/%m/%Y')` →
+   `timezone.localtime(v.approved_at).strftime('%d/%m/%Y')`
+   (`timezone` già importato). Nessuna altra modifica.
+3. Test mirato isolato: PASS.
+4. Suite Django completa (venv `.venv` attiva): **1207/1207 PASS**, 0
+   warning, `manage.py check` pulito.
+5. Aggiornati `docs/ai/TESTING_STATUS.md` e `docs/ai/TASKS.md`.
+6. Nessuna modifica a view, modelli, template o migrazioni. Nessun file
+   del progetto sorgente originale toccato.
+
+**Esito test (`scripts/test.sh`, con venv `.venv` attiva):**
+
+```
+Ran 1207 tests in 502.104s
+OK
+Tutti i controlli completati con successo.
+Exit code: 0
+```
+
+**Problemi riscontrati:**
+
+- Nessuno. Suite completamente verde, nessun warning residuo.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Procedere con i task della roadmap in `docs/ai/PROJECT_ANALYSIS.md`
+   (es. migrazione permessi cartella, pulizia dipendenze inutilizzate,
+   allineamento documentazione).

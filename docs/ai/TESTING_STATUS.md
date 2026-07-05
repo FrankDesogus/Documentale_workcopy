@@ -1,7 +1,7 @@
 # Testing status — Documentale Workcopy
 
 Stato onesto della validazione della test suite in questa copia Station.
-Aggiornato: 2026-07-06 (TASK-004 — fix warning + scoperta test fragile).
+Aggiornato: 2026-07-06 (TASK-005 — suite tornata 1207/1207 PASS).
 
 ## Stato attuale
 
@@ -50,6 +50,21 @@ dettagli tecnici (bug di fuso orario pre-esistente nel test, non nel fix).
 Questo fallimento è transitorio: dipende dall'orario di esecuzione
 (confine di mezzanotte CEST/UTC), non da uno stato del codice.
 
+### TASK-005 (2026-07-06) — 1207/1207 PASS (test fragile corretto)
+
+```
+Ran 1207 tests in 502.104s
+OK
+Tutti i controlli completati con successo.
+```
+
+Fix: in `documents/tests.py`,
+`v.approved_at.strftime('%d/%m/%Y')` → `timezone.localtime(v.approved_at).strftime('%d/%m/%Y')`,
+per confrontare lo stesso valore localizzato (Europe/Rome) che il template
+mostra davvero, invece del datetime UTC grezzo. Solo il test modificato:
+nessuna view/modello/template toccato. Test mirato isolato: PASS. Suite
+completa: **1207/1207 PASS**, 0 warning, `manage.py check` pulito.
+
 ### Problemi minori noti
 
 - ~~`documents/versioning.py:9` — `SyntaxWarning`~~ **Corretto in TASK-004**
@@ -64,23 +79,15 @@ Questo fallimento è transitorio: dipende dall'orario di esecuzione
   Nessuna modifica applicata." è l'output atteso di un test che verifica
   esplicitamente il rollback transazionale (simula un errore apposta) — non
   un fallimento.
-- **Nuovo, trovato in TASK-004, NON corretto (fuori scope):**
-  `documents.tests.DocumentDetailApprovalTests.test_document_list_shows_approval_date`
-  è **fragile su confine di fuso orario**. Confronta
-  `v.approved_at.strftime('%d/%m/%Y')` (datetime UTC, non convertito) con
-  il rendering del template (localizzato in `Europe/Rome` via `USE_TZ` +
-  `TIME_ZONE`). Vicino alla mezzanotte CEST/CET le due date possono
-  differire di un giorno (osservato: run alle 22:09 UTC / 00:09 CEST,
-  atteso "05/07/2026", trovato "06/07/2026" in pagina). **Dimostrato
-  indipendente da qualunque modifica di questo task**: lo stesso test
-  isolato fallisce identicamente anche con `documents/versioning.py`
-  ripristinato alla versione originale (test di controllo A/B eseguito
-  esplicitamente). Bug pre-esistente nel test suite del Documentale, non
-  nella logica applicativa di produzione (il template localizza
-  correttamente; è l'assert del test a non farlo). Non corretto qui:
-  richiederebbe modificare `documents/tests.py`, fuori scope di TASK-004.
-  Candidato per un piccolo task dedicato futuro (es. usare
-  `django.utils.timezone.localtime()` nell'assert).
+- ~~`documents.tests.DocumentDetailApprovalTests.test_document_list_shows_approval_date`
+  fragile su confine di fuso orario~~ **Corretto in TASK-005** (2026-07-06):
+  vedi sopra. Trovato in TASK-004 (confrontava `v.approved_at.strftime(...)`
+  UTC grezzo con il rendering del template, localizzato in Europe/Rome —
+  vicino alla mezzanotte CEST/CET le due date potevano differire di un
+  giorno; dimostrato indipendente dal fix di TASK-004 con test di controllo
+  A/B), corretto usando `timezone.localtime()` nell'assert. Bug era solo
+  nel test, mai nella logica applicativa di produzione (il template
+  localizza correttamente).
 
 ## Cosa è stato validato
 
@@ -88,7 +95,8 @@ Questo fallimento è transitorio: dipende dall'orario di esecuzione
   `py_compile` su `config/test_settings.py`.
 - Comportamento fail-fast quando mancavano le dipendenze (validato prima di
   TASK-003: `exit 1` con elenco chiaro, nessun falso successo).
-- **La suite Django reale del Documentale importato: 1207/1207 test PASS,
+- **La suite Django reale del Documentale importato: 1207/1207 test PASS
+  (confermato più volte, ultima conferma TASK-005, 2026-07-06),
   `manage.py check` pulito, in un ambiente con le dipendenze reali
   installate in una venv dedicata e isolata.**
 - Integrazione con gli helper Station (`station-project-readiness.sh`,
@@ -107,8 +115,6 @@ Questo fallimento è transitorio: dipende dall'orario di esecuzione
 - Compatibilità con PostgreSQL (target di produzione) non verificata: i
   test usano SQLite `:memory:` per design (nessun DB reale), non è stata
   fatta alcuna verifica specifica su PostgreSQL.
-- Il test fragile su fuso orario (`test_document_list_shows_approval_date`)
-  resta da correggere in un task dedicato (vedi "Problemi minori noti").
 
 ## Interpretazione corretta di "test PASS" per questo progetto
 
@@ -122,10 +128,6 @@ distinto esplicitamente da un vero fallimento della suite applicativa.
 
 ## Prossimo passo
 
-- Task piccolo, facoltativo: correggere il test fragile su fuso orario in
-  `documents/tests.py` (`test_document_list_shows_approval_date`), usando
-  `django.utils.timezone.localtime()` nell'assert invece di `strftime`
-  diretto su un datetime UTC.
-- Procedere con i task della roadmap in `docs/ai/PROJECT_ANALYSIS.md`
-  (es. migrazione permessi cartella, pulizia dipendenze inutilizzate,
-  allineamento documentazione).
+Nessun problema noto residuo nella suite. Procedere con i task della
+roadmap in `docs/ai/PROJECT_ANALYSIS.md` (es. migrazione permessi cartella,
+pulizia dipendenze inutilizzate, allineamento documentazione).
