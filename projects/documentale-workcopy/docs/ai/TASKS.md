@@ -22,13 +22,13 @@ _Nessun task in corso._
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
-| TASK-002 | Collegare test reali Django | alta | rete di sicurezza per i cicli futuri, no DB reale, no server, no segreti |
 
 ## Completati
 
 | ID | Titolo | Commit | Data |
 | -- | ------ | ------ | ---- |
 | TASK-001 | Analisi iniziale progetto Documentale | — | 2026-07-05 |
+| TASK-002 | Collegare test reali Django | — | 2026-07-05 |
 
 ---
 
