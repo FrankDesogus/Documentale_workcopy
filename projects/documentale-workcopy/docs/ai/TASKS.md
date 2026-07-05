@@ -22,7 +22,6 @@ _Nessun task in corso._
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
-| TASK-003 | Preparare ambiente test dedicato Documentale | alta | serve autorizzazione esplicita per installare pacchetti; vedi docs/ai/TESTING_STATUS.md |
 
 ## Completati
 
@@ -30,6 +29,7 @@ _Nessun task in corso._
 | -- | ------ | ------ | ---- |
 | TASK-001 | Analisi iniziale progetto Documentale | — | 2026-07-05 |
 | TASK-002 | Collegare test reali Django | — | 2026-07-05 |
+| TASK-003 | Preparare ambiente test dedicato Documentale | — | 2026-07-05 |
 
 ---
 
@@ -220,10 +220,11 @@ importato, così da avere una vera rete di sicurezza per i cicli AI futuri.
 
 #### Nota di stato (post-completamento)
 
-TASK-002 ha creato un runner reale e sicuro, ma **la suite Django non è
-stata validata end-to-end** in questo ambiente (dipendenze mancanti, mai
-installate per design). Stato dettagliato: `docs/ai/TESTING_STATUS.md`.
-Prossimo task per chiudere la validazione: **TASK-003**.
+TASK-002 ha creato un runner reale e sicuro. Al momento del completamento
+di TASK-002 la suite Django non era ancora stata validata end-to-end
+(dipendenze mancanti). **Aggiornamento (TASK-003, stesso giorno): la suite
+è stata validata in una venv dedicata — 1207/1207 test PASS.** Stato
+dettagliato: `docs/ai/TESTING_STATUS.md`.
 
 ---
 
@@ -258,12 +259,22 @@ importato è davvero verde (non solo se il runner è ben scritto).
 
 #### Acceptance criteria
 
-- [ ] Autorizzazione esplicita dell'operatore ottenuta prima di installare
+- [x] Autorizzazione esplicita dell'operatore ottenuta prima di installare
       qualunque pacchetto.
-- [ ] `./scripts/test.sh` eseguito in un ambiente con le dipendenze reali.
-- [ ] Esito reale (PASS o FAIL applicativo) documentato in
+- [x] `./scripts/test.sh` eseguito in un ambiente con le dipendenze reali.
+- [x] Esito reale (PASS o FAIL applicativo) documentato in
       `docs/ai/TESTING_STATUS.md`.
-- [ ] Nessuna modifica alla logica applicativa in questo task.
+- [x] Nessuna modifica alla logica applicativa in questo task.
+
+#### Esito (2026-07-05)
+
+Venv dedicata `projects/documentale-workcopy/.venv` (già ignorata da
+`.gitignore`, mai committata). Dipendenze installate con
+`pip install -r requirements.txt` solo in quella venv. **Suite Django reale:
+1207/1207 test PASS, `manage.py check` senza problemi.** Dettagli completi
+in `docs/ai/TESTING_STATUS.md`. Un `SyntaxWarning` cosmetico non bloccante
+trovato in `documents/versioning.py:9` (non corretto: fuori scope, nessuna
+modifica a codice applicativo in questo task).
 
 #### Test richiesti
 
