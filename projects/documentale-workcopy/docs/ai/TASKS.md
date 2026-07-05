@@ -22,12 +22,12 @@ _Nessun task in corso._
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
-| TASK-001 | Analisi iniziale progetto Documentale | alta | primo task obbligatorio dopo l'onboarding — solo analisi, no modifiche |
 
 ## Completati
 
 | ID | Titolo | Commit | Data |
 | -- | ------ | ------ | ---- |
+| TASK-001 | Analisi iniziale progetto Documentale | — | 2026-07-05 |
 
 ---
 
