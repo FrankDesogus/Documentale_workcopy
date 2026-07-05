@@ -31,6 +31,7 @@ _Nessun task in corso._
 | TASK-002 | Collegare test reali Django | — | 2026-07-05 |
 | TASK-003 | Preparare ambiente test dedicato Documentale | — | 2026-07-05 |
 | TASK-004 | Correggere SyntaxWarning in versioning | — | 2026-07-06 |
+| TASK-005 | Correggere test approval date timezone | — | 2026-07-06 |
 
 ---
 
@@ -367,6 +368,86 @@ eseguendo lo stesso test isolato con il file originale (non modificato):
 fallisce identicamente. Non corretto in questo task (richiederebbe
 modificare `documents/tests.py`, fuori scope). Vedi
 `docs/ai/TESTING_STATUS.md` per i dettagli completi.
+
+---
+
+### TASK-005 — Correggere test approval date timezone — Claude Code
+
+#### Obiettivo
+
+Correggere il test fragile `test_document_list_shows_approval_date`, che
+fallisce per differenza tra UTC e timezone locale CEST vicino alla
+mezzanotte, riportando la suite Django reale a 1207/1207 PASS.
+
+#### Scope
+
+- Modificare solo il test interessato (e import strettamente necessari)
+  in `documents/tests.py`.
+- Non modificare view, modelli, template o logica applicativa: il
+  comportamento della pagina (che già localizza correttamente in
+  Europe/Rome tramite il filtro `|date:"d/m/Y"`) resta invariato.
+- Nessun refactor più ampio del test o della classe di test.
+
+#### File coinvolti
+
+- `documents/tests.py` (solo il metodo
+  `test_document_list_shows_approval_date`).
+- `docs/ai/TASKS.md`.
+- `docs/ai/TESTING_STATUS.md`.
+- `docs/ai/RUN_LOG.md`.
+
+#### Causa esatta (accertata in TASK-004)
+
+- `approved_at` è impostato con `timezone.now()` in
+  `approvals/services.py` → datetime timezone-aware in UTC.
+- Il template `templates/documents/document_list.html` lo renderizza con
+  `{{ doc.current_version.approved_at|date:"d/m/Y" }}`: il filtro `date`
+  di Django, con `USE_TZ=True`, converte automaticamente in
+  `TIME_ZONE = 'Europe/Rome'` prima di formattare.
+- Il test confronta invece con `v.approved_at.strftime('%d/%m/%Y')`:
+  `strftime` su un datetime aware non converte la zona, usa direttamente
+  l'ora UTC memorizzata. Vicino alla mezzanotte CEST (UTC ancora nel giorno
+  precedente, Rome già nel giorno successivo) le due stringhe di data
+  differiscono.
+
+#### Fix richiesto
+
+Sostituire, nel test, `v.approved_at.strftime('%d/%m/%Y')` con
+`timezone.localtime(v.approved_at).strftime('%d/%m/%Y')` (`timezone` già
+importato in `documents/tests.py`), così da confrontare lo stesso valore
+localizzato che il template effettivamente mostra.
+
+#### Acceptance criteria
+
+- [ ] `test_document_list_shows_approval_date` passa.
+- [ ] La suite Django reale torna a 1207/1207 PASS (o numero diverso solo
+      se motivato da cause indipendenti).
+- [ ] Nessuna modifica a view/modelli/template/logica applicativa.
+- [ ] Nessun file del progetto sorgente originale toccato.
+
+#### Test richiesti
+
+```bash
+source projects/documentale-workcopy/.venv/bin/activate
+projects/documentale-workcopy/scripts/test.sh
+```
+
+#### Guardrail
+
+- Non modificare view/template/modelli per far passare il test.
+- Non cambiare il comportamento applicativo.
+- Non eseguire server, non usare database reale, non leggere segreti.
+- Non installare pacchetti.
+- No push, no merge, no reset --hard, no git clean.
+- No commit da parte dell'implementatore.
+
+#### Esito (2026-07-06)
+
+Fix applicato: `v.approved_at.strftime('%d/%m/%Y')` →
+`timezone.localtime(v.approved_at).strftime('%d/%m/%Y')` in
+`documents/tests.py`. Solo il test modificato, nessuna view/modello/template
+toccato. Test mirato: PASS. **Suite Django reale tornata a 1207/1207 PASS**
+(prima: 1206/1207). Nessun `SyntaxWarning` residuo.
 
 ---
 

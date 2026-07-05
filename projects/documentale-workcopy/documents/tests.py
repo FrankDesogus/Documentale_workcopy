@@ -935,7 +935,7 @@ class DocumentDetailApprovalTests(TestCase):
         self.client.login(username='dd_viewer', password='pw')
         response = self.client.get(reverse('document_list'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, v.approved_at.strftime('%d/%m/%Y'))
+        self.assertContains(response, timezone.localtime(v.approved_at).strftime('%d/%m/%Y'))
 
     def test_document_detail_shows_multiple_approvers_for_all_policy(self):
         v = create_new_revision(self.doc, self.author, '01', 1)
