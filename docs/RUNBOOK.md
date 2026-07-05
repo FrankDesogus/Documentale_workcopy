@@ -311,6 +311,57 @@ invece `scripts/new-project.sh`, già esistente.
 
 ---
 
+## Importare un progetto reale esistente
+
+Per portare dentro la Station un progetto software già esistente (non un
+pilota nato qui) e prepararlo al workflow AI:
+
+```bash
+./scripts/onboard-existing-project.sh \
+  --source ~/old-project \
+  --name old-project \
+  --title "Old Project"
+```
+
+Copia il contenuto di `--source` in `projects/<name>/`, escludendo
+ricorsivamente le directory `.git`, `.venv`, `venv`, `node_modules`,
+`__pycache__`, `.pytest_cache`, `dist`, `build` (match sul nome, ovunque si
+trovino nell'albero). Non sovrascrive un progetto già esistente. Crea
+`docs/ai/TASKS.md` (da `docs/templates/PROJECT_ANALYSIS_TASK.md`, con un
+solo task iniziale — TASK-001, analisi del progetto) e `scripts/test.sh`
+(placeholder eseguibile) **solo se non già presenti** nel progetto sorgente.
+Non modifica la sorgente, non installa dipendenze, non esegue codice del
+progetto importato, non fa `git add` né commit.
+
+Flusso operativo completo consigliato:
+
+```bash
+./scripts/onboard-existing-project.sh --source ~/old-project --name old-project --title "Old Project"
+./scripts/station-project-readiness.sh --project old-project
+./scripts/station-next-task.sh --project old-project
+./scripts/ai-cycle.sh --project old-project --task TASK-001 --run
+# dopo la review APPROVED:
+./scripts/commit-if-approved.sh --project old-project --task TASK-001 --review-file /tmp/review-prompt-TASK-001.md
+```
+
+Nessun push o merge automatico in nessun punto del flusso: restano sempre a
+cura dell'operatore.
+
+### Verifica di prontezza (`station-project-readiness.sh`)
+
+```bash
+./scripts/station-project-readiness.sh --project <nome-progetto>
+```
+
+Controlla: esistenza del progetto, presenza di `docs/ai/TASKS.md`, presenza
+ed eseguibilità di `scripts/test.sh`, presenza di almeno un task disponibile
+("In corso" o "Backlog", verificato tramite `station-next-task.sh`). Stampa
+`READY` (exit 0) con il prossimo comando consigliato, oppure `NOT_READY`
+(exit 1) con una checklist dei problemi e come risolverli. Read-only: non
+modifica file.
+
+---
+
 ## Template standard TASKS.md
 
 Il template `docs/templates/TASKS.template.md` definisce il formato standard di
@@ -324,6 +375,10 @@ dettaglio per task.
 `prompt_builder.py` cattura il dettaglio fino al primo heading `##`/`###`: usare
 `###` per le sotto-sezioni troncherebbe l'estrazione. Il formato è validato su
 `projects/ai-cycle-dogfood` (TASK-002).
+
+`docs/templates/PROJECT_ANALYSIS_TASK.md` è la variante usata da
+`onboard-existing-project.sh` per generare il `TASKS.md` iniziale di un
+progetto importato: stessa convenzione, con TASK-001 già pronto in Backlog.
 
 ---
 

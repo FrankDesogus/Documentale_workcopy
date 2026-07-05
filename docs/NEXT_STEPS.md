@@ -26,6 +26,8 @@ Disponibile e funzionante:
 | `scripts/station-status.sh` | fotografia read-only dello stato della Station |
 | `scripts/station-next-task.sh` | suggerisce il prossimo task e il comando `ai-cycle` pronto |
 | `scripts/new-ai-project.sh` | scaffold leggero (README, TASKS.md, test.sh placeholder) |
+| `scripts/onboard-existing-project.sh` | importa un progetto reale esistente in `projects/`, con TASK-001 di analisi già pronto |
+| `scripts/station-project-readiness.sh` | verifica READY/NOT_READY di un progetto (TASKS.md, test.sh, task disponibili) |
 
 Progetti pilota: `demo-minimal`, `task-cli-pilot`, `cursor-prompt-builder`,
 `log-analyzer`, `station-summary`, `ai-cycle-dogfood` (quest'ultimo usato per
@@ -35,9 +37,10 @@ il collaudo end-to-end reale, TASK-002 implementato da Cursor Agent).
 
 ## Cosa manca davvero
 
-1. **Uso su un progetto software reale più grande.** Tutti i pilota sono
-   piccoli tool a scopo di validazione workflow. Manca ancora un caso d'uso
-   con complessità paragonabile a un progetto vero.
+1. **Uso su un progetto software reale più grande.** Lo strumento di
+   onboarding (`onboard-existing-project.sh`) c'è ed è validato su fixture di
+   test; manca ancora un caso d'uso reale con complessità paragonabile a un
+   progetto vero, portato dentro con questo flusso.
 2. **Selezione automatica del prossimo task su più progetti.** `station-next-task.sh`
    funziona per singolo progetto; non esiste ancora un comando che scansioni
    tutta la Station e proponga cosa fare dopo in assoluto.
@@ -45,6 +48,11 @@ il collaudo end-to-end reale, TASK-002 implementato da Cursor Agent).
    (branch, helper, progetti, log); manca storicizzazione, metriche di
    durata dei cicli, o output non testuale.
 4. **MCP e modello locale (Ollama).** Rimandati, nessun caso d'uso attivo.
+5. **Bug noto minore in `cursor-prompt-builder`:** `prompt_builder.py` elenca
+   sempre `<project>/prompt_builder.py` tra i file da leggere per Cursor
+   Agent, anche per progetti che non lo contengono (riferimento hardcoded,
+   non derivato dal progetto). Non blocca il workflow ma è un refuso da
+   correggere in un piccolo task dedicato su quel progetto.
 
 ---
 
@@ -62,7 +70,9 @@ il collaudo end-to-end reale, TASK-002 implementato da Cursor Agent).
 
 ```
 1. Progetto software reale più grande
-   └── scripts/new-ai-project.sh (scaffold leggero) o new-project.sh (scaffold completo)
+   └── scripts/onboard-existing-project.sh --source <path> --name <nome> --title "..."
+       (o new-ai-project.sh / new-project.sh se il progetto parte da zero)
+   └── scripts/station-project-readiness.sh --project <nome>
    └── scripts/station-next-task.sh --project <nome>
    └── scripts/ai-cycle.sh --run per ogni task
    └── review + commit-if-approved.sh
@@ -79,5 +89,5 @@ il collaudo end-to-end reale, TASK-002 implementato da Cursor Agent).
 
 ## Data ultima revisione
 
-2026-07-05 (aggiornato post merge `workflow-automation-v1` — aggiunti helper
-operativi `station-status`, `station-next-task`, `new-ai-project`).
+2026-07-05 (aggiornato post merge `operator-workflow-v1` — aggiunti helper
+di onboarding `onboard-existing-project`, `station-project-readiness`).
