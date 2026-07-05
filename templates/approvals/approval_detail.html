@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title %}Approvazione {{ document.code }} rev.{{ version.revision_label }}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav class="breadcrumb">
+  <a href="{% url 'approval_queue' %}">Approvazioni</a>
+  <span class="breadcrumb-sep">›</span>
+  <a href="{% url 'document_detail' document.pk %}">{{ document.code }}</a>
+  <span class="breadcrumb-sep">›</span>
+  <a href="{% url 'version_detail' version.pk %}">Rev. {{ version.revision_label }}</a>
+  <span class="breadcrumb-sep">›</span>
+  <span>Approvazione</span>
+</nav>
+
+<h1 class="text-2xl font-bold text-brand-900 mb-4">{{ document.code }} — Rev. {{ version.revision_label }}</h1>
+
+<!-- Metadati -->
+<div class="card">
+  <dl class="dl-grid">
+    <dt>Documento</dt>    <dd><a href="{% url 'document_detail' document.pk %}" class="link">{{ document.code }} — {{ document.title }}</a></dd>
+    <dt>Revisione</dt>    <dd><a href="{% url 'version_detail' version.pk %}" class="link">{{ version.revision_label }} (n. {{ version.revision_number }})</a></dd>
+    <dt>Autore</dt>       <dd>{{ version.created_by.get_full_name|default:version.created_by.username }}</dd>
+    <dt>Richiedente</dt>  <dd>{{ approval_request.requested_by.get_full_name|default:approval_request.requested_by.username }}</dd>
+    <dt>Richiesta il</dt> <dd>{{ approval_request.requested_at|date:"d/m/Y H:i" }}</dd>
+    {% if approval_request.due_date %}
+    <dt>Scadenza</dt>     <dd>{{ approval_request.due_date|date:"d/m/Y" }}</dd>
+    {% endif %}
+    <dt>Modalità</dt>
+    <dd>
+      {% if approval_request.approval_policy == 'any' %}Basta un voto (ANY)
+      {% elif approval_request.approval_policy == 'all' %}Tutti devono approvare (ALL)
+      {% elif approval_request.approval_policy == 'sequential' %}Voto sequenziale (SEQUENTIAL)
+      {% else %}{{ approval_request.get_approval_policy_display }}
+      {% endif %}
+    </dd>
+    <dt>Stato richiesta</dt>
+    <dd>
+      {% if approval_request.status == 'PENDING' %}
+      <span class="badge-status-in_approval">In attesa</span>
+      {% elif approval_request.status == 'APPROVED' %}
+      <span class="badge-status-approved">Approvata</span>
+      {% elif approval_request.status == 'REJECTED' %}
+      <span class="badge-status-rejected">Rifiutata</span>
+      {% elif approval_request.status == 'CANCELLED' %}
+      <span class="badge-status-archived">Annullata</span>
+      {% else %}
+      <span class="badge-status-draft">{{ approval_request.get_status_display }}</span>
+      {% endif %}
+    </dd>
+    {% if version.change_summary %}
+    <dt>Sommario</dt>     <dd>{{ version.change_summary }}</dd>
+    {% endif %}
+    {% if version.file %}
+    <dt>File operativo</dt>
+    <dd class="flex items-center gap-2">
+      <span>{{ version.file.original_filename }}</span>
+      <a href="{% url 'version_download' version.pk %}" class="btn-secondary btn-sm">Scarica</a>
+    </dd>
+    {% endif %}
+    {% with attachments=approval_request.attachments.all %}
+    {% if attachments %}
+    <dt>Allegati richiesta</dt>
+    <dd>
+      {% for att in attachments %}
+      <div class="flex items-center gap-2 mb-1">
+        <span>{{ att.get_attachment_type_display }}: {{ att.original_filename }}</span>
+        <a href="{% url 'approval_attachment_download' att.pk %}" class="btn-secondary btn-sm">Scarica</a>
+      </div>
+      {% endfor %}
+    </dd>
+    {% endif %}
+    {% endwith %}
+  </dl>
+</div>
+
+<!-- Approvatori -->
+{% if approvers %}
+<h2 class="text-lg font-semibold text-brand-900 mb-3">Approvatori</h2>
+<div class="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden mb-4">
+  <table class="data-table">
+    <thead>
+      <tr>
+        {% if approval_request.approval_policy == 'sequential' %}<th>#</th>{% endif %}
+        <th>Approvatore</th>
+        <th>Stato</th>
+        <th>Deciso il</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for slot in approvers %}
+      <tr{% if next_approver and slot.approver == next_approver %} class="font-semibold"{% endif %}>
+        {% if approval_request.approval_policy == 'sequential' %}<td class="text-gray-500">{{ forloop.counter }}</td>{% endif %}
+        <td>{{ slot.approver.get_full_name|default:slot.approver.username }}</td>
+        <td>
+          {% if slot.status == 'PENDING' %}
+          <span class="badge-status-in_approval">In attesa</span>
+          {% elif slot.status == 'APPROVED' %}
+          <span class="badge-status-approved">Approvato</span>
+          {% elif slot.status == 'REJECTED' %}
+          <span class="badge-status-rejected">Rifiutato</span>
+          {% elif slot.status == 'CANCELLED' %}
+          <span class="badge-status-archived">Annullato</span>
+          {% else %}
+          <span class="badge-status-draft">{{ slot.get_status_display }}</span>
+          {% endif %}
+        </td>
+        <td class="meta">{{ slot.decided_at|date:"d/m/Y H:i"|default:"—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if next_approver and approval_request.status == 'PENDING' %}
+<div class="next-action-box mb-4">
+  <div class="next-action-box-title">In attesa di</div>
+  <p class="next-action-box-text">{{ next_approver.get_full_name|default:next_approver.username }}</p>
+</div>
+{% endif %}
+{% endif %}
+
+<!-- Decisioni registrate -->
+{% if decisions %}
+<h2 class="text-lg font-semibold text-brand-900 mb-3">Decisioni registrate</h2>
+<div class="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden mb-4">
+  <table class="data-table">
+    <thead>
+      <tr><th>Approvatore</th><th>Decisione</th><th>Data</th><th>Note</th></tr>
+    </thead>
+    <tbody>
+      {% for d in decisions %}
+      <tr>
+        <td>{{ d.approver.get_full_name|default:d.approver.username }}</td>
+        <td>
+          {% if d.decision == 'APPROVED' or d.decision == 'approve' %}
+          <span class="badge-status-approved">{{ d.get_decision_display }}</span>
+          {% elif d.decision == 'REJECTED' or d.decision == 'reject' %}
+          <span class="badge-status-rejected">{{ d.get_decision_display }}</span>
+          {% else %}
+          <span class="badge-status-draft">{{ d.get_decision_display }}</span>
+          {% endif %}
+        </td>
+        <td class="meta whitespace-nowrap">{{ d.decided_at|date:"d/m/Y H:i" }}</td>
+        <td class="meta">{{ d.notes|default:"—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- Azioni -->
+{% if approval_request.status == 'PENDING' %}
+<h2 class="text-lg font-semibold text-brand-900 mb-3 mt-6">Azioni</h2>
+
+<div class="next-action-box mb-4">
+  <div class="next-action-box-title">Prossima azione richiesta</div>
+  <p class="next-action-box-text">Esamina il documento e scegli se approvare o rifiutare la revisione.</p>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+  <div class="card">
+    <h3 class="text-base font-semibold text-green-700 mb-3">✔ Approva</h3>
+    <form method="post">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label for="id_comment_approve" class="form-label">Commento (opzionale)</label>
+        <textarea name="comment" id="id_comment_approve" rows="3" class="w-full rounded-md border-gray-300 text-sm focus:ring-brand-500 focus:border-brand-500"></textarea>
+      </div>
+      {% include "auditlog/sanatoria_fields.html" %}
+      <button type="submit" name="action" value="approve" class="btn-success mt-3">Approva revisione</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3 class="text-base font-semibold text-red-700 mb-3">✖ Rifiuta</h3>
+    <form method="post">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label for="id_rejection_reason" class="form-label">Motivo rifiuto <span class="text-red-500">*</span></label>
+        <textarea name="rejection_reason" id="id_rejection_reason" rows="3" required class="w-full rounded-md border-gray-300 text-sm focus:ring-brand-500 focus:border-brand-500"></textarea>
+      </div>
+      <div class="mb-3">
+        <label for="id_comment_reject" class="form-label">Commento (opzionale)</label>
+        <textarea name="comment" id="id_comment_reject" rows="2" class="w-full rounded-md border-gray-300 text-sm focus:ring-brand-500 focus:border-brand-500"></textarea>
+      </div>
+      {% include "auditlog/sanatoria_fields.html" %}
+      <button type="submit" name="action" value="reject" class="btn-danger mt-3">Rifiuta revisione</button>
+    </form>
+  </div>
+
+</div>
+{% else %}
+<div class="alert-info mt-4">
+  Questa richiesta è già stata <strong>{{ approval_request.get_status_display|lower }}</strong>{% if approval_request.completed_at %} il {{ approval_request.completed_at|date:"d/m/Y H:i" }}{% endif %}.
+</div>
+{% endif %}
+
+{% if historical_records %}
+<div class="card mt-6">
+  <div class="card-header">
+    <h2 class="section-title mb-0">Dati storici (sanatoria)</h2>
+  </div>
+  <div class="table-container mt-0 mb-0">
+    <table class="data-table">
+      <thead><tr>
+        <th>Data dichiarata</th>
+        <th>Evento</th>
+        <th>Attore storico</th>
+        <th>Fonte</th>
+        <th>Registrato da</th>
+        <th>Note</th>
+      </tr></thead>
+      <tbody>
+        {% for hr in historical_records %}
+        <tr>
+          <td class="meta whitespace-nowrap">{{ hr.historical_date|date:"d/m/Y"|default:"—" }}</td>
+          <td>{{ hr.get_event_type_display }}</td>
+          <td>{{ hr.get_actor_display }}</td>
+          <td class="meta text-xs">{{ hr.source_description|default:"—" }}</td>
+          <td class="meta">{{ hr.recorded_by.get_full_name|default:hr.recorded_by.username|default:"—" }}</td>
+          <td class="meta text-xs">{{ hr.notes|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

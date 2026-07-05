@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Nuovo documento — Documentale{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav class="breadcrumb">
+  {% if from_project %}
+  <a href="{% url 'project_detail' from_project.pk %}">{{ from_project.code }} — {{ from_project.name }}</a>
+  <span class="breadcrumb-sep">›</span>
+  {% else %}
+  <a href="{% url 'dashboard' %}">Dashboard</a>
+  <span class="breadcrumb-sep">›</span>
+  {% endif %}
+  <span>Nuovo documento</span>
+</nav>
+
+<div class="page-header">
+  <h1>{% if from_project %}Nuovo documento in {{ from_project.code }}{% else %}Nuovo documento{% endif %}</h1>
+</div>
+
+{% if from_project %}
+<div class="alert-info mb-4">
+  Il documento sarà creato nella cartella radice <strong>{{ from_project.root_folder }}</strong> del progetto.
+</div>
+{% endif %}
+
+<form method="post" action="{% url 'document_new' %}{% if from_project %}?project={{ from_project.pk }}{% endif %}" enctype="multipart/form-data">
+  {% csrf_token %}
+
+  <!-- Sezione: Informazioni documento -->
+  <div class="form-section">
+    <div class="form-section-title">Informazioni documento</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {% for field in form %}
+        {% if field.name == 'code' or field.name == 'category' or field.name == 'document_type' or field.name == 'project_folder' %}
+        <div class="form-group mb-0">
+          <label class="form-label" for="{{ field.id_for_label }}">
+            {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
+          </label>
+          {{ field }}
+          {% if field.help_text %}<p class="form-help">{{ field.help_text }}</p>{% endif %}
+          {% for error in field.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+        </div>
+        {% endif %}
+      {% endfor %}
+      <!-- Titolo — full width -->
+      <div class="form-group mb-0 md:col-span-2">
+        <label class="form-label" for="{{ form.title.id_for_label }}">
+          {{ form.title.label }}{% if form.title.field.required %} <span class="text-red-500">*</span>{% endif %}
+        </label>
+        {{ form.title }}
+        {% if form.title.help_text %}<p class="form-help">{{ form.title.help_text }}</p>{% endif %}
+        {% for error in form.title.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+      </div>
+      <!-- Descrizione — full width -->
+      {% if form.description %}
+      <div class="form-group mb-0 md:col-span-2">
+        <label class="form-label" for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>
+        {{ form.description }}
+        {% for error in form.description.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Sezione: Prima revisione -->
+  <div class="form-section">
+    <div class="form-section-title">Prima revisione</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="form-group mb-0">
+        <label class="form-label" for="{{ form.revision_scheme.id_for_label }}">
+          {{ form.revision_scheme.label }} <span class="text-red-500">*</span>
+        </label>
+        {{ form.revision_scheme }}
+        {% if form.revision_scheme.help_text %}<p class="form-help">{{ form.revision_scheme.help_text }}</p>{% endif %}
+        {% for error in form.revision_scheme.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+      </div>
+      <div class="form-group mb-0">
+        <label class="form-label" for="{{ form.revision_label.id_for_label }}">
+          {{ form.revision_label.label }} <span class="text-red-500">*</span>
+        </label>
+        {{ form.revision_label }}
+        {% if form.revision_label.help_text %}<p class="form-help">{{ form.revision_label.help_text }}</p>{% endif %}
+        {% for error in form.revision_label.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+      </div>
+      <div class="form-group mb-0">
+        <label class="form-label" for="{{ form.revision_number.id_for_label }}">
+          {{ form.revision_number.label }} <span class="text-red-500">*</span>
+        </label>
+        {{ form.revision_number }}
+        {% for error in form.revision_number.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+      </div>
+      <div class="form-group mb-0 md:col-span-2">
+        <label class="form-label" for="{{ form.change_summary.id_for_label }}">{{ form.change_summary.label }}</label>
+        {{ form.change_summary }}
+      </div>
+      <div class="form-group mb-0 md:col-span-2">
+        <label class="form-label" for="{{ form.file.id_for_label }}">{{ form.file.label }}</label>
+        {{ form.file }}
+        {% for error in form.file.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Sezione: Governance revisioni -->
+  <div class="form-section">
+    <div class="form-section-title">Governance revisioni</div>
+    <div class="form-group mb-0">
+      <label class="flex items-center gap-2 cursor-pointer">
+        {{ form.ecn_exemption }}
+        <span class="form-label mb-0">{{ form.ecn_exemption.label }}</span>
+      </label>
+      {% if form.ecn_exemption.help_text %}
+      <p class="form-help">{{ form.ecn_exemption.help_text }}</p>
+      {% endif %}
+      {% for error in form.ecn_exemption.errors %}
+      <p class="form-error">{{ error }}</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% include "auditlog/sanatoria_fields.html" %}
+
+  <div class="form-actions">
+    <button type="submit" class="btn-primary">Crea documento e prima bozza</button>
+    <a href="{% if from_project %}{% url 'project_detail' from_project.pk %}{% else %}{% url 'dashboard' %}{% endif %}" class="btn-secondary">Annulla</a>
+  </div>
+</form>
+{% endblock %}

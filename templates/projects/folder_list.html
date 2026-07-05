@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Cartelle — Documentale{% endblock %}
+
+{% block content %}
+<div class="page-header flex items-start justify-between flex-wrap gap-2">
+  <div>
+    <h1>Archivio cartelle</h1>
+    {% if total_count is not None %}
+    <p class="page-header-sub">{{ total_count }} cartell{% if total_count == 1 %}a{% else %}e{% endif %} radicali</p>
+    {% endif %}
+  </div>
+  {% if can_create %}
+  <a href="{% url 'folder_create' %}" class="btn-primary">+ Nuova cartella</a>
+  {% endif %}
+</div>
+
+<!-- Ricerca -->
+<form method="get" class="filter-bar">
+  <div class="filter-group">
+    <label class="form-label">Ricerca cartella</label>
+    <input type="text" name="q" value="{{ q }}" placeholder="Codice o nome…" class="min-w-[220px]">
+  </div>
+  <div class="filter-actions">
+    <button type="submit" class="btn-primary btn-sm">🔍 Cerca</button>
+    {% if q %}
+    <a href="{% url 'folder_list' %}" class="btn-secondary btn-sm">✕ Reset</a>
+    {% endif %}
+  </div>
+</form>
+
+{% if folders %}
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
+  {% for folder in folders %}
+  <a href="{% url 'folder_detail' folder.pk %}" class="folder-tile no-underline block">
+    <div class="folder-tile-icon">📁</div>
+    <div class="folder-tile-name">{{ folder.name }}</div>
+    <div class="folder-tile-meta">
+      {{ folder.code }}
+      {% with sc=folder.subfolders.count %}
+      {% if sc %} · {{ sc }} sottocartell{% if sc == 1 %}a{% else %}e{% endif %}{% endif %}
+      {% endwith %}
+    </div>
+    <div class="mt-1">
+      <span class="badge badge-folder text-xs">{{ folder.get_folder_kind_display }}</span>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+{% include "_pagination.html" with page_obj=page_obj total_count=total_count %}
+
+{% else %}
+<div class="card">
+  {% if q %}
+  <div class="empty-state">
+    <div class="empty-state-icon">🔍</div>
+    <div class="empty-state-title">Nessuna cartella trovata</div>
+    <div class="empty-state-desc">Nessun risultato per "{{ q }}". <a href="{% url 'folder_list' %}" class="text-brand-600 hover:underline">Mostra tutte</a></div>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-state-icon">📁</div>
+    <div class="empty-state-title">Nessuna cartella disponibile</div>
+    <div class="empty-state-desc">Contatta il Responsabile Qualità per ottenere l'accesso alle cartelle documentali.</div>
+    {% if can_create %}
+    <a href="{% url 'folder_create' %}" class="btn-primary mt-4">Crea la prima cartella</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
