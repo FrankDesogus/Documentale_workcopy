@@ -5,10 +5,41 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-cd "${PROJECT_ROOT}"
 
 TEST_SETTINGS="${TEST_SETTINGS:-config.test_settings}"
 REQUIREMENTS_FILE="${PROJECT_ROOT}/requirements.txt"
+
+usage() {
+	cat <<EOF
+Usage: $(basename "$0") [--help]
+
+Esegue controlli reali e sicuri sul Django importato in questa copia:
+  0) verifica che le dipendenze di requirements.txt siano importabili;
+  1) python -m compileall (sintassi di tutto il codice);
+  2) manage.py check (settings di test, nessun .env reale);
+  3) manage.py test (SQLite :memory:, nessun database reale).
+
+Se le dipendenze non sono installate nell'interprete Python in uso, lo
+script fallisce (exit 1) con un elenco chiaro: NON le installa mai da solo
+e NON esegue in quel caso la suite Django reale. Questo è un blocco di
+ambiente, non un'indicazione di bug nel codice applicativo. Vedi
+docs/ai/TESTING_STATUS.md per lo stato dettagliato della validazione.
+
+Nessuna rete, nessuna installazione pacchetti, nessun database reale,
+nessun server avviato, nessuna migrazione reale eseguita.
+EOF
+}
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+	usage
+	exit 0
+fi
+[[ $# -eq 0 ]] || {
+	echo "ERRORE: opzione non riconosciuta: '$1'. Usa --help." >&2
+	exit 1
+}
+
+cd "${PROJECT_ROOT}"
 
 fail() {
 	echo "ERRORE: $*" >&2
@@ -74,11 +105,21 @@ while IFS= read -r line || [[ -n "${line}" ]]; do
 done <"${REQUIREMENTS_FILE}"
 
 if [[ ${#missing[@]} -gt 0 ]]; then
-	echo "Dipendenze mancanti:" >&2
+	echo "" >&2
+	echo "BLOCCO AMBIENTE — non è un bug del codice applicativo del Documentale." >&2
+	echo "Dipendenze Python mancanti in questo interprete (${PYTHON}):" >&2
 	for dep in "${missing[@]}"; do
 		echo "  - ${dep}" >&2
 	done
-	fail "Impossibile eseguire controlli Django reali. Installare le dipendenze da requirements.txt (fuori da questo script)."
+	echo "" >&2
+	echo "Questo script NON installa dipendenze automaticamente (per design)." >&2
+	echo "Serve un ambiente Python dedicato con:" >&2
+	echo "  pip install -r requirements.txt" >&2
+	echo "" >&2
+	echo "Di conseguenza la suite Django reale (manage.py check / test) NON" >&2
+	echo "è stata eseguita in questo run. Stato dettagliato della validazione:" >&2
+	echo "  docs/ai/TESTING_STATUS.md" >&2
+	fail "Controlli Django reali non eseguibili: ambiente senza le dipendenze installate."
 fi
 
 echo "OK — dipendenze di requirements.txt importabili."
