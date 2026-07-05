@@ -20,8 +20,20 @@ _Nessun task in corso._
 
 ## Backlog
 
+Backlog operativo derivato dalla roadmap di `docs/ai/PROJECT_ANALYSIS.md`
+(TASK-001), riordinato e raffinato in task piccoli e testabili.
+**Prossimo task consigliato: TASK-006** (solo audit, non migrazione — vedi
+dettaglio).
+
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
+| TASK-006 | Audit permessi cartella/documenti | alta | solo analisi, nessuna modifica; produce `docs/ai/PERMISSIONS_AUDIT.md` |
+| TASK-007 | Migrazione permessi cartella | alta | dipende da TASK-006; non avviare prima |
+| TASK-008 | Audit dipendenze requirements | media | solo analisi DRF/django-filter, nessuna modifica |
+| TASK-009 | Pulizia dipendenze inutilizzate | media | dipende da TASK-008 |
+| TASK-010 | Allineamento documentazione progetto | bassa | AI_CONTEXT.md/PROJECT_HANDOFF.md/DEPLOY.md, no codice |
+| TASK-011 | Review deployment locale/VM | bassa | solo analisi/dry-run, nessun deploy reale aziendale |
+| TASK-012 | Hardening configurazione test | bassa | miglioria facoltativa a config/test_settings.py e scripts/test.sh |
 
 ## Completati
 
@@ -448,6 +460,327 @@ Fix applicato: `v.approved_at.strftime('%d/%m/%Y')` →
 `documents/tests.py`. Solo il test modificato, nessuna view/modello/template
 toccato. Test mirato: PASS. **Suite Django reale tornata a 1207/1207 PASS**
 (prima: 1206/1207). Nessun `SyntaxWarning` residuo.
+
+---
+
+### TASK-006 — Audit permessi cartella/documenti — Claude Code / Cursor Agent
+
+#### Obiettivo
+
+Analizzare il sistema di permessi cartella attuale — `FolderPermissionGrant`
+(modulare) che coesiste con `ProjectFolderMembership` (legacy) tramite
+fallback nel resolver (rischio #4 di `PROJECT_ANALYSIS.md`) — **senza
+modificare nulla**, producendo un report che permetta di pianificare una
+migrazione controllata in TASK-007.
+
+#### Scope
+
+- Solo lettura e analisi. Creare un solo file:
+  `docs/ai/PERMISSIONS_AUDIT.md`.
+- Non modificare modelli, resolver, management command o test.
+- Non eseguire i management command `backfill_folder_permission_grants` o
+  `compare_folder_permissions` su dati reali (non esistono in questa copia
+  comunque); se utile eseguirli in un ambiente di test isolato, documentare
+  solo l'esito, non farne dipendere lo scope del task.
+
+#### File coinvolti (probabili)
+
+- Analizzare: `projects/permissions.py`, `projects/resolver.py`,
+  `projects/models.py` (campi/modelli `FolderPermissionGrant`,
+  `ProjectFolderMembership`), `projects/management/commands/backfill_folder_permission_grants.py`,
+  `projects/management/commands/compare_folder_permissions.py`,
+  `projects/tests.py` (sezioni permessi).
+- Creare: `docs/ai/PERMISSIONS_AUDIT.md`.
+- Non modificare: nessun altro file.
+
+#### Acceptance criteria
+
+- [ ] `docs/ai/PERMISSIONS_AUDIT.md` creato con: modello dati attuale
+      (legacy vs modulare), punti in cui il fallback viene usato, comandi
+      di migrazione disponibili, test esistenti sui permessi, gap di test
+      individuati, rischi di una migrazione, proposta di sequenza per
+      TASK-007.
+- [ ] Nessuna modifica applicativa.
+- [ ] Suite Django reale resta a 1207/1207 PASS (nessuna modifica prevista,
+      va comunque confermato).
+
+#### Test richiesti
+
+```bash
+source projects/documentale-workcopy/.venv/bin/activate
+projects/documentale-workcopy/scripts/test.sh
+```
+
+#### Guardrail
+
+- Non modificare modelli, resolver, management command, migrazioni.
+- Non eseguire server, non usare database reale, non leggere segreti.
+- Non installare pacchetti.
+- No push, no merge, no reset --hard, no git clean.
+- No commit da parte dell'implementatore.
+
+#### Note operative
+
+Il report deve raccomandare esplicitamente se e come esercitare
+`backfill_folder_permission_grants`/`compare_folder_permissions` in
+sicurezza (es. in un test dedicato con SQLite `:memory:`) prima che
+TASK-007 tenti la migrazione vera.
+
+---
+
+### TASK-007 — Migrazione permessi cartella — Cursor Agent
+
+#### Obiettivo
+
+Eseguire, sulla base delle raccomandazioni di TASK-006, la migrazione
+controllata da `ProjectFolderMembership` (legacy) a `FolderPermissionGrant`
+(modulare), con test di regressione dedicati.
+
+#### Scope
+
+- **Dipende da TASK-006 completato e revisionato**: non avviare prima.
+- Eseguire `backfill_folder_permission_grants` e
+  `compare_folder_permissions` in ambiente di test (mai su dati reali,
+  che non esistono in questa copia).
+- Valutare, solo se TASK-006 lo raccomanda esplicitamente, la rimozione
+  del fallback legacy nel resolver.
+- Aggiungere/aggiornare test di regressione per la migrazione.
+
+#### File coinvolti (probabili)
+
+- `projects/resolver.py`, `projects/permissions.py`,
+  `projects/management/commands/backfill_folder_permission_grants.py`,
+  `projects/management/commands/compare_folder_permissions.py`,
+  `projects/tests.py`.
+
+#### Acceptance criteria
+
+- [ ] Migrazione eseguita ed esito documentato in `docs/ai/RUN_LOG.md`.
+- [ ] Test di regressione aggiunti/aggiornati.
+- [ ] Suite Django reale verde dopo la modifica.
+- [ ] Nessun dato reale coinvolto (non esiste comunque in questa copia).
+
+#### Test richiesti
+
+```bash
+source projects/documentale-workcopy/.venv/bin/activate
+projects/documentale-workcopy/scripts/test.sh
+```
+
+#### Guardrail
+
+- Non avviare senza TASK-006 completato e rivisto.
+- Non eseguire server, non usare database reale, non leggere segreti.
+- Non installare pacchetti.
+- No push, no merge, no reset --hard, no git clean.
+- No commit da parte dell'implementatore.
+
+---
+
+### TASK-008 — Audit dipendenze requirements — Claude Code
+
+#### Obiettivo
+
+Determinare se `djangorestframework` e `django-filter` (dichiarati in
+`requirements.txt` ma assenti da `INSTALLED_APPS` e dal codice — problema
+#2 di `PROJECT_ANALYSIS.md`) vanno rimossi o integrati.
+
+#### Scope
+
+- Solo analisi: grep/lettura di `requirements.txt`, `config/settings.py`,
+  ricerca di import nel codebase.
+- Nessuna modifica a `requirements.txt` o `INSTALLED_APPS` in questo task.
+- Produrre una raccomandazione chiara (rimuovere o integrare, con
+  motivazione).
+
+#### File coinvolti (probabili)
+
+- Analizzare: `requirements.txt`, `config/settings.py`, tutto il codebase
+  (grep import).
+- Aggiornare: `docs/ai/PROJECT_ANALYSIS.md` (sezione dedicata) o nuovo file
+  breve, a scelta dell'implementatore.
+
+#### Acceptance criteria
+
+- [ ] Raccomandazione esplicita e motivata per ciascuna delle due
+      dipendenze.
+- [ ] Nessuna modifica a `requirements.txt`/`INSTALLED_APPS`.
+
+#### Test richiesti
+
+Nessuno (task di sola analisi); confermare comunque che
+`scripts/test.sh` resti verde.
+
+#### Guardrail
+
+- Nessuna modifica applicativa.
+- Non installare pacchetti, non accedere alla rete.
+- No push, no merge, no commit da parte dell'implementatore.
+
+---
+
+### TASK-009 — Pulizia dipendenze inutilizzate — Cursor Agent
+
+#### Obiettivo
+
+Applicare la raccomandazione di TASK-008 (rimuovere o integrare
+`djangorestframework`/`django-filter`).
+
+#### Scope
+
+- **Dipende da TASK-008 completato.**
+- Se raccomandata rimozione: aggiornare `requirements.txt`. Se
+  raccomandata integrazione: aggiungere a `INSTALLED_APPS` con uso minimo
+  documentato — da valutare in base all'esito di TASK-008.
+- Nessuna installazione di nuovi pacchetti diversi da quelli già in
+  `requirements.txt`.
+
+#### File coinvolti (probabili)
+
+- `requirements.txt`, eventualmente `config/settings.py`.
+
+#### Acceptance criteria
+
+- [ ] Modifica coerente con la raccomandazione di TASK-008.
+- [ ] Suite Django reale verde dopo la modifica.
+- [ ] Nessuna funzionalità esistente rotta.
+
+#### Test richiesti
+
+```bash
+source projects/documentale-workcopy/.venv/bin/activate
+projects/documentale-workcopy/scripts/test.sh
+```
+
+#### Guardrail
+
+- Non avviare senza TASK-008 completato.
+- Non installare pacchetti nuovi, non accedere alla rete.
+- No push, no merge, no commit da parte dell'implementatore.
+
+---
+
+### TASK-010 — Allineamento documentazione progetto — Claude Code
+
+#### Obiettivo
+
+Allineare la documentazione operativa del Documentale (`DEPLOY.md`,
+`AI_CONTEXT.md`, `PROJECT_HANDOFF.md`) su conteggio test, nomi gruppi e
+branch di riferimento (problemi #3, #4, #5 di `PROJECT_ANALYSIS.md`).
+
+#### Scope
+
+- Modificare solo i file di documentazione del progetto Documentale
+  elencati sopra (non i file `docs/ai/` della Station).
+- Il conteggio test corretto e verificato è **1207** (confermato in
+  TASK-003/004/005).
+- Nessuna modifica al codice.
+
+#### File coinvolti (probabili)
+
+- `DEPLOY.md`, `AI_CONTEXT.md`, `PROJECT_HANDOFF.md`.
+
+#### Acceptance criteria
+
+- [ ] Conteggio test coerente (1207) in tutti e tre i file.
+- [ ] Nomi gruppi Django coerenti tra i file.
+- [ ] Branch di riferimento coerente (o nota esplicita se il branch citato
+      è obsoleto/da aggiornare a cura dell'operatore).
+
+#### Test richiesti
+
+Nessuno (solo documentazione); confermare comunque `scripts/test.sh` verde.
+
+#### Guardrail
+
+- Nessuna modifica al codice applicativo.
+- No push, no merge, no commit da parte dell'implementatore.
+
+---
+
+### TASK-011 — Review deployment locale/VM — Claude Code
+
+#### Obiettivo
+
+Rivedere `DEPLOY.md` e valutare un eventuale dry-run di deploy locale/VM di
+prova, per validare il processo senza toccare infrastrutture aziendali
+reali.
+
+#### Scope
+
+- Solo analisi/documentazione ed eventuale dry-run **locale e isolato**
+  (mai contro server o infrastruttura aziendale reale).
+- Nessuna azione di rete verso sistemi esterni, nessun deploy reale.
+
+#### File coinvolti (probabili)
+
+- `DEPLOY.md`, eventuale nuovo documento di note dry-run.
+
+#### Acceptance criteria
+
+- [ ] Report su coerenza/completezza di `DEPLOY.md`.
+- [ ] Se eseguito un dry-run, documentato con esito e ambiente usato
+      (mai infrastruttura reale).
+
+#### Test richiesti
+
+Nessuno specifico; confermare `scripts/test.sh` verde.
+
+#### Guardrail
+
+- Nessun deploy reale, nessuna azione su infrastruttura aziendale.
+- Nessun accesso a segreti/credenziali reali.
+- No push, no merge, no commit da parte dell'implementatore.
+
+#### Note operative
+
+Priorità bassa e rischio più alto degli altri task: da pianificare con
+attenzione extra e conferma esplicita dell'operatore prima di qualunque
+azione che tocchi ambienti esterni alla Station.
+
+---
+
+### TASK-012 — Hardening configurazione test — Claude Code
+
+#### Obiettivo
+
+Migliorie facoltative e a basso rischio a `config/test_settings.py` e
+`scripts/test.sh` (es. attivazione automatica della venv, opzioni di
+selezione subset test, messaggi diagnostici aggiuntivi).
+
+#### Scope
+
+- Solo file di test/config lato Station (`config/test_settings.py`,
+  `scripts/test.sh`).
+- Nessuna modifica alla logica applicativa.
+
+#### File coinvolti (probabili)
+
+- `config/test_settings.py`, `scripts/test.sh`.
+
+#### Acceptance criteria
+
+- [ ] Eventuali miglioramenti non cambiano il comportamento core già
+      validato (compileall → check → test, fallimento chiaro se mancano
+      dipendenze).
+- [ ] Suite Django reale resta a 1207/1207 PASS.
+
+#### Test richiesti
+
+```bash
+source projects/documentale-workcopy/.venv/bin/activate
+projects/documentale-workcopy/scripts/test.sh
+```
+
+#### Guardrail
+
+- Nessuna modifica alla logica applicativa.
+- No push, no merge, no commit da parte dell'implementatore.
+
+#### Note operative
+
+Task opzionale e a bassa priorità: da fare solo se non toglie tempo a
+task applicativi più utili (TASK-006..010).
 
 ---
 

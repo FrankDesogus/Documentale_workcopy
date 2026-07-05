@@ -330,3 +330,38 @@ Exit code: 0
 1. Procedere con i task della roadmap in `docs/ai/PROJECT_ANALYSIS.md`
    (es. migrazione permessi cartella, pulizia dipendenze inutilizzate,
    allineamento documentazione).
+
+---
+
+### Run — 2026-07-06 — Organizzazione backlog operativo roadmap
+
+**Agente:** Claude Code (solo documentazione, nessun codice applicativo)
+**Task:** N/A — riorganizzazione `docs/ai/TASKS.md`
+**Branch:** task/documentale-roadmap-backlog
+
+**Operazioni eseguite:**
+
+1. Letti `PROJECT_ANALYSIS.md`, `TESTING_STATUS.md`, `TASKS.md`,
+   `RUN_LOG.md` per ricostruire lo stato reale (TASK-001..005 completati,
+   suite 1207/1207 PASS, nessun problema noto residuo).
+2. Trasformata la roadmap di `PROJECT_ANALYSIS.md` in Backlog operativo in
+   `docs/ai/TASKS.md`: TASK-006 (audit permessi, solo analisi), TASK-007
+   (migrazione permessi, dipende da TASK-006), TASK-008 (audit dipendenze),
+   TASK-009 (pulizia dipendenze, dipende da TASK-008), TASK-010
+   (allineamento documentazione), TASK-011 (review deployment),
+   TASK-012 (hardening config test) — ciascuno con dettaglio operativo
+   completo (obiettivo, scope, file coinvolti, acceptance criteria, test,
+   guardrail, note).
+3. Nota aggiunta in `PROJECT_ANALYSIS.md`: roadmap operativa trasferita in
+   `TASKS.md`.
+4. Nessuna modifica a codice applicativo.
+
+**Esito test (`scripts/test.sh`, con venv `.venv` attiva):**
+
+Suite Django reale confermata 1207/1207 PASS (nessuna modifica applicativa
+in questo lavoro).
+
+**Prossimo passo per l'operatore umano:**
+
+1. Eseguire **TASK-006** (audit permessi cartella/documenti, solo analisi)
+   con `./scripts/ai-cycle.sh --project documentale-workcopy --task TASK-006 --run`.
