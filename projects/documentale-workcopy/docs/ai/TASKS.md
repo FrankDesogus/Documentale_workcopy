@@ -30,6 +30,7 @@ _Nessun task in corso._
 | TASK-001 | Analisi iniziale progetto Documentale | — | 2026-07-05 |
 | TASK-002 | Collegare test reali Django | — | 2026-07-05 |
 | TASK-003 | Preparare ambiente test dedicato Documentale | — | 2026-07-05 |
+| TASK-004 | Correggere SyntaxWarning in versioning | — | 2026-07-06 |
 
 ---
 
@@ -291,6 +292,81 @@ modifica a codice applicativo in questo task).
 - Non usare `.env` reale, non usare database reale del Documentale
   originale, non avviare server in produzione.
 - No commit da parte dell'implementatore.
+
+---
+
+### TASK-004 — Correggere SyntaxWarning in versioning — Claude Code
+
+#### Obiettivo
+
+Correggere il warning Python in `documents/versioning.py` relativo alla
+escape sequence non valida `\d` (`SyntaxWarning: "\d" is an invalid escape
+sequence`), senza toccare alcuna logica applicativa.
+
+#### Scope
+
+- Modificare solo quanto necessario per eliminare il warning.
+- Il warning proviene dal docstring di modulo (righe 1-13), non dalla regex
+  compilata (`_RE_NUMERIC = re.compile(r'^\d+$')`, riga 20, già una raw
+  string corretta): il docstring contiene testo descrittivo con `\d` in una
+  stringa normale (non raw). Fix minimo: rendere il docstring una raw
+  string (`"""` → `r"""`), senza cambiarne il contenuto testuale.
+- Nessun refactor, nessuna modifica a `_RE_NUMERIC` o ad altre funzioni.
+
+#### File coinvolti
+
+- `documents/versioning.py` (solo la riga del docstring di apertura).
+- `docs/ai/TASKS.md`.
+- `docs/ai/RUN_LOG.md`.
+
+#### Acceptance criteria
+
+- [ ] Il `SyntaxWarning` non compare più durante `compileall`/import.
+- [ ] La logica di versioning resta invariata (nessuna modifica a
+      `_RE_NUMERIC`, funzioni o comportamento).
+- [ ] La suite Django reale resta verde (1207/1207 test, nessuna
+      regressione).
+- [ ] Nessun file del progetto sorgente originale viene toccato.
+- [ ] Nessun refactor fuori scope.
+
+#### Test richiesti
+
+```bash
+source projects/documentale-workcopy/.venv/bin/activate
+projects/documentale-workcopy/scripts/test.sh
+```
+
+Verificare che l'output non contenga più il `SyntaxWarning` e che tutti i
+1207 test passino.
+
+#### Guardrail
+
+- Non modificare modelli, view, migrazioni o settings.
+- Non eseguire server.
+- Non usare database reale.
+- Non leggere segreti.
+- Non installare pacchetti.
+- No push, no merge, no reset --hard, no git clean.
+- No commit da parte dell'implementatore.
+
+#### Esito (2026-07-06)
+
+Fix applicato: `"""` → `r"""` sul docstring di modulo (riga 1). Verificato
+con `ast.parse` + `-W error::SyntaxWarning`: nessun warning residuo.
+Comportamento a runtime dimostrato invariato (una modifica a un docstring
+non altera la logica; la regex già compilata `_RE_NUMERIC` era già una raw
+string corretta).
+
+**Scoperta indipendente durante la suite completa:** 1 test
+(`documents.tests.DocumentDetailApprovalTests.test_document_list_shows_approval_date`)
+fallisce per un bug pre-esistente, non collegato a questo fix: confronta
+`v.approved_at.strftime(...)` (UTC, non convertito) con il rendering del
+template (localizzato in Europe/Rome). Vicino alla mezzanotte CEST le due
+date possono differire di un giorno. **Dimostrato indipendente dal fix**
+eseguendo lo stesso test isolato con il file originale (non modificato):
+fallisce identicamente. Non corretto in questo task (richiederebbe
+modificare `documents/tests.py`, fuori scope). Vedi
+`docs/ai/TESTING_STATUS.md` per i dettagli completi.
 
 ---
 

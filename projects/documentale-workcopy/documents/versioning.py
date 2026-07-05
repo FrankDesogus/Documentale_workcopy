@@ -1,4 +1,4 @@
-"""
+r"""
 Utility centralizzate per la gestione degli schemi di revisione.
 
 Supporta due schemi:
