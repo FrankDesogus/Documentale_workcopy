@@ -10,13 +10,13 @@
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
-| TASK-002 | Implementa count_by_field | media | Valida il formato TASKS standard |
 
 ## Completati
 
 | ID | Titolo | Commit | Data |
 | -- | ------ | ------ | ---- |
 | TASK-001 | Implementa summarize_status | — | 2026-06-29 |
+| TASK-002 | Implementa count_by_field | <da aggiornare col commit> | 2026-07-05 |
 
 ---
 
