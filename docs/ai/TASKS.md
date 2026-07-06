@@ -22,13 +22,13 @@ _Nessun task in corso._
 
 Backlog operativo derivato dalla roadmap di `docs/ai/PROJECT_ANALYSIS.md`
 (TASK-001), riordinato e raffinato in task piccoli e testabili.
-**Prossimo task consigliato: TASK-006** (solo audit, non migrazione — vedi
-dettaglio).
+**Prossimo task consigliato: TASK-007** (migrazione permessi, ora sbloccata
+da TASK-006 — vedi audit in `docs/ai/PERMISSIONS_AUDIT.md` prima di
+avviarla).
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
-| TASK-006 | Audit permessi cartella/documenti | alta | solo analisi, nessuna modifica; produce `docs/ai/PERMISSIONS_AUDIT.md` |
-| TASK-007 | Migrazione permessi cartella | alta | dipende da TASK-006; non avviare prima |
+| TASK-007 | Migrazione permessi cartella | alta | vedi `docs/ai/PERMISSIONS_AUDIT.md` — richiede allineamento mapping prima del fallback OFF |
 | TASK-008 | Audit dipendenze requirements | media | solo analisi DRF/django-filter, nessuna modifica |
 | TASK-009 | Pulizia dipendenze inutilizzate | media | dipende da TASK-008 |
 | TASK-010 | Allineamento documentazione progetto | bassa | AI_CONTEXT.md/PROJECT_HANDOFF.md/DEPLOY.md, no codice |
@@ -44,6 +44,7 @@ dettaglio).
 | TASK-003 | Preparare ambiente test dedicato Documentale | — | 2026-07-05 |
 | TASK-004 | Correggere SyntaxWarning in versioning | — | 2026-07-06 |
 | TASK-005 | Correggere test approval date timezone | — | 2026-07-06 |
+| TASK-006 | Audit permessi cartella/documenti | — | 2026-07-06 |
 
 ---
 
@@ -526,38 +527,76 @@ Il report deve raccomandare esplicitamente se e come esercitare
 sicurezza (es. in un test dedicato con SQLite `:memory:`) prima che
 TASK-007 tenti la migrazione vera.
 
+#### Esito (2026-07-06)
+
+Audit completato da Cursor Agent: `docs/ai/PERMISSIONS_AUDIT.md` creato.
+Nessuna modifica applicativa (confermato via `git diff --name-only`, solo
+`docs/ai/`). Suite Django reale rieseguita da Claude Code (venv attiva,
+Cursor Agent non aveva shell disponibile per verificarla): **1207/1207
+PASS**, invariata.
+
+**Finding principale:** backfill e compare usano un mapping più ristretto
+(`BACKFILL_ROLE_PERMISSIONS`) del fallback runtime
+(`_LEGACY_ROLE_PERMISSIONS`) — un backfill+compare "verde" **non
+garantisce** parità se si spegne il fallback legacy. Permessi come
+`view_projects`, `view_folder_ecns`, `view_obsolete_documents`,
+`manage_rejected_drafts`, `manage_project_documents`, `request_ecn` sono
+nel fallback ma esclusi dal backfill. Inoltre `get_folder_role`/
+`has_folder_role` e `ecn/permissions.py` bypassano completamente il
+resolver modulare. TASK-007 raffinato di conseguenza (vedi sotto).
+
 ---
 
 ### TASK-007 — Migrazione permessi cartella — Cursor Agent
 
 #### Obiettivo
 
-Eseguire, sulla base delle raccomandazioni di TASK-006, la migrazione
-controllata da `ProjectFolderMembership` (legacy) a `FolderPermissionGrant`
-(modulare), con test di regressione dedicati.
+Eseguire la migrazione controllata da `ProjectFolderMembership` (legacy) a
+`FolderPermissionGrant` (modulare), seguendo la sequenza a fasi proposta
+nell'audit (`docs/ai/PERMISSIONS_AUDIT.md`, sezione 10), **senza spegnere
+il fallback legacy finché il mapping non è allineato**.
 
 #### Scope
 
-- **Dipende da TASK-006 completato e revisionato**: non avviare prima.
-- Eseguire `backfill_folder_permission_grants` e
-  `compare_folder_permissions` in ambiente di test (mai su dati reali,
-  che non esistono in questa copia).
-- Valutare, solo se TASK-006 lo raccomanda esplicitamente, la rimozione
-  del fallback legacy nel resolver.
-- Aggiungere/aggiornare test di regressione per la migrazione.
+- **Sbloccato da TASK-006** (audit completato, vedi `PERMISSIONS_AUDIT.md`).
+- **Fase 1 — allineamento mapping (obbligatoria prima di ogni fallback OFF):**
+  allineare `BACKFILL_ROLE_PERMISSIONS` a `_LEGACY_ROLE_PERMISSIONS` (o
+  documentare esplicitamente ogni esclusione residua); estendere
+  `compare_folder_permissions` a **tutti** i permission code, non solo il
+  subset backfill.
+- **Fase 2** — eseguire `backfill_folder_permission_grants --dry-run` poi
+  `--apply` solo in ambiente di test (SQLite `:memory:`/DB test isolato,
+  mai su dati reali, che non esistono in questa copia).
+- **Fase 3** — solo se Fase 1-2 verdi: valutare refactor dei percorsi che
+  bypassano il resolver (`get_folder_role`/`has_folder_role`,
+  `ecn/permissions.py`), priorità a `ecn/permissions.py`.
+- **Fase 4 (rimozione fallback)** — NON eseguire in questo task senza
+  ulteriore conferma esplicita dell'operatore: impostare
+  `include_legacy_fallback=False` è l'ultimo passo, solo dopo Fasi 1-3
+  complete e verdi.
+- Aggiungere test di regressione per ogni fase (gap G1-G7 dell'audit).
 
 #### File coinvolti (probabili)
 
-- `projects/resolver.py`, `projects/permissions.py`,
-  `projects/management/commands/backfill_folder_permission_grants.py`,
-  `projects/management/commands/compare_folder_permissions.py`,
-  `projects/tests.py`.
+- `projects/resolver.py` (`_LEGACY_ROLE_PERMISSIONS`),
+  `projects/management/commands/backfill_folder_permission_grants.py`
+  (`BACKFILL_ROLE_PERMISSIONS`),
+  `projects/management/commands/compare_folder_permissions.py`
+  (`_legacy_allows`), `ecn/permissions.py` (solo Fase 3, se applicabile),
+  `projects/tests.py` (nuovi test regressione).
 
 #### Acceptance criteria
 
-- [ ] Migrazione eseguita ed esito documentato in `docs/ai/RUN_LOG.md`.
-- [ ] Test di regressione aggiunti/aggiornati.
-- [ ] Suite Django reale verde dopo la modifica.
+- [ ] Fase 1 completata: mapping backfill/compare allineato al fallback
+      runtime (o esclusioni residue esplicitamente documentate e accettate).
+- [ ] Test di regressione aggiunti per i gap G1/G2 dell'audit (parità
+      ruolo-per-ruolo su tutti i 12 permission code, con e senza fallback).
+- [ ] Backfill eseguito e verificato solo in ambiente di test isolato.
+- [ ] `include_legacy_fallback=False` **non** attivato in questo task senza
+      conferma esplicita separata dell'operatore.
+- [ ] Suite Django reale verde dopo ogni fase (1207/1207 o numero
+      aggiornato motivato da nuovi test).
+- [ ] Esito documentato in `docs/ai/RUN_LOG.md`.
 - [ ] Nessun dato reale coinvolto (non esiste comunque in questa copia).
 
 #### Test richiesti

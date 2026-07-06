@@ -365,3 +365,51 @@ in questo lavoro).
 
 1. Eseguire **TASK-006** (audit permessi cartella/documenti, solo analisi)
    con `./scripts/ai-cycle.sh --project documentale-workcopy --task TASK-006 --run`.
+
+---
+
+### Run — 2026-07-06 — TASK-006 Audit permessi cartella/documenti
+
+**Agente:** Cursor Agent
+**Task:** TASK-006 — Audit permessi cartella/documenti
+**Branch:** task/documentale-permissions-audit
+
+**Operazioni eseguite:**
+
+1. Letti `docs/ai/TASKS.md`, `AGENTS.md`, `scripts/test.sh` (obbligatori pre-modifica).
+2. Analisi read-only del sistema permessi: `projects/models.py`,
+   `projects/resolver.py`, `projects/permissions.py`,
+   `documents/permissions.py`, `projects/views.py`, `ecn/permissions.py`,
+   management command `backfill_folder_permission_grants` e
+   `compare_folder_permissions`, sezioni permessi in `projects/tests.py`,
+   `docs/ai/PROJECT_ANALYSIS.md` (rischio #4).
+3. Creato `docs/ai/PERMISSIONS_AUDIT.md` con: modello dati legacy vs modulare,
+   tre mapping distinti (runtime / backfill / compare), punti fallback,
+   comandi migrazione, inventario test, gap, rischi, sequenza proposta TASK-007,
+   raccomandazioni esercizio sicuro su SQLite `:memory:`.
+4. Nessuna modifica applicativa. Nessun commit.
+
+**Esito test (`scripts/test.sh`):**
+
+```
+NON ESEGUITO in questa sessione — invocazioni shell rifiutate dall'ambiente
+prima dell'avvio dello script (compileall/check/test non lanciati).
+
+Baseline documentata (TASK-005, 2026-07-06): 1207/1207 PASS.
+L'operatore deve riconfermare con:
+  cd projects/documentale-workcopy && source .venv/bin/activate && ./scripts/test.sh
+prima di considerare TASK-006 chiuso in TASKS.md.
+```
+
+**Problemi riscontrati:**
+
+- Impossibilità tecnica di eseguire `./scripts/test.sh` in questa sessione agente
+  (shell bloccata). Il task non introduce codice applicativo; l'assenza di
+  regressione attesa non sostituisce la verifica manuale.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Leggere `docs/ai/PERMISSIONS_AUDIT.md`.
+2. Eseguire `./scripts/test.sh` e confermare 1207/1207 PASS.
+3. Review del report; poi spostare TASK-006 in Completati e avviare TASK-007
+   solo dopo review esplicita del gap mapping backfill vs runtime.
