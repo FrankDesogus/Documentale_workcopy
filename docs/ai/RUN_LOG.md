@@ -616,3 +616,37 @@ Conferma richiesta all'operatore:
 2. Leggere `docs/ai/DEPENDENCIES_AUDIT.md`.
 3. Spostare TASK-008 in Completati dopo review; avviare **TASK-009**
    (rimozione `django-filter`, `djangorestframework`, valutare `pillow`).
+
+---
+
+### Run — 2026-07-07 — TASK-009 Step A: rimozione django-filter
+
+**Agente:** Claude Code (esecuzione diretta, nessuna delega a Cursor Agent
+per questo task — rimozione dipendenza a basso rischio, incrementale)
+**Task:** TASK-009 Step A
+**Branch:** task/documentale-clean-unused-dependencies
+
+**Operazioni eseguite:**
+
+1. Riverificata assenza d'uso: `rg -i "django_filters|django-filter|FilterSet|DjangoFilterBackend|filter_backends"` su tutto il codebase Python (esclusi migrations) → nessun match. `INSTALLED_APPS` in `config/settings.py` non contiene `django_filters`.
+2. Rimossa riga `django-filter==25.2` da `requirements.txt`.
+3. `pip uninstall -y django-filter` nella venv locale `projects/documentale-workcopy/.venv` (nessun pacchetto globale toccato).
+4. Eseguita suite completa con venv attiva.
+
+**Esito test (`scripts/test.sh`):**
+
+```
+Ran 1208 tests in 482.281s
+OK
+System check identified no issues (0 silenced).
+OK — manage.py test superato.
+Tutti i controlli completati con successo.
+```
+
+**Problemi riscontrati:**
+
+- Nessuno.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Procedere con Step B (`djangorestframework`) dopo review/commit di Step A.
