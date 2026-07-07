@@ -28,7 +28,7 @@ resolver, da pianificare separatamente).
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
-| TASK-008 | Audit dipendenze requirements | media | solo analisi DRF/django-filter, nessuna modifica |
+| TASK-008 | Audit dipendenze requirements | media | audit completo delle 11 dipendenze di `requirements.txt`, solo analisi, nessuna modifica |
 | TASK-009 | Pulizia dipendenze inutilizzate | media | dipende da TASK-008 |
 | TASK-010 | Allineamento documentazione progetto | bassa | AI_CONTEXT.md/PROJECT_HANDOFF.md/DEPLOY.md, no codice |
 | TASK-011 | Review deployment locale/VM | bassa | solo analisi/dry-run, nessun deploy reale aziendale |
@@ -895,44 +895,102 @@ revisione esplicita di questa Fase 2.
 
 ---
 
-### TASK-008 — Audit dipendenze requirements — Claude Code
+### TASK-008 — Audit dipendenze requirements — Cursor Agent
 
 #### Obiettivo
 
-Determinare se `djangorestframework` e `django-filter` (dichiarati in
-`requirements.txt` ma assenti da `INSTALLED_APPS` e dal codice — problema
-#2 di `PROJECT_ANALYSIS.md`) vanno rimossi o integrati.
+Analizzare **tutte** le dipendenze dichiarate in `requirements.txt` (11
+pacchetti: `asgiref`, `Django`, `django-filter`, `djangorestframework`,
+`gunicorn`, `pillow`, `psycopg`, `psycopg-binary`, `python-decouple`,
+`sqlparse`, `tzdata`) e produrre un report tecnico che classifichi
+ciascuna come usata/dubbia/inutilizzata, con evidenze concrete (import,
+uso in settings, uso in deploy). Caso noto da `PROJECT_ANALYSIS.md`
+(problema #2): `djangorestframework` e `django-filter` sono pinati ma
+assenti da `INSTALLED_APPS` e da qualsiasi import nel codebase — verificare
+se questo è ancora vero e se ci sono altri casi simili non ancora
+documentati.
 
 #### Scope
 
-- Solo analisi: grep/lettura di `requirements.txt`, `config/settings.py`,
-  ricerca di import nel codebase.
-- Nessuna modifica a `requirements.txt` o `INSTALLED_APPS` in questo task.
-- Produrre una raccomandazione chiara (rimuovere o integrare, con
-  motivazione).
+- Solo analisi e documentazione: grep/lettura di `requirements.txt`,
+  `config/settings.py` (tutti i moduli, incl. eventuali `settings/`
+  split), tutto il codebase applicativo (import diretti e indiretti),
+  file di deploy (`DEPLOY.md`, eventuali `Procfile`/`wsgi.py`/script di
+  avvio) per dipendenze usate solo a runtime/deploy (es. `gunicorn`,
+  `psycopg`) e non tramite `import` Python esplicito nel codice.
+- **Nessuna modifica a `requirements.txt`.**
+- **Nessuna modifica a codice applicativo, `INSTALLED_APPS`, settings.**
+- Nessuna installazione/disinstallazione pacchetti, nessun accesso rete.
+- Creare **un solo file nuovo**:
+  `projects/documentale-workcopy/docs/ai/DEPENDENCIES_AUDIT.md`.
 
-#### File coinvolti (probabili)
+#### File coinvolti
 
-- Analizzare: `requirements.txt`, `config/settings.py`, tutto il codebase
-  (grep import).
-- Aggiornare: `docs/ai/PROJECT_ANALYSIS.md` (sezione dedicata) o nuovo file
-  breve, a scelta dell'implementatore.
+- Analizzare (sola lettura): `requirements.txt`, `config/settings.py` (e
+  moduli correlati), tutto il codebase Python del progetto (grep import),
+  `DEPLOY.md`, `manage.py`, eventuali file di avvio/deploy.
+- Creare: `docs/ai/DEPENDENCIES_AUDIT.md`.
+- Non modificare: `requirements.txt`, `config/settings.py`, alcun file di
+  codice applicativo, `docs/ai/PROJECT_ANALYSIS.md` (salvo eventuale nota
+  minima di rimando, non obbligatoria).
+
+#### Contenuto richiesto di `DEPENDENCIES_AUDIT.md`
+
+- Elenco completo delle dipendenze di `requirements.txt`, ciascuna con:
+  - classificazione: **usata chiaramente** / **probabilmente usata** /
+    **dubbia** / **apparentemente inutilizzata**;
+  - categoria: **runtime/deploy** (es. `gunicorn`, `psycopg`,
+    `psycopg-binary`, `tzdata`) o **dev/test** (se presente alcuna);
+  - evidenza concreta: file e riga di import, oppure uso in
+    `config/settings.py` (es. `DATABASES` per `psycopg`), oppure
+    citazione in file di deploy per pacchetti mai importati direttamente
+    in Python (es. `gunicorn` è invocato da riga di comando, non
+    importato).
+- Per ogni dipendenza classificata **dubbia** o **apparentemente
+  inutilizzata**: sezione dedicata con l'evidenza negativa (comando grep
+  eseguito e risultato) e rischio di una rimozione prematura.
+- Dipendenze citate solo indirettamente (es. da un'altra libreria, o da
+  configurazione) ma non importate direttamente nel codice applicativo:
+  segnalarle esplicitamente.
+- Sezione "Rischi di rimozione": cosa si romperebbe per ciascuna
+  dipendenza dubbia se rimossa senza verifica.
+- Sezione "Proposta per TASK-009": per ciascuna dipendenza dubbia,
+  raccomandazione esplicita (rimuovere / integrare / mantenere e perché),
+  e piano di rimozione sicuro in piccoli step (una dipendenza alla volta,
+  con test tra uno step e l'altro).
+- Sezione "Test da eseguire prima e dopo eventuali rimozioni": comando
+  esatto (`scripts/test.sh` con venv attiva) e cosa verificare.
 
 #### Acceptance criteria
 
-- [ ] Raccomandazione esplicita e motivata per ciascuna delle due
-      dipendenze.
-- [ ] Nessuna modifica a `requirements.txt`/`INSTALLED_APPS`.
+- [ ] `docs/ai/DEPENDENCIES_AUDIT.md` creato con tutte le sezioni sopra,
+      per tutte e 11 le dipendenze di `requirements.txt`.
+- [ ] Report specifico con evidenze concrete (comandi/risultati grep,
+      percorsi file), non generico.
+- [ ] `djangorestframework` e `django-filter` riverificati esplicitamente
+      (non solo citati da `PROJECT_ANALYSIS.md`).
+- [ ] Nessuna modifica a `requirements.txt`.
+- [ ] Nessuna modifica a codice applicativo, settings, `INSTALLED_APPS`.
+- [ ] Nessuna installazione/disinstallazione pacchetti.
+- [ ] Suite Django reale resta verde (nessuna modifica prevista, va
+      comunque confermato).
 
 #### Test richiesti
 
-Nessuno (task di sola analisi); confermare comunque che
-`scripts/test.sh` resti verde.
+```bash
+source projects/documentale-workcopy/.venv/bin/activate
+projects/documentale-workcopy/scripts/test.sh
+```
+
+Task di sola analisi: la suite non deve cambiare esito, va solo
+riconfermata verde dopo il ciclo.
 
 #### Guardrail
 
-- Nessuna modifica applicativa.
-- Non installare pacchetti, non accedere alla rete.
+- Nessuna modifica applicativa, nessuna modifica a `requirements.txt`.
+- Non installare né disinstallare pacchetti, non accedere alla rete.
+- Non modificare `docs/ai/TASKS.md` oltre a questo task (l'aggiornamento
+  del backlog/RUN_LOG è a cura dell'operatore dopo la review).
 - No push, no merge, no commit da parte dell'implementatore.
 
 ---
