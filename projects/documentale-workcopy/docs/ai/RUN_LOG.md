@@ -690,3 +690,49 @@ Tutti i controlli completati con successo.
 
 1. Procedere con Step C (`pillow`, dubbia — verifica approfondita prima
    di decidere) dopo review/commit di Step B.
+
+---
+
+### Run — 2026-07-07 — TASK-009 Step C: rimozione pillow
+
+**Agente:** Claude Code (esecuzione diretta)
+**Task:** TASK-009 Step C
+**Branch:** task/documentale-clean-unused-dependencies
+
+**Operazioni eseguite:**
+
+1. Verifica approfondita (dipendenza "dubbia", cautela maggiore):
+   nessun `import PIL`/`from PIL`, nessun `ImageField` (né in modelli né
+   in form), nessun riferimento a `thumbnail`/`preview`/`immagine` nel
+   codice Python, nessun `<img>`/`thumbnail` nei template, nessun
+   validator specifico immagine (`FileExtensionValidator` con estensioni
+   immagine, `ImageFileValidator`). Tutti gli upload nel progetto usano
+   `models.FileField`/`forms.FileField` (documenti/allegati PDF), mai
+   `ImageField` — Django richiede Pillow solo per `ImageField`. Nessuna
+   menzione di piani futuri per campi immagine in `PROJECT_HANDOFF.md`,
+   `DEPLOY.md`, `AI_CONTEXT.md`, `CLAUDE.md`. **Nessun dubbio reale
+   emerso**: rimozione confermata sicura.
+2. Rimossa riga `pillow==12.2.0` da `requirements.txt`.
+3. `pip uninstall -y pillow` nella venv locale (nessun pacchetto globale
+   toccato).
+4. Eseguita suite completa con venv attiva.
+
+**Esito test (`scripts/test.sh`):**
+
+```
+Ran 1208 tests in 480.204s
+OK
+System check identified no issues (0 silenced).
+OK — manage.py test superato.
+Tutti i controlli completati con successo.
+```
+
+**Problemi riscontrati:**
+
+- Nessuno.
+
+**Prossimo passo per l'operatore umano:**
+
+1. TASK-009 completo (Step A/B/C tutti verdi). Eseguire verifiche finali
+   (suite completa, regressioni Station, `requirements.txt` coerente con
+   la venv) e review finale prima del merge.
