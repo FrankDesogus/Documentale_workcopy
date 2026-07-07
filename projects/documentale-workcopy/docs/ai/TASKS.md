@@ -22,11 +22,12 @@ _Nessun task in corso._
 
 Backlog operativo derivato dalla roadmap di `docs/ai/PROJECT_ANALYSIS.md`
 (TASK-001), riordinato e raffinato in task piccoli e testabili.
-**Prossimo task consigliato: TASK-008** (audit dipendenze — TASK-007
-Fase 1 completata; Fase 2 di TASK-007 da pianificare separatamente).
+**Prossimo task consigliato: TASK-007-2** (backfill esteso permessi —
+TASK-007 Fase 2, prosegue la migrazione permessi cartella dopo la Fase 1).
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
+| TASK-007-2 | Migrazione permessi cartella (Fase 2: backfill esteso) | alta | estende `BACKFILL_ROLE_PERMISSIONS`; richiede TASK-007 Fase 1 completata; fallback legacy resta attivo |
 | TASK-008 | Audit dipendenze requirements | media | solo analisi DRF/django-filter, nessuna modifica |
 | TASK-009 | Pulizia dipendenze inutilizzate | media | dipende da TASK-008 |
 | TASK-010 | Allineamento documentazione progetto | bassa | AI_CONTEXT.md/PROJECT_HANDOFF.md/DEPLOY.md, no codice |
@@ -689,6 +690,207 @@ invariato** (verificato con `git diff` esplicito: nessuna riga tocca
 `include_legacy_fallback`). Nessuna migrazione dati. Suite Django reale:
 **1208/1208 PASS** (1207 + 1 nuovo test). Dettagli in
 `docs/ai/RUN_LOG.md`.
+
+---
+
+### TASK-007-2 — Backfill esteso permessi (TASK-007 / Fase 2) — Cursor Agent
+
+> Questa esecuzione copre **solo la Fase 2** della migrazione permessi
+> (backfill esteso reale in ambiente di test). Prerequisito: TASK-007
+> Fase 1 completata (vedi sezione precedente). Le Fasi 3 (refactor
+> `ecn/permissions.py`) e 4 (rimozione fallback) restano task futuri
+> separati, **non iniziare a implementarle qui**.
+
+#### Obiettivo
+
+Estendere `BACKFILL_ROLE_PERMISSIONS` in
+`projects/management/commands/backfill_folder_permission_grants.py`
+rimuovendo le esclusioni che non hanno più motivo di esistere, così che il
+backfill copra (quando possibile in sicurezza) l'intero mapping di
+`_LEGACY_ROLE_PERMISSIONS`. Il fallback legacy resta **attivo**: questa
+fase prepara i dati (grant modulari), non rimuove alcuna rete di sicurezza
+applicativa.
+
+#### Analisi già svolta (da riusare, non ripetere)
+
+I 6 permission code oggi esclusi dal backfill
+(`BACKFILL_EXCLUDED_PERMISSIONS` in
+`backfill_folder_permission_grants.py`) sono: `view_projects`,
+`view_folder_ecns`, `view_obsolete_documents`, `manage_rejected_drafts`,
+`manage_project_documents`, `request_ecn`.
+
+Verifica per grep su tutto `projects/documentale-workcopy` (esclusi
+`tests.py`, `resolver.py`, i due management command e le migrazioni) di
+dove ciascun codice è effettivamente consumato tramite il resolver
+(`has_folder_permission` / `_resolve_folder_perm` / `resolver.resolve_bulk`)
+nel codice applicativo:
+
+- `view_projects` — **consumato attivamente** in
+  `projects/permissions.py` (`get_project_visible_folder_ids`, riga ~204)
+  e `projects/views.py` (righe 113, 423, 808), sempre con
+  `include_legacy_fallback=True`. È il permesso a rischio più alto
+  (audit R1: "progetti nascosti" se il fallback venisse rimosso senza
+  backfill). Non c'è alcuna condizione applicativa aggiuntiva oltre al
+  ruolo cartella: nessun motivo tecnico per escluderlo dal backfill.
+- `view_folder_ecns`, `request_ecn` — **non consumati da nessun path
+  applicativo tramite il resolver**: `ecn/permissions.py`
+  (`can_view_ecn`, `can_create_ecn`) usa direttamente
+  `get_folder_role(user, folder) in AUDIT_ROLES/WRITE_ROLES`, bypassando
+  completamente `FolderPermissionGrant`/`PermissionResolver` (confermato
+  per lettura diretta del file). Questi due permission code esistono oggi
+  solo come valori dell'enum del modello: backfillarli è innocuo (nessun
+  comportamento runtime dipende da essi) e prepara il terreno per la
+  Fase 3 (refactor ECN sul resolver).
+- `view_obsolete_documents`, `manage_rejected_drafts`,
+  `manage_project_documents` — stessa situazione: nessun uso di questi
+  permission_code tramite `has_folder_permission`/`_resolve_folder_perm`
+  in `documents/permissions.py` o altrove nel codice applicativo
+  (confermato per grep mirato). Backfillarli non cambia alcun
+  comportamento osservabile oggi.
+
+**Conclusione dell'analisi:** nessuno dei 6 permission code esclusi ha una
+motivazione tecnica residua per restare escluso. Tutti derivano
+direttamente da `_LEGACY_ROLE_PERMISSIONS` (fonte unica già in uso dal
+backfill dopo la Fase 1) e il backfill è per costruzione idempotente,
+conservativo (mai sovrascrive un grant `deny` esistente, li segnala come
+conflitto) e non distruttivo. **Non risultano esclusioni residue da
+mantenere.**
+
+#### Scope — modifiche richieste
+
+1. **`projects/management/commands/backfill_folder_permission_grants.py`**:
+   - Svuotare `BACKFILL_EXCLUDED_PERMISSIONS` (`frozenset()`), **senza
+     rimuovere la costante**: deve restare come punto di estensione
+     esplicito e documentato per eventuali esclusioni future. Aggiornare
+     il commento sopra la costante spiegando che è vuota perché l'analisi
+     TASK-007/Fase 2 non ha trovato permission code da escludere (con
+     riferimento a questa sezione di `docs/ai/TASKS.md` e a
+     `docs/ai/PERMISSIONS_AUDIT.md`), e non per assenza di analisi.
+   - Aggiornare il docstring del comando (righe 15–26 circa) che elenca
+     il "mapping conservativo" ed i permessi esclusi: ora
+     `BACKFILL_ROLE_PERMISSIONS` corrisponde esattamente a
+     `_LEGACY_ROLE_PERMISSIONS` per ogni ruolo.
+   - **Non cambiare nessun'altra logica** del comando (idempotenza,
+     gestione conflitti, transazione, `inherit_to_children=False`, opzioni
+     CLI): tutte già corrette e testate.
+2. **`projects/management/commands/compare_folder_permissions.py`**: **non
+   modificare** — già confronta il mapping legacy completo dalla Fase 1;
+   con il backfill esteso, il numero di divergenze attese scende a zero
+   per i ruoli interamente backfillati.
+3. **`projects/tests.py`**:
+   - `BackfillFolderPermissionGrantsTests.test_mapping_manager_conservative`
+     (riga ~2372): il nome e l'ultima asserzione
+     (`assertTrue(created_perms.isdisjoint(excluded))`) presuppongono
+     esclusioni che non esistono più. Aggiornare il test (rinominarlo in
+     `test_mapping_manager_full` o simile) verificando che
+     `created_perms` sia **uguale** a `BACKFILL_ROLE_PERMISSIONS['manager']`
+     **e** a `_LEGACY_ROLE_PERMISSIONS['manager']` (tutti i 12 permission
+     code), rimuovendo l'asserzione `isdisjoint` ormai priva di senso.
+   - Le altre 4 asserzioni di mapping (`test_mapping_reader/author/approver/auditor`,
+     righe ~2317–2370) restano valide così come sono (già confrontano
+     contro `BACKFILL_ROLE_PERMISSIONS[ruolo]`, che ora è più ampio ma la
+     forma del test non cambia).
+   - `CompareFolderPermissionsTests.test_no_divergences_exit_code_0`
+     (riga ~2452): con `BACKFILL_EXCLUDED_PERMISSIONS` vuoto, `expected`
+     diventa l'insieme vuoto e il compare non deve più rilevare
+     divergenze per il ruolo `reader` dopo il backfill. Aggiornare
+     l'asserzione da `assertNotEqual(exit_code, 0)` a
+     `assertEqual(exit_code, 0)` e da `assertEqual(divergent, expected)`
+     a `assertEqual(divergent, set())` (o mantenere il confronto con
+     `expected` che ora è vuoto — equivalente). Aggiornare il commento
+     del test.
+   - `CompareFolderPermissionsTests.test_backfill_gap_detected_for_all_roles`
+     (riga ~2549): con esclusioni vuote, il gap G1/G2 dell'audit è ora
+     **chiuso** per tutti e 5 i ruoli. Aggiornare il test (rinominandolo,
+     es. `test_no_gap_after_extended_backfill_for_all_roles`) per
+     verificare che dopo il backfill esteso, per ogni ruolo, `compare`
+     rilevi **zero divergenze** (`exit_code == 0`, `divergent == set()`),
+     dimostrando che il backfill esteso chiude il gap G1/G2 identificato
+     nell'audit. Non eliminare la copertura per-ruolo (il loop sui 5
+     ruoli resta).
+   - **Non toccare** `test_divergence_exit_code_nonzero`,
+     `test_user_id_filter`, `test_folder_id_filter`,
+     `test_compare_does_not_modify_database`,
+     `test_compare_uses_resolver_without_legacy_fallback`: verificano
+     comportamento del comando indipendente dal mapping (filtri,
+     read-only, rilevamento divergenza in assenza di backfill) e restano
+     validi.
+   - Aggiungere un nuovo test in `BackfillFolderPermissionGrantsTests` che
+     confermi esplicitamente, per il ruolo `manager` (quello con più
+     permission code), che dopo l'apply **tutti e 12** i permission code
+     di `_LEGACY_ROLE_PERMISSIONS['manager']` risultano come grant
+     `FolderPermissionGrant` con `effect=allow` — regressione esplicita
+     sul gap G1/G2 chiuso (può essere lo stesso test rinominato al punto
+     precedente, se già copre questo).
+
+#### File coinvolti
+
+- `projects/management/commands/backfill_folder_permission_grants.py` —
+  svuotare `BACKFILL_EXCLUDED_PERMISSIONS`, aggiornare docstring/commenti.
+- `projects/tests.py` — aggiornare i test elencati sopra.
+- `docs/ai/TASKS.md`, `docs/ai/RUN_LOG.md` — esito.
+- Non toccare: `projects/resolver.py`, `projects/management/commands/compare_folder_permissions.py`,
+  `ecn/permissions.py`, `projects/models.py`, migrazioni, view, template,
+  settings, `ProjectFolderMembership`.
+
+#### Acceptance criteria
+
+- [ ] `BACKFILL_EXCLUDED_PERMISSIONS` vuoto (`frozenset()`), costante
+      mantenuta e documentata (non rimossa).
+- [ ] `BACKFILL_ROLE_PERMISSIONS` risultante identico a
+      `_LEGACY_ROLE_PERMISSIONS` per tutti e 5 i ruoli.
+- [ ] `compare_folder_permissions` non modificato; dopo backfill completo
+      su un set di membership che copre tutti i ruoli, rileva **zero**
+      divergenze.
+- [ ] Test aggiornati coerentemente (nessuna copertura rimossa senza
+      sostituzione equivalente); nuova asserzione esplicita che il gap
+      G1/G2 è chiuso per tutti i ruoli dopo il backfill esteso.
+- [ ] Fallback legacy invariato (`include_legacy_fallback` non toccato in
+      nessun punto applicativo — verificare con
+      `git diff | grep -E "^[+-].*include_legacy_fallback"` deve dare
+      output vuoto).
+- [ ] Nessuna rimozione di `ProjectFolderMembership`.
+- [ ] Nessuna migrazione dati, nessun `--apply` su dati reali (non
+      esistono comunque in questa copia; gli `--apply` nei test girano su
+      SQLite `:memory:` tramite `call_command` nei test esistenti).
+- [ ] Nessuna modifica a `ecn/permissions.py`, view, template, UX,
+      migrazioni, settings.
+- [ ] Suite Django reale verde: 1208 test esistenti (aggiornati, non
+      rimossi) + eventuali nuovi test, tutti PASS.
+- [ ] Esito documentato in `docs/ai/RUN_LOG.md`.
+
+#### Test richiesti
+
+```bash
+source projects/documentale-workcopy/.venv/bin/activate
+projects/documentale-workcopy/scripts/test.sh
+```
+
+Verificare in particolare `BackfillFolderPermissionGrantsTests` (in
+particolare il test sul mapping `manager` aggiornato) e l'intera classe
+`CompareFolderPermissionsTests` (in particolare il test rinominato che
+dimostra zero divergenze dopo il backfill esteso).
+
+#### Guardrail
+
+- Non disattivare il fallback legacy (`include_legacy_fallback`) in nessun
+  punto.
+- Non rimuovere o migrare `ProjectFolderMembership`.
+- Non eseguire `--apply` su dati reali (non esistono in questa copia).
+- Non modificare `ecn/permissions.py`, `compare_folder_permissions.py`,
+  `resolver.py`, view, template, UX, migrazioni, settings.
+- Non eseguire server, non usare database reale persistente, non leggere
+  segreti.
+- Non installare pacchetti.
+- No push, no merge, no reset --hard, no git clean.
+- No commit da parte dell'implementatore.
+
+#### Note operative
+
+Questa è la Fase 2 di TASK-007. La Fase 3 (refactor `ecn/permissions.py`
+per usare il resolver invece di `get_folder_role` diretto) e la Fase 4
+(rimozione fallback) restano task futuri separati, da avviare solo dopo
+revisione esplicita di questa Fase 2.
 
 ---
 
