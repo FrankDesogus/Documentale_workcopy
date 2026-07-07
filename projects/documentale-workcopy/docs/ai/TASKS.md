@@ -22,13 +22,11 @@ _Nessun task in corso._
 
 Backlog operativo derivato dalla roadmap di `docs/ai/PROJECT_ANALYSIS.md`
 (TASK-001), riordinato e raffinato in task piccoli e testabili.
-**Prossimo task consigliato: TASK-007** (migrazione permessi, ora sbloccata
-da TASK-006 — vedi audit in `docs/ai/PERMISSIONS_AUDIT.md` prima di
-avviarla).
+**Prossimo task consigliato: TASK-008** (audit dipendenze — TASK-007
+Fase 1 completata; Fase 2 di TASK-007 da pianificare separatamente).
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
-| TASK-007 | Migrazione permessi cartella (Fase 1: allineamento mapping) | alta | solo compare/backfill mapping + test; no migrazione dati, no fallback OFF |
 | TASK-008 | Audit dipendenze requirements | media | solo analisi DRF/django-filter, nessuna modifica |
 | TASK-009 | Pulizia dipendenze inutilizzate | media | dipende da TASK-008 |
 | TASK-010 | Allineamento documentazione progetto | bassa | AI_CONTEXT.md/PROJECT_HANDOFF.md/DEPLOY.md, no codice |
@@ -45,6 +43,7 @@ avviarla).
 | TASK-004 | Correggere SyntaxWarning in versioning | — | 2026-07-06 |
 | TASK-005 | Correggere test approval date timezone | — | 2026-07-06 |
 | TASK-006 | Audit permessi cartella/documenti | — | 2026-07-06 |
+| TASK-007 | Migrazione permessi cartella (Fase 1: allineamento mapping) | — | 2026-07-07 |
 
 ---
 
@@ -677,7 +676,19 @@ e il nuovo test di regressione sul gap.
 Le Fasi 2 (backfill esteso reale), 3 (refactor ECN) e 4 (rimozione
 fallback) restano task futuri separati, da avviare solo dopo review
 esplicita di questa Fase 1.
-- No commit da parte dell'implementatore.
+
+#### Esito (2026-07-07)
+
+`BACKFILL_ROLE_PERMISSIONS` ora derivato da `_LEGACY_ROLE_PERMISSIONS` −
+`BACKFILL_EXCLUDED_PERMISSIONS` (valori identici a prima, nessun cambio di
+comportamento del backfill). `compare_folder_permissions` ora confronta il
+mapping legacy completo, non solo il sottoinsieme backfillato. Test
+esistenti aggiornati (3) + 1 nuovo test di regressione
+(`test_backfill_gap_detected_for_all_roles`, gap G1/G2). **Fallback legacy
+invariato** (verificato con `git diff` esplicito: nessuna riga tocca
+`include_legacy_fallback`). Nessuna migrazione dati. Suite Django reale:
+**1208/1208 PASS** (1207 + 1 nuovo test). Dettagli in
+`docs/ai/RUN_LOG.md`.
 
 ---
 

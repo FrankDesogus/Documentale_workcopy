@@ -29,33 +29,23 @@ in lista esclusioni:
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+from projects.resolver import _LEGACY_ROLE_PERMISSIONS
 
-# Mapping conservativo: ruolo → frozenset di permission_code
+
+# Permission code esclusi dal backfill conservativo (Fase 1); vedi docs/ai/PERMISSIONS_AUDIT.md
+BACKFILL_EXCLUDED_PERMISSIONS: frozenset[str] = frozenset([
+    'view_projects',
+    'view_folder_ecns',
+    'view_obsolete_documents',
+    'manage_rejected_drafts',
+    'manage_project_documents',
+    'request_ecn',
+])
+
+# Mapping conservativo: ruolo → frozenset di permission_code (derivato da _LEGACY_ROLE_PERMISSIONS)
 BACKFILL_ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
-    'reader': frozenset([
-        'read_published',
-    ]),
-    'author': frozenset([
-        'read_published',
-        'create_draft',
-        'submit_for_approval',
-    ]),
-    'approver': frozenset([
-        'read_published',
-        'eligible_document_approver',
-    ]),
-    'auditor': frozenset([
-        'read_published',
-        'view_history',
-    ]),
-    'manager': frozenset([
-        'read_published',
-        'create_draft',
-        'submit_for_approval',
-        'eligible_document_approver',
-        'view_history',
-        'manage_folder',
-    ]),
+    role: perms - BACKFILL_EXCLUDED_PERMISSIONS
+    for role, perms in _LEGACY_ROLE_PERMISSIONS.items()
 }
 
 

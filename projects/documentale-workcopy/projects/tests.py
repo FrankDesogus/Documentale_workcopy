@@ -2422,6 +2422,21 @@ class CompareFolderPermissionsTests(TestCase):
             exit_code = e.code
         return out.getvalue(), exit_code
 
+    def _parse_divergent_permissions(self, output):
+        """Estrae i permission_code dalla sezione DIVERGENZE dell'output compare."""
+        import re
+        perms = []
+        in_divergences = False
+        for line in output.splitlines():
+            if '--- DIVERGENZE ---' in line:
+                in_divergences = True
+                continue
+            if in_divergences and line.strip().startswith('user='):
+                match = re.search(r'perm=([^ |]+)', line)
+                if match:
+                    perms.append(match.group(1))
+        return perms
+
     def _backfill(self):
         """Helper: esegue il backfill apply per la cartella corrente."""
         from io import StringIO
@@ -2433,14 +2448,22 @@ class CompareFolderPermissionsTests(TestCase):
             stdout=StringIO(),
         )
 
-    # 1. Confronto senza divergenze → exit code 0
+    # 1. Dopo backfill: solo i codici esclusi dal backfill divergono
     def test_no_divergences_exit_code_0(self):
+        from projects.management.commands.backfill_folder_permission_grants import (
+            BACKFILL_EXCLUDED_PERMISSIONS,
+        )
+        from projects.resolver import _LEGACY_ROLE_PERMISSIONS
+
         ProjectFolderMembership.objects.create(
             folder=self.folder, user=self.user, role='reader'
         )
         self._backfill()
-        _, exit_code = self._call_compare()
-        self.assertEqual(exit_code, 0)
+        out, exit_code = self._call_compare()
+        self.assertNotEqual(exit_code, 0)
+        divergent = set(self._parse_divergent_permissions(out))
+        expected = BACKFILL_EXCLUDED_PERMISSIONS & _LEGACY_ROLE_PERMISSIONS['reader']
+        self.assertEqual(divergent, expected)
 
     # 2. Divergenza rilevata → exit code diverso da 0
     def test_divergence_exit_code_nonzero(self):
@@ -2462,9 +2485,13 @@ class CompareFolderPermissionsTests(TestCase):
             folder=self.folder, user=other, role='reader'
         )
         self._backfill()
-        # Backfill ha creato grants per entrambi: filtro per user → 0 divergenze
-        _, exit_code = self._call_compare(user_id=self.user.pk)
+        out, exit_code = self._call_compare(
+            user_id=self.user.pk,
+            allow_differences=True,
+        )
         self.assertEqual(exit_code, 0)
+        self.assertIn('cmp_user', out)
+        self.assertNotIn('cmp_other', out)
 
     # 4. --folder-id filtra correttamente
     def test_folder_id_filter(self):
@@ -2483,9 +2510,13 @@ class CompareFolderPermissionsTests(TestCase):
         )
         # Backfill solo su self.folder
         self._backfill()
-        # Compare limitato a self.folder: dovrebbe essere ok
-        _, exit_code = self._call_compare(folder_id=self.folder.pk)
+        out, exit_code = self._call_compare(
+            folder_id=self.folder.pk,
+            allow_differences=True,
+        )
         self.assertEqual(exit_code, 0)
+        self.assertIn('CMP-FOLD', out)
+        self.assertNotIn('CMP-OTHER', out)
 
     # 5. Nessuna modifica al database dopo compare
     def test_compare_does_not_modify_database(self):
@@ -2513,6 +2544,37 @@ class CompareFolderPermissionsTests(TestCase):
         out, exit_code = self._call_compare()
         self.assertNotEqual(exit_code, 0)
         self.assertIn('Divergenze', out)
+
+    # 7. Gap G1/G2: compare rileva esattamente i codici esclusi dal backfill
+    def test_backfill_gap_detected_for_all_roles(self):
+        from projects.management.commands.backfill_folder_permission_grants import (
+            BACKFILL_EXCLUDED_PERMISSIONS,
+        )
+        from projects.resolver import _LEGACY_ROLE_PERMISSIONS
+
+        for role in ('reader', 'author', 'approver', 'auditor', 'manager'):
+            with self.subTest(role=role):
+                user = User.objects.create_user(f'cmp_gap_{role}', password='pw')
+                ProjectFolderMembership.objects.create(
+                    folder=self.folder, user=user, role=role,
+                )
+                from io import StringIO
+                from django.core.management import call_command
+                call_command(
+                    'backfill_folder_permission_grants',
+                    apply=True,
+                    folder_id=self.folder.pk,
+                    user_id=user.pk,
+                    stdout=StringIO(),
+                )
+                out, exit_code = self._call_compare(user_id=user.pk)
+                self.assertNotEqual(exit_code, 0)
+                divergent = set(self._parse_divergent_permissions(out))
+                expected = (
+                    BACKFILL_EXCLUDED_PERMISSIONS
+                    & _LEGACY_ROLE_PERMISSIONS[role]
+                )
+                self.assertEqual(divergent, expected)
 
 
 # ===========================================================================
