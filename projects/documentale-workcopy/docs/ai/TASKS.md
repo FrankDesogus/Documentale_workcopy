@@ -996,44 +996,127 @@ riconfermata verde dopo il ciclo.
 
 ---
 
-### TASK-009 — Pulizia dipendenze inutilizzate — Cursor Agent
+### TASK-009 — Pulizia dipendenze inutilizzate — Claude Code
 
 #### Obiettivo
 
-Applicare la raccomandazione di TASK-008 (rimuovere o integrare
-`djangorestframework`/`django-filter`).
+Applicare la raccomandazione di `docs/ai/DEPENDENCIES_AUDIT.md` (TASK-008):
+rimuovere `django-filter`, `djangorestframework`, `pillow` da
+`requirements.txt`, **una dipendenza alla volta**, con verifica e test
+completo dopo ogni step, in ordine di certezza decrescente (le prime due
+sono "apparentemente inutilizzate" con evidenza forte; `pillow` è "dubbia"
+e richiede più cautela).
 
 #### Scope
 
-- **Dipende da TASK-008 completato.**
-- Se raccomandata rimozione: aggiornare `requirements.txt`. Se
-  raccomandata integrazione: aggiungere a `INSTALLED_APPS` con uso minimo
-  documentato — da valutare in base all'esito di TASK-008.
-- Nessuna installazione di nuovi pacchetti diversi da quelli già in
-  `requirements.txt`.
+- **Dipende da TASK-008 completato** (già mergiato su `main`).
+- Rimozione incrementale e reversibile: una riga di `requirements.txt` per
+  step, disinstallazione **solo** dalla venv locale
+  `projects/documentale-workcopy/.venv`, mai pacchetti globali.
+- Nessuna installazione di pacchetti nuovi, nessun accesso rete.
+- Nessun refactor applicativo, salvo eventuale rimozione di import
+  realmente inutilizzati se emergessero durante la verifica (non attesi,
+  l'audit non ne ha trovati).
+- Se uno step fallisce (test rossi o dubbio reale su `pillow`): rollback
+  della singola riga in `requirements.txt` + reinstall da requirements,
+  documentare il blocco, **non procedere allo step successivo**.
 
-#### File coinvolti (probabili)
+#### Step A — `django-filter`
 
-- `requirements.txt`, eventualmente `config/settings.py`.
+1. Riverificare assenza d'uso: `django_filters`, `django-filter`,
+   `FilterSet`, `DjangoFilterBackend`, `filter_backends` in tutto il
+   codebase Python e in `config/settings.py` (`INSTALLED_APPS`).
+2. Se nessun uso: rimuovere la riga `django-filter==25.2` da
+   `requirements.txt`; `pip uninstall -y django-filter` (solo venv
+   locale).
+3. Eseguire suite completa (`scripts/test.sh` con venv attiva).
+4. Se verde: aggiornare `TASKS.md`/`RUN_LOG.md`, commit gated
+   (`Remove unused django-filter dependency`).
+5. Se rossa: ripristinare la riga in `requirements.txt`, reinstallare da
+   requirements, documentare il blocco in `RUN_LOG.md`, **fermarsi**.
+
+#### Step B — `djangorestframework`
+
+Solo se Step A verde e committato.
+
+1. Riverificare assenza d'uso: `rest_framework`, `APIView`, `ViewSet`,
+   `Serializer`, `ModelSerializer`, `Response`, `routers`,
+   `DefaultRouter` in tutto il codebase e in `INSTALLED_APPS`.
+2. Se nessun uso: rimuovere `djangorestframework==3.17.1` da
+   `requirements.txt`; `pip uninstall -y djangorestframework` (solo venv
+   locale).
+3. Eseguire suite completa.
+4. Se verde: aggiornare docs, commit gated
+   (`Remove unused djangorestframework dependency`).
+5. Se rossa: rollback riga, reinstall, documentare, fermarsi (non
+   procedere allo Step C).
+
+#### Step C — `pillow` (dubbia, cautela maggiore)
+
+Solo se Step B verde e committato.
+
+1. Verifica approfondita di uso indiretto: `PIL`, `Image`, `ImageField`,
+   `forms.ImageField`, upload/validazione/preview/thumbnail immagini, in
+   modelli, form, admin, template.
+2. Se emergono dubbi reali (anche solo un uso indiretto plausibile): **non
+   rimuovere**, documentare esplicitamente il motivo in
+   `DEPENDENCIES_AUDIT.md`/`RUN_LOG.md`, eventuale commit solo
+   documentale.
+3. Se nessuna evidenza d'uso (confermando l'audit): rimuovere
+   `pillow==12.2.0` da `requirements.txt`; `pip uninstall -y pillow`
+   (solo venv locale).
+4. Eseguire suite completa.
+5. Se verde: aggiornare docs, commit gated
+   (`Remove unused pillow dependency`).
+6. Se rossa: rollback riga, reinstall, documentare, fermarsi.
+
+#### File coinvolti
+
+- `requirements.txt` (rimozione righe, una per step).
+- `docs/ai/TASKS.md`, `docs/ai/RUN_LOG.md`, eventualmente
+  `docs/ai/DEPENDENCIES_AUDIT.md` (nota di chiusura).
+- Non toccare: `config/settings.py`, `INSTALLED_APPS`, view, template,
+  modelli, migrazioni — a meno di import realmente orfani scoperti (non
+  attesi).
 
 #### Acceptance criteria
 
-- [ ] Modifica coerente con la raccomandazione di TASK-008.
-- [ ] Suite Django reale verde dopo la modifica.
-- [ ] Nessuna funzionalità esistente rotta.
+- [ ] Una dipendenza rimossa per step, mai più di una insieme.
+- [ ] Test completo (`scripts/test.sh`) eseguito e verde dopo **ogni**
+      step riuscito.
+- [ ] Nessuna modifica applicativa salvo eventuale rimozione di import
+      inutilizzati realmente trovati.
+- [ ] Nessun pacchetto installato/disinstallato fuori dalla venv locale
+      del progetto.
+- [ ] Se `pillow` risulta dubbia in fase di verifica, **non rimuoverla**
+      e documentare il motivo (meglio rimuovere meno con certezza che
+      troppo).
+- [ ] `requirements.txt` finale contiene solo le dipendenze rimaste
+      necessarie.
+- [ ] Documentazione (`TASKS.md`, `RUN_LOG.md`) aggiornata per ogni step
+      eseguito (anche se bloccato).
 
-#### Test richiesti
+#### Test richiesti (dopo ogni step)
 
 ```bash
 source projects/documentale-workcopy/.venv/bin/activate
 projects/documentale-workcopy/scripts/test.sh
 ```
 
+Atteso: 1208/1208 PASS invariato dopo ogni rimozione (nessuna dipendenza
+rimossa è usata da codice o test).
+
 #### Guardrail
 
-- Non avviare senza TASK-008 completato.
+- Non avviare senza TASK-008 completato (già vero, mergiato su main).
 - Non installare pacchetti nuovi, non accedere alla rete.
-- No push, no merge, no commit da parte dell'implementatore.
+- Disinstallare pacchetti **solo** nella venv locale
+  `projects/documentale-workcopy/.venv`, mai globalmente, mai con `sudo`.
+- Non rimuovere più di una dipendenza per step senza test completo.
+- Non procedere allo step successivo se lo step corrente non è verde e
+  committato.
+- No push, no merge, no reset --hard, no git clean.
+- Commit solo tramite `commit-if-approved.sh`, mai `git commit` diretto.
 
 ---
 
