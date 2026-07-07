@@ -12,18 +12,16 @@ Il comando è:
 
 Modalità predefinita: --dry-run (non scrive nulla nel database).
 
-Mapping conservativo (vedi tabella in resolver.py):
-  reader   → read_published
-  author   → read_published, create_draft, submit_for_approval
-  approver → read_published, eligible_document_approver
-  auditor  → read_published, view_history
-  manager  → read_published, create_draft, submit_for_approval,
-             eligible_document_approver, view_history, manage_folder
+Mapping completo (identico a _LEGACY_ROLE_PERMISSIONS in resolver.py):
+  reader   → read_published, view_projects, view_folder_ecns
+  author   → reader + create_draft, submit_for_approval,
+             manage_rejected_drafts, manage_project_documents, request_ecn
+  approver → reader + eligible_document_approver
+  auditor  → reader + view_history, view_obsolete_documents
+  manager  → tutti i permessi sopra + manage_folder
 
-Esclusi per mancanza di prova esplicita nel codice legacy o per essere
-in lista esclusioni:
-  view_projects, view_folder_ecns, manage_project_documents, request_ecn,
-  view_obsolete_documents, manage_rejected_drafts
+Nessuna esclusione attiva (Fase 2 TASK-007): BACKFILL_ROLE_PERMISSIONS
+corrisponde esattamente a _LEGACY_ROLE_PERMISSIONS per ogni ruolo.
 """
 
 from django.core.management.base import BaseCommand
@@ -32,17 +30,13 @@ from django.db import transaction
 from projects.resolver import _LEGACY_ROLE_PERMISSIONS
 
 
-# Permission code esclusi dal backfill conservativo (Fase 1); vedi docs/ai/PERMISSIONS_AUDIT.md
-BACKFILL_EXCLUDED_PERMISSIONS: frozenset[str] = frozenset([
-    'view_projects',
-    'view_folder_ecns',
-    'view_obsolete_documents',
-    'manage_rejected_drafts',
-    'manage_project_documents',
-    'request_ecn',
-])
+# Permission code esclusi dal backfill. Vuoto dopo l'analisi TASK-007 Fase 2
+# (docs/ai/TASKS.md, sezione TASK-007-2; docs/ai/PERMISSIONS_AUDIT.md): nessun
+# codice ha motivazione tecnica residua per restare escluso. La costante resta
+# come punto di estensione esplicito per eventuali esclusioni future.
+BACKFILL_EXCLUDED_PERMISSIONS: frozenset[str] = frozenset()
 
-# Mapping conservativo: ruolo → frozenset di permission_code (derivato da _LEGACY_ROLE_PERMISSIONS)
+# Mapping completo: ruolo → frozenset di permission_code (derivato da _LEGACY_ROLE_PERMISSIONS)
 BACKFILL_ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
     role: perms - BACKFILL_EXCLUDED_PERMISSIONS
     for role, perms in _LEGACY_ROLE_PERMISSIONS.items()
