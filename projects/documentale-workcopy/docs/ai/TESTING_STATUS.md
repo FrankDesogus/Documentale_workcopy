@@ -1,7 +1,7 @@
 # Testing status — Documentale Workcopy
 
 Stato onesto della validazione della test suite in questa copia Station.
-Aggiornato: 2026-07-06 (TASK-005 — suite tornata 1207/1207 PASS).
+Aggiornato: 2026-07-07 (TASK-010 — suite corrente **1208/1208 PASS**).
 
 ## Stato attuale
 
@@ -89,6 +89,24 @@ completa: **1207/1207 PASS**, 0 warning, `manage.py check` pulito.
   nel test, mai nella logica applicativa di produzione (il template
   localizza correttamente).
 
+### TASK-006 → TASK-009 (2026-07-06 / 2026-07-07) — 1208/1208 PASS
+
+Un test è stato aggiunto durante TASK-007 Fase 1 (regressione gap
+permessi G1/G2), portando il totale da 1207 a **1208**. Da allora il
+conteggio resta stabile a 1208/1208 PASS attraverso:
+
+- TASK-007 Fase 1 — allineamento mapping backfill/compare permessi
+  cartella (+1 test).
+- TASK-007-2 — backfill esteso a tutti i permission code (2 test
+  rinominati/aggiornati, nessuna variazione di conteggio).
+- TASK-008 — audit dipendenze `requirements.txt` (solo documentazione,
+  nessuna variazione).
+- TASK-009 — rimozione `django-filter`, `djangorestframework`, `pillow`
+  da `requirements.txt` (una alla volta, test completo dopo ogni step:
+  1208/1208 PASS in ognuno, confermando che nessuna era realmente usata).
+
+Dettaglio completo di ogni esecuzione in `docs/ai/RUN_LOG.md`.
+
 ## Cosa è stato validato
 
 - Sintassi bash dello script (`bash -n`), `shellcheck`/`shfmt` puliti,
@@ -128,6 +146,7 @@ distinto esplicitamente da un vero fallimento della suite applicativa.
 
 ## Prossimo passo
 
-Nessun problema noto residuo nella suite. Procedere con i task della
-roadmap in `docs/ai/PROJECT_ANALYSIS.md` (es. migrazione permessi cartella,
-pulizia dipendenze inutilizzate, allineamento documentazione).
+Nessun problema noto residuo nella suite. Migrazione permessi cartella
+(Fase 1/2), pulizia dipendenze e allineamento documentazione completati
+(TASK-007→010). Procedere con il backlog corrente in `docs/ai/TASKS.md`
+(prossimo: TASK-011 o come indicato da `station-next-task.sh`).

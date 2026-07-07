@@ -1,5 +1,20 @@
 # Project Handoff
 
+> **Nota Station (TASK-010, 2026-07-07):** questo file descrive lo stato
+> del progetto **originale** (fuori dalla Station, branch `main` del
+> repository sorgente) al momento dell'import come workcopy — non viene
+> riscritto integralmente per preservarne lo storico. Per lo stato
+> **di questa copia di lavoro** (`projects/documentale-workcopy`,
+> lavorata dentro la Station) vedi `docs/ai/TASKS.md` (roadmap TASK-001→
+> TASK-010+), `docs/ai/TESTING_STATUS.md` (conteggio test corrente,
+> attualmente 1208/1208 PASS), `docs/ai/DEPENDENCIES_AUDIT.md`
+> (`requirements.txt` ora senza `django-filter`/`djangorestframework`/
+> `pillow`, rimossi in TASK-009) e `docs/ai/PERMISSIONS_AUDIT.md`
+> (migrazione permessi cartella, Fase 1/2 completate, fallback legacy
+> ancora attivo). I riferimenti a comandi PowerShell, push su
+> `origin/main`, e checkpoint git sotto riguardano il repository
+> **originale**, non questa workcopy (che non ha remote configurato).
+
 ## Stato Git
 
 Branch di lavoro: `main`

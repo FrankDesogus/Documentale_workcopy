@@ -4,6 +4,17 @@ Questo file è un briefing tecnico sintetico per AI (ChatGPT, Claude, Codex, ecc
 Descrive architettura, modelli, flussi e vincoli del progetto.
 Non sostituisce il codice — è pensato per ragionare su modifiche e produrre prompt precisi.
 
+> **Nota Station (TASK-010, 2026-07-07):** questo file descrive il
+> progetto originale (branch `authz-foundation`, fuori dalla Station) e
+> non viene riscritto integralmente. Per lo stato **di questa copia di
+> lavoro** (`projects/documentale-workcopy`) — conteggio test corrente,
+> venv, dipendenze, avanzamento migrazione permessi — vedi
+> `docs/ai/TESTING_STATUS.md`, `docs/ai/DEPENDENCIES_AUDIT.md`,
+> `docs/ai/PERMISSIONS_AUDIT.md` e `docs/ai/TASKS.md`. La tabella gruppi
+> sotto è stata corretta per riflettere le costanti reali nel codice
+> (`documents/permissions.py`, `ecn/permissions.py`), che divergevano dai
+> nomi qui elencati in precedenza.
+
 ---
 
 ## Cos'è il progetto
@@ -272,18 +283,21 @@ send_notifications=should_send_notifications(sanatoria=form.is_sanatoria)
 
 ## Gruppi utente (permessi globali)
 
-| Gruppo | Accesso |
-|---|---|
-| `readers` | Lettura documenti pubblicati |
-| `authors` | Crea/modifica bozze |
-| `approvers` | Approva revisioni |
-| `auditors` | Lettura tutto (incluso storico) |
-| `managers` | Gestione completa documenti |
-| `quality_managers` | Gestione ECN, visibilità totale |
-| `quality_operators` | Operatività qualità |
-| `direction` | Accesso direzionale |
-| `ecn_proposers` | Può creare ECN |
-| `ccb` | Membro CCB, può votare ECN |
+Nomi reali (costante Python → nome gruppo Django), fonte unica
+`documents/permissions.py` ed `ecn/permissions.py`:
+
+| Costante | Nome gruppo Django | Accesso |
+|---|---|---|
+| `GROUP_READERS` | `Document Readers` | Lettura documenti pubblicati |
+| `GROUP_AUTHORS` | `Document Authors` | Crea/modifica bozze |
+| `GROUP_APPROVERS` | `Document Approvers` | Approva revisioni |
+| `GROUP_AUDITORS` | `Document Auditors` | Lettura tutto (incluso storico) |
+| `GROUP_MANAGERS` | `Document Managers` | Gestione completa documenti |
+| `GROUP_QUALITY_MANAGER` | `Quality Manager` | Gestione ECN, visibilità totale |
+| `GROUP_QUALITY_OPERATOR` | `Quality Operator` | Operatività qualità, visibilità totale ECN |
+| `GROUP_DIRECTION` | `Direction` | Visibilità totale ECN (accesso direzionale) |
+| `GROUP_ECN_PROPOSERS` | `ECN Proposers` | Può proporre ECN |
+| `GROUP_CCB` (in `ecn/permissions.py`) | `Change Control Board` | Pool candidati CCB (nessuna visibilità automatica) |
 
 ---
 

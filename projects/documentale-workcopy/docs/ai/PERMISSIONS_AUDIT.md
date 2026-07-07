@@ -5,6 +5,17 @@
 **Scope:** sola analisi (nessuna modifica applicativa)  
 **Obiettivo:** mappare lo stato attuale del doppio sistema permessi e preparare TASK-007 (migrazione controllata).
 
+> **Aggiornamento (TASK-010, 2026-07-07):** TASK-007 Fase 1 (allineamento
+> mapping backfill/compare) e Fase 2 (backfill esteso reale, tutti i 6
+> permission code prima esclusi ora inclusi) sono **completate**. Il gap
+> G1/G2 descritto in questo documento è chiuso per tutti i ruoli dopo
+> backfill esteso. **Il fallback legacy (`include_legacy_fallback=True`)
+> resta attivo** — non è stato rimosso. Fase 3 (refactor
+> `ecn/permissions.py` su resolver) e Fase 4 (rimozione fallback) restano
+> task futuri non ancora pianificati in dettaglio. Vedi
+> `docs/ai/TASKS.md` (sezioni TASK-007/Fase 1 e TASK-007-2) e
+> `docs/ai/RUN_LOG.md` per il dettaglio delle esecuzioni.
+
 ---
 
 ## 1. Sintesi esecutiva

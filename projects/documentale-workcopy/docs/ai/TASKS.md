@@ -22,13 +22,12 @@ _Nessun task in corso._
 
 Backlog operativo derivato dalla roadmap di `docs/ai/PROJECT_ANALYSIS.md`
 (TASK-001), riordinato e raffinato in task piccoli e testabili.
-**Prossimo task consigliato: TASK-010** (allineamento documentazione
-progetto — TASK-009 completato: `requirements.txt` ridotto da 11 a 8
-pacchetti, tutti usati).
+**Prossimo task consigliato: TASK-011** (review deployment locale/VM —
+TASK-010 completato: documentazione allineata a 1208/1208 PASS, dipendenze
+correnti, gruppi Django corretti).
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
-| TASK-010 | Allineamento documentazione progetto | bassa | AI_CONTEXT.md/PROJECT_HANDOFF.md/DEPLOY.md, no codice |
 | TASK-011 | Review deployment locale/VM | bassa | solo analisi/dry-run, nessun deploy reale aziendale |
 | TASK-012 | Hardening configurazione test | bassa | miglioria facoltativa a config/test_settings.py e scripts/test.sh |
 
@@ -46,6 +45,7 @@ pacchetti, tutti usati).
 | TASK-007-2 | Migrazione permessi cartella (Fase 2: backfill esteso) | — | 2026-07-07 |
 | TASK-008 | Audit dipendenze requirements | — | 2026-07-07 |
 | TASK-009 | Pulizia dipendenze inutilizzate (django-filter, djangorestframework, pillow) | — | 2026-07-07 |
+| TASK-010 | Allineamento documentazione progetto | — | 2026-07-07 |
 
 ---
 
