@@ -650,3 +650,43 @@ Tutti i controlli completati con successo.
 **Prossimo passo per l'operatore umano:**
 
 1. Procedere con Step B (`djangorestframework`) dopo review/commit di Step A.
+
+---
+
+### Run — 2026-07-07 — TASK-009 Step B: rimozione djangorestframework
+
+**Agente:** Claude Code (esecuzione diretta)
+**Task:** TASK-009 Step B
+**Branch:** task/documentale-clean-unused-dependencies
+
+**Operazioni eseguite:**
+
+1. Riverificata assenza d'uso con pattern mirati (evitando falsi positivi
+   sul generico `response` dei test client): nessun `import rest_framework`,
+   nessun `APIView`/`ViewSet`/`ModelSerializer`/`DefaultRouter`/
+   `DjangoFilterBackend`, nessun `rest_framework.response/serializers/
+   views/viewsets/routers/generics`. `INSTALLED_APPS` non contiene
+   `rest_framework`. Nessun router DRF in alcun `urls.py`.
+2. Rimossa riga `djangorestframework==3.17.1` da `requirements.txt`.
+3. `pip uninstall -y djangorestframework` nella venv locale (nessun
+   pacchetto globale toccato).
+4. Eseguita suite completa con venv attiva.
+
+**Esito test (`scripts/test.sh`):**
+
+```
+Ran 1208 tests in 485.471s
+OK
+System check identified no issues (0 silenced).
+OK — manage.py test superato.
+Tutti i controlli completati con successo.
+```
+
+**Problemi riscontrati:**
+
+- Nessuno.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Procedere con Step C (`pillow`, dubbia — verifica approfondita prima
+   di decidere) dopo review/commit di Step B.
