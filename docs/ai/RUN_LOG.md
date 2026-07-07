@@ -736,3 +736,67 @@ Tutti i controlli completati con successo.
 1. TASK-009 completo (Step A/B/C tutti verdi). Eseguire verifiche finali
    (suite completa, regressioni Station, `requirements.txt` coerente con
    la venv) e review finale prima del merge.
+
+---
+
+### Run — 2026-07-07 — TASK-010 Allineamento documentazione progetto
+
+**Agente:** Claude Code (esecuzione diretta, solo documentazione)
+**Task:** TASK-010
+**Branch:** task/documentale-docs-alignment
+
+**Operazioni eseguite:**
+
+1. Audit di `AI_CONTEXT.md`, `PROJECT_HANDOFF.md`, `DEPLOY.md`,
+   `README.md`, `docs/ai/PROJECT_ANALYSIS.md`, `docs/ai/TESTING_STATUS.md`,
+   `docs/ai/DEPENDENCIES_AUDIT.md`, `docs/ai/PERMISSIONS_AUDIT.md`.
+2. `README.md`: era **corrotto** (UTF-16LE senza BOM, illeggibile in
+   qualunque strumento che assume UTF-8) — decodificato con `iconv` e
+   riscritto in UTF-8 pulito, contenuto originale preservato + nota
+   Station aggiunta.
+3. `AI_CONTEXT.md`: aggiunta nota Station (chiarisce che descrive il
+   progetto originale, non la workcopy) + **corretta la tabella gruppi**,
+   disallineata dal codice reale (`readers`/`authors`/... minuscoli senza
+   prefisso vs le vere costanti `GROUP_READERS = 'Document Readers'` ecc.
+   in `documents/permissions.py`/`ecn/permissions.py`).
+4. `PROJECT_HANDOFF.md`: aggiunta nota Station (chiarisce che i
+   riferimenti a PowerShell/push su `origin/main` riguardano il repo
+   originale, non questa workcopy senza remote) senza riscrivere lo
+   storico originale.
+5. `DEPLOY.md`: **corretto bug reale** nel comando bootstrap gruppi —
+   `'Quality Managers'` (plurale, sbagliato) → `'Quality Manager'`
+   (singolare, come da codice); un nome errato avrebbe creato un gruppo
+   Django inutilizzato senza concedere alcun permesso. Elenco gruppi
+   completato con tutti e 10 quelli reali del codice.
+6. `docs/ai/PROJECT_ANALYSIS.md`: aggiunta nota di stato aggiornato sopra
+   la tabella "Problemi evidenti" (verbale storico non riscritto) —
+   problemi #1/#2 risolti (TASK-002/003, TASK-009), #3/#4/#5 allineati
+   in questo task, #6 chiarito (fallback attivo per design, non un bug).
+7. `docs/ai/TESTING_STATUS.md`: conteggio test aggiornato da 1207/1207 a
+   **1208/1208 PASS**, aggiunta sezione riassuntiva TASK-006→TASK-009,
+   sezione "Prossimo passo" aggiornata.
+8. `docs/ai/PERMISSIONS_AUDIT.md`: aggiunta nota di aggiornamento — Fase
+   1/2 di TASK-007 completate, fallback legacy ancora attivo, Fase 3/4
+   restano future.
+9. `docs/ai/TASKS.md`: TASK-010 spostato in Completati, "Prossimo task
+   consigliato" aggiornato a TASK-011.
+10. Nessuna modifica a codice applicativo, `requirements.txt`, settings,
+    test Python.
+
+**Esito test (`scripts/test.sh`):**
+
+```
+1208/1208 PASS (invariato — nessuna modifica applicativa in questo task)
+pip check: No broken requirements found.
+```
+
+**Problemi riscontrati:**
+
+- `README.md` corrotto (encoding) — non era nell'elenco dei problemi noti
+  di `PROJECT_ANALYSIS.md`, scoperto durante l'audit di questo task.
+  Corretto.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Procedere con TASK-011 (review deployment locale/VM, solo
+   analisi/dry-run) dopo review/commit di questo task.

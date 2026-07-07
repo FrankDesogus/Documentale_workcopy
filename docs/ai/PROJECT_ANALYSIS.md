@@ -7,6 +7,27 @@ presenti in `projects/documentale-workcopy`. Nessuna modifica applicativa.
 **Agente:** Cursor Agent  
 **Branch atteso:** `task/documentale-workcopy` (workcopy Station)
 
+> **Aggiornamento (TASK-010, 2026-07-07):** questo report resta un
+> **verbale storico** dell'analisi iniziale (TASK-001) e non viene
+> riscritto. Stato reale aggiornato dei problemi elencati sotto:
+> - **#1** (`scripts/test.sh` placeholder) — **risolto** in TASK-002/003:
+>   test runner reale collegato, venv dedicata. Vedi
+>   `docs/ai/TESTING_STATUS.md`.
+> - **#2** (DRF/django-filter inutilizzati) — **risolto** in TASK-009:
+>   rimossi insieme a `pillow` (terzo caso scoperto nell'audit TASK-008).
+>   Vedi `docs/ai/DEPENDENCIES_AUDIT.md`.
+> - **#3/#4/#5** (conteggio test, branch, nomi gruppi incoerenti tra
+>   `AI_CONTEXT.md`/`PROJECT_HANDOFF.md`/`DEPLOY.md`) — **allineati** in
+>   TASK-010 con note esplicite nei file interessati (i nomi gruppo
+>   corretti, fonte unica, sono le costanti `GROUP_*` in
+>   `documents/permissions.py`).
+> - **#6** (permessi legacy, `include_legacy_fallback=True`) — TASK-007
+>   Fase 1 e Fase 2 completate (mapping allineato, backfill esteso a
+>   tutti i permission code); **il fallback resta attivo per design**,
+>   non è un problema residuo da correggere ora. Vedi
+>   `docs/ai/PERMISSIONS_AUDIT.md`.
+> - **#7/#8** — non affrontati in un task dedicato, restano validi.
+
 ---
 
 ## Panoramica del progetto
