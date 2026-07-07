@@ -566,3 +566,53 @@ Exit code: 0
    a runtime) resta task futuro separato.
 3. Fase 4 (rimozione fallback) resta bloccata finché Fase 3 non è
    completa e verde.
+
+---
+
+### Run — 2026-07-07 — TASK-008 Audit dipendenze requirements
+
+**Agente:** Cursor Agent
+**Task:** TASK-008 — Audit dipendenze requirements
+**Branch:** task/documentale-dependencies-audit
+
+**Operazioni eseguite:**
+
+1. Letti `docs/ai/TASKS.md`, `AGENTS.md`, `scripts/test.sh` (obbligatori pre-modifica).
+2. Analisi read-only: `requirements.txt` (11 pacchetti), `config/settings.py`,
+   `config/test_settings.py`, `config/wsgi.py`, `config/asgi.py`, `.env.example`,
+   `DEPLOY.md`, `manage.py`, grep import su tutto il codebase Python.
+3. Creato `docs/ai/DEPENDENCIES_AUDIT.md` con classificazione per ciascuna
+   dipendenza, evidenze grep/file, sezioni dedicate per dubbie/inutilizzate,
+   rischi di rimozione, proposta TASK-009 e test pre/post rimozione.
+4. Riverificati esplicitamente `djangorestframework` e `django-filter`: ancora
+   assenti da `INSTALLED_APPS` e da qualsiasi import Python — conferma
+   problema #2 di `PROJECT_ANALYSIS.md`.
+5. Scoperto caso aggiuntivo non documentato in PROJECT_ANALYSIS: `pillow`
+   pinato ma nessun `ImageField`/`PIL` nel codebase (solo `FileField`).
+6. Nessuna modifica a `requirements.txt`, settings, codice applicativo,
+   `TASKS.md`, `PROJECT_ANALYSIS.md`. Nessun commit.
+
+**Esito test (`scripts/test.sh`):**
+
+```
+Non eseguito in questa sessione agente — esecuzione shell/Python bloccata
+(Rejected). Task di sola analisi: nessun file applicativo modificato;
+esito atteso invariato rispetto a TASK-007-2 (1208/1208 PASS).
+
+Conferma richiesta all'operatore:
+  source projects/documentale-workcopy/.venv/bin/activate
+  projects/documentale-workcopy/scripts/test.sh
+```
+
+**Problemi riscontrati:**
+
+- Shell agente non disponibile per `./scripts/test.sh` in questa sessione
+  (stesso pattern già osservato in TASK-006/007). Audit completato via
+  grep/lettura; verifica suite delegata all'operatore.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Rieseguire `./scripts/test.sh` con venv attiva (conferma formale verde).
+2. Leggere `docs/ai/DEPENDENCIES_AUDIT.md`.
+3. Spostare TASK-008 in Completati dopo review; avviare **TASK-009**
+   (rimozione `django-filter`, `djangorestframework`, valutare `pillow`).
