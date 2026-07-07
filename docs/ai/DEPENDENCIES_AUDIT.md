@@ -487,6 +487,27 @@ L'implementatore deve rieseguire `./scripts/test.sh` con venv attiva per conferm
 
 ---
 
+## Esito TASK-009 (rimozione applicata, 2026-07-07)
+
+Le 3 dipendenze raccomandate sono state rimosse con successo, **una alla
+volta con test completo tra uno step e l'altro** (dettaglio in
+`docs/ai/RUN_LOG.md`):
+
+| Step | Dipendenza | Esito | Suite dopo rimozione |
+|------|-----------|-------|----------------------|
+| A | `django-filter` | Rimossa | 1208/1208 PASS |
+| B | `djangorestframework` | Rimossa | 1208/1208 PASS |
+| C | `pillow` | Rimossa (nessun dubbio reale emerso in verifica approfondita) | 1208/1208 PASS |
+
+`requirements.txt` finale (8 pacchetti): `asgiref`, `Django`, `gunicorn`,
+`psycopg`, `psycopg-binary`, `python-decouple`, `sqlparse`, `tzdata` — tutti
+usati chiaramente o probabilmente usati (dipendenze runtime indirette di
+Django), nessuno rimosso senza evidenza. Suite Django invariata a
+1208/1208 PASS in ogni step, confermando che nessuna delle 3 dipendenze
+rimosse era realmente in uso.
+
+---
+
 ## Riferimenti
 
 - `requirements.txt` — elenco pin (11 pacchetti)
