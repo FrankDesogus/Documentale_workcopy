@@ -22,14 +22,14 @@ _Nessun task in corso._
 
 Backlog operativo derivato dalla roadmap di `docs/ai/PROJECT_ANALYSIS.md`
 (TASK-001), riordinato e raffinato in task piccoli e testabili.
-**Prossimo task consigliato: TASK-008** (audit dipendenze — TASK-007
-Fase 1 e Fase 2 completate; Fase 3, refactor `ecn/permissions.py` su
-resolver, da pianificare separatamente).
+**Prossimo task consigliato: TASK-009** (pulizia dipendenze inutilizzate —
+TASK-008 completato, raccomandazione: rimuovere `django-filter`,
+`djangorestframework`, `pillow`, uno alla volta con test tra uno step e
+l'altro; vedi `docs/ai/DEPENDENCIES_AUDIT.md`).
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
-| TASK-008 | Audit dipendenze requirements | media | audit completo delle 11 dipendenze di `requirements.txt`, solo analisi, nessuna modifica |
-| TASK-009 | Pulizia dipendenze inutilizzate | media | dipende da TASK-008 |
+| TASK-009 | Pulizia dipendenze inutilizzate | media | rimuovere `django-filter`, `djangorestframework`, `pillow` uno alla volta (vedi `docs/ai/DEPENDENCIES_AUDIT.md`) |
 | TASK-010 | Allineamento documentazione progetto | bassa | AI_CONTEXT.md/PROJECT_HANDOFF.md/DEPLOY.md, no codice |
 | TASK-011 | Review deployment locale/VM | bassa | solo analisi/dry-run, nessun deploy reale aziendale |
 | TASK-012 | Hardening configurazione test | bassa | miglioria facoltativa a config/test_settings.py e scripts/test.sh |
@@ -46,6 +46,7 @@ resolver, da pianificare separatamente).
 | TASK-006 | Audit permessi cartella/documenti | — | 2026-07-06 |
 | TASK-007 | Migrazione permessi cartella (Fase 1: allineamento mapping) | — | 2026-07-07 |
 | TASK-007-2 | Migrazione permessi cartella (Fase 2: backfill esteso) | — | 2026-07-07 |
+| TASK-008 | Audit dipendenze requirements | — | 2026-07-07 |
 
 ---
 
