@@ -413,3 +413,68 @@ prima di considerare TASK-006 chiuso in TASKS.md.
 2. Eseguire `./scripts/test.sh` e confermare 1207/1207 PASS.
 3. Review del report; poi spostare TASK-006 in Completati e avviare TASK-007
    solo dopo review esplicita del gap mapping backfill vs runtime.
+
+---
+
+### Run — 2026-07-07 — TASK-007 / Fase 1 Allineamento mapping permessi
+
+**Agente:** Cursor Agent (implementazione) + Claude Code (verifica test,
+scope, review — Cursor Agent non aveva shell disponibile per eseguire i
+test nella propria sessione, come già in TASK-006)
+**Task:** TASK-007 / Fase 1 — Allineamento mapping permessi
+**Branch:** task/documentale-permissions-mapping-alignment
+
+**Operazioni eseguite:**
+
+1. `projects/management/commands/backfill_folder_permission_grants.py`:
+   `BACKFILL_ROLE_PERMISSIONS` ora derivato da `_LEGACY_ROLE_PERMISSIONS`
+   (importato da `projects.resolver`) meno il nuovo insieme nominato
+   `BACKFILL_EXCLUDED_PERMISSIONS` (i 6 permission code esclusi,
+   documentati con rimando a `PERMISSIONS_AUDIT.md`). Valori risultanti
+   verificati identici a quelli precedenti (nessun cambio di comportamento
+   del backfill).
+2. `projects/management/commands/compare_folder_permissions.py`:
+   `_legacy_allows()` e il loop principale usano ora
+   `_LEGACY_ROLE_PERMISSIONS` (mapping completo) invece di
+   `BACKFILL_ROLE_PERMISSIONS` (sottoinsieme) — il confronto è ora onesto
+   sull'intero comportamento legacy, non solo sul sottoinsieme backfillato.
+3. `projects/tests.py` (`CompareFolderPermissionsTests`): aggiornati
+   `test_no_divergences_exit_code_0`, `test_user_id_filter`,
+   `test_folder_id_filter` per riflettere la nuova semantica (divergenze
+   attese sui permission code esclusi dal backfill, non più "0 divergenze
+   dopo backfill"); aggiunto nuovo test di regressione
+   `test_backfill_gap_detected_for_all_roles` (gap G1/G2 dell'audit): per
+   ciascuno dei 5 ruoli, confronta che le divergenze rilevate dopo backfill
+   coincidano **esattamente** con `BACKFILL_EXCLUDED_PERMISSIONS ∩
+   _LEGACY_ROLE_PERMISSIONS[ruolo]`.
+4. Nessuna modifica a `ecn/permissions.py`, `resolver.py`, modelli, view,
+   template, migrazioni, settings. Nessun tocco a `include_legacy_fallback`
+   in nessun punto (verificato con `git diff` esplicito). Nessuna migrazione
+   dati, nessun `--apply` su dati reali (non esistono in questa copia).
+5. **Claude Code (reviewer)** ha eseguito i test mirati
+   (`CompareFolderPermissionsTests`, `BackfillFolderPermissionGrantsTests`)
+   e la suite completa con `.venv` attiva, dato che Cursor Agent non poteva
+   verificarlo nella propria sessione.
+
+**Esito test (con venv `.venv` attiva):**
+
+```
+CompareFolderPermissionsTests: 7/7 PASS (incluso il nuovo test di regressione)
+BackfillFolderPermissionGrantsTests: 15/15 PASS
+Suite completa: Ran 1208 tests — OK (1207 + 1 nuovo test)
+System check identified no issues (0 silenced).
+Exit code: 0
+```
+
+**Problemi riscontrati:**
+
+- Nessuno. Refactor comportamentalmente neutro sul backfill, estensione
+  onesta sul compare, copertura test aggiornata e ampliata.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Spostare TASK-007/Fase 1 in Completati dopo review.
+2. Pianificare Fase 2 (backfill esteso reale in ambiente di test) come task
+   separato, solo dopo revisione esplicita di questa Fase 1.
+3. Fase 3 (refactor `ecn/permissions.py`) e Fase 4 (rimozione fallback)
+   restano bloccate finché Fase 2 non è completa e verde.

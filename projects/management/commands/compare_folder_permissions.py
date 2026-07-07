@@ -1,13 +1,18 @@
 """
 Management command: compare_folder_permissions
 
-Confronta il comportamento del sistema legacy (ProjectFolderMembership)
-con il resolver modulare shadow (FolderPermissionGrant) dopo il backfill.
+Confronta il comportamento legacy completo (ProjectFolderMembership +
+_LEGACY_ROLE_PERMISSIONS) con il resolver modulare shadow (FolderPermissionGrant)
+dopo il backfill.
 
 Il comando è completamente read-only: non modifica il database.
 
 Usa il resolver con include_legacy_fallback=False, quindi verifica i grant
 modulari reali senza cadere sul fallback legacy.
+
+Confronta tutti i permission code del ruolo legacy, non solo il sottoinsieme
+già backfillato. Le divergenze sui codici esclusi dal backfill conservativo
+sono attese e corrette finché non si esegue una Fase 2 dedicata.
 
 Exit code:
   0  — nessuna divergenza
@@ -18,18 +23,15 @@ import sys
 
 from django.core.management.base import BaseCommand
 
-from projects.management.commands.backfill_folder_permission_grants import (
-    BACKFILL_ROLE_PERMISSIONS,
-)
-from projects.resolver import has_folder_permission
+from projects.resolver import _LEGACY_ROLE_PERMISSIONS, has_folder_permission
 
 
 def _legacy_allows(user, folder, permission_code: str) -> bool:
     """
     Replica la decisione legacy per (user, folder, permission_code).
 
-    Usa il mapping conservativo del backfill: se il ruolo dell'utente
-    nella cartella include il permission_code, restituisce True.
+    Usa _LEGACY_ROLE_PERMISSIONS: se il ruolo dell'utente nella cartella
+    include il permission_code, restituisce True.
     I privilegiati globali (superuser, Document Manager) ottengono allow.
     """
     from projects.permissions import _is_global_manager, get_folder_role
@@ -42,12 +44,12 @@ def _legacy_allows(user, folder, permission_code: str) -> bool:
     role = get_folder_role(user, folder)
     if role is None:
         return False
-    return permission_code in BACKFILL_ROLE_PERMISSIONS.get(role, frozenset())
+    return permission_code in _LEGACY_ROLE_PERMISSIONS.get(role, frozenset())
 
 
 class Command(BaseCommand):
     help = (
-        'Confronta il comportamento legacy con il resolver modulare shadow. '
+        'Confronta il comportamento legacy completo con il resolver modulare shadow. '
         'Read-only. Exit code 0 se nessuna divergenza, 1 se ci sono divergenze.'
     )
 
@@ -92,7 +94,7 @@ class Command(BaseCommand):
         for membership in memberships:
             user = membership.user
             folder = membership.folder
-            target_perms = BACKFILL_ROLE_PERMISSIONS.get(membership.role, frozenset())
+            target_perms = _LEGACY_ROLE_PERMISSIONS.get(membership.role, frozenset())
 
             for perm_code in sorted(target_perms):
                 total += 1
