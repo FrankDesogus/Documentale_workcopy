@@ -22,12 +22,12 @@ _Nessun task in corso._
 
 Backlog operativo derivato dalla roadmap di `docs/ai/PROJECT_ANALYSIS.md`
 (TASK-001), riordinato e raffinato in task piccoli e testabili.
-**Prossimo task consigliato: TASK-007-2** (backfill esteso permessi —
-TASK-007 Fase 2, prosegue la migrazione permessi cartella dopo la Fase 1).
+**Prossimo task consigliato: TASK-008** (audit dipendenze — TASK-007
+Fase 1 e Fase 2 completate; Fase 3, refactor `ecn/permissions.py` su
+resolver, da pianificare separatamente).
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
-| TASK-007-2 | Migrazione permessi cartella (Fase 2: backfill esteso) | alta | estende `BACKFILL_ROLE_PERMISSIONS`; richiede TASK-007 Fase 1 completata; fallback legacy resta attivo |
 | TASK-008 | Audit dipendenze requirements | media | solo analisi DRF/django-filter, nessuna modifica |
 | TASK-009 | Pulizia dipendenze inutilizzate | media | dipende da TASK-008 |
 | TASK-010 | Allineamento documentazione progetto | bassa | AI_CONTEXT.md/PROJECT_HANDOFF.md/DEPLOY.md, no codice |
@@ -45,6 +45,7 @@ TASK-007 Fase 2, prosegue la migrazione permessi cartella dopo la Fase 1).
 | TASK-005 | Correggere test approval date timezone | — | 2026-07-06 |
 | TASK-006 | Audit permessi cartella/documenti | — | 2026-07-06 |
 | TASK-007 | Migrazione permessi cartella (Fase 1: allineamento mapping) | — | 2026-07-07 |
+| TASK-007-2 | Migrazione permessi cartella (Fase 2: backfill esteso) | — | 2026-07-07 |
 
 ---
 

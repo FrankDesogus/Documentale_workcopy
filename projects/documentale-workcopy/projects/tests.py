@@ -2369,11 +2369,13 @@ class BackfillFolderPermissionGrantsTests(TestCase):
         )
         self.assertEqual(created_perms, BACKFILL_ROLE_PERMISSIONS['auditor'])
 
-    # 15. Mapping manager (conservativo: non include permessi esclusi)
-    def test_mapping_manager_conservative(self):
+    # 15. Mapping manager (completo: tutti i 12 permission code legacy)
+    def test_mapping_manager_full(self):
         from projects.management.commands.backfill_folder_permission_grants import (
             BACKFILL_ROLE_PERMISSIONS,
         )
+        from projects.resolver import _LEGACY_ROLE_PERMISSIONS
+
         self._membership('manager')
         self._call('backfill_folder_permission_grants', apply=True)
         created_perms = set(
@@ -2382,12 +2384,17 @@ class BackfillFolderPermissionGrantsTests(TestCase):
             ).values_list('permission_code', flat=True)
         )
         self.assertEqual(created_perms, BACKFILL_ROLE_PERMISSIONS['manager'])
-        # Verifica che i permessi esclusi NON siano stati assegnati
-        excluded = {
-            'view_folder_ecns', 'manage_project_documents', 'request_ecn',
-            'view_obsolete_documents', 'manage_rejected_drafts',
-        }
-        self.assertTrue(created_perms.isdisjoint(excluded))
+        self.assertEqual(created_perms, _LEGACY_ROLE_PERMISSIONS['manager'])
+        self.assertEqual(len(created_perms), 12)
+        for perm_code in _LEGACY_ROLE_PERMISSIONS['manager']:
+            self.assertTrue(
+                FolderPermissionGrant.objects.filter(
+                    folder=self.folder,
+                    user=self.user,
+                    permission_code=perm_code,
+                    effect=FolderPermissionGrant.Effect.ALLOW,
+                ).exists()
+            )
 
 
 # ===========================================================================
@@ -2448,22 +2455,16 @@ class CompareFolderPermissionsTests(TestCase):
             stdout=StringIO(),
         )
 
-    # 1. Dopo backfill: solo i codici esclusi dal backfill divergono
+    # 1. Dopo backfill esteso: zero divergenze per reader
     def test_no_divergences_exit_code_0(self):
-        from projects.management.commands.backfill_folder_permission_grants import (
-            BACKFILL_EXCLUDED_PERMISSIONS,
-        )
-        from projects.resolver import _LEGACY_ROLE_PERMISSIONS
-
         ProjectFolderMembership.objects.create(
             folder=self.folder, user=self.user, role='reader'
         )
         self._backfill()
         out, exit_code = self._call_compare()
-        self.assertNotEqual(exit_code, 0)
+        self.assertEqual(exit_code, 0)
         divergent = set(self._parse_divergent_permissions(out))
-        expected = BACKFILL_EXCLUDED_PERMISSIONS & _LEGACY_ROLE_PERMISSIONS['reader']
-        self.assertEqual(divergent, expected)
+        self.assertEqual(divergent, set())
 
     # 2. Divergenza rilevata → exit code diverso da 0
     def test_divergence_exit_code_nonzero(self):
@@ -2477,6 +2478,16 @@ class CompareFolderPermissionsTests(TestCase):
 
     # 3. --user-id filtra correttamente
     def test_user_id_filter(self):
+        """
+        Con backfill esteso il ruolo reader non produce più divergenze,
+        quindi l'output non stampa più username (compaiono solo nelle righe
+        di divergenza). La prova che il filtro --user-id scoperi il solo
+        utente richiesto passa dal conteggio 'Combinazioni analizzate',
+        che deve corrispondere esattamente ai permission code di un solo
+        utente, non di entrambi.
+        """
+        from projects.resolver import _LEGACY_ROLE_PERMISSIONS
+
         other = User.objects.create_user('cmp_other', password='pw')
         ProjectFolderMembership.objects.create(
             folder=self.folder, user=self.user, role='reader'
@@ -2490,11 +2501,13 @@ class CompareFolderPermissionsTests(TestCase):
             allow_differences=True,
         )
         self.assertEqual(exit_code, 0)
-        self.assertIn('cmp_user', out)
-        self.assertNotIn('cmp_other', out)
+        expected_combos = len(_LEGACY_ROLE_PERMISSIONS['reader'])
+        self.assertIn(f'Combinazioni analizzate : {expected_combos}', out)
 
     # 4. --folder-id filtra correttamente
     def test_folder_id_filter(self):
+        """Vedi nota in test_user_id_filter sul conteggio combinazioni."""
+        from projects.resolver import _LEGACY_ROLE_PERMISSIONS
         from projects.services import set_folder_path
         other_folder = ProjectFolder.objects.create(
             code='CMP-OTHER', name='Other',
@@ -2515,8 +2528,8 @@ class CompareFolderPermissionsTests(TestCase):
             allow_differences=True,
         )
         self.assertEqual(exit_code, 0)
-        self.assertIn('CMP-FOLD', out)
-        self.assertNotIn('CMP-OTHER', out)
+        expected_combos = len(_LEGACY_ROLE_PERMISSIONS['reader'])
+        self.assertIn(f'Combinazioni analizzate : {expected_combos}', out)
 
     # 5. Nessuna modifica al database dopo compare
     def test_compare_does_not_modify_database(self):
@@ -2545,13 +2558,8 @@ class CompareFolderPermissionsTests(TestCase):
         self.assertNotEqual(exit_code, 0)
         self.assertIn('Divergenze', out)
 
-    # 7. Gap G1/G2: compare rileva esattamente i codici esclusi dal backfill
-    def test_backfill_gap_detected_for_all_roles(self):
-        from projects.management.commands.backfill_folder_permission_grants import (
-            BACKFILL_EXCLUDED_PERMISSIONS,
-        )
-        from projects.resolver import _LEGACY_ROLE_PERMISSIONS
-
+    # 7. Gap G1/G2 chiuso: dopo backfill esteso, zero divergenze per tutti i ruoli
+    def test_no_gap_after_extended_backfill_for_all_roles(self):
         for role in ('reader', 'author', 'approver', 'auditor', 'manager'):
             with self.subTest(role=role):
                 user = User.objects.create_user(f'cmp_gap_{role}', password='pw')
@@ -2568,13 +2576,9 @@ class CompareFolderPermissionsTests(TestCase):
                     stdout=StringIO(),
                 )
                 out, exit_code = self._call_compare(user_id=user.pk)
-                self.assertNotEqual(exit_code, 0)
+                self.assertEqual(exit_code, 0)
                 divergent = set(self._parse_divergent_permissions(out))
-                expected = (
-                    BACKFILL_EXCLUDED_PERMISSIONS
-                    & _LEGACY_ROLE_PERMISSIONS[role]
-                )
-                self.assertEqual(divergent, expected)
+                self.assertEqual(divergent, set())
 
 
 # ===========================================================================

@@ -478,3 +478,91 @@ Exit code: 0
    separato, solo dopo revisione esplicita di questa Fase 1.
 3. Fase 3 (refactor `ecn/permissions.py`) e Fase 4 (rimozione fallback)
    restano bloccate finché Fase 2 non è completa e verde.
+
+---
+
+### Run — 2026-07-07 — TASK-007 / Fase 2 Backfill esteso permessi
+
+**Agente:** Cursor Agent (implementazione, via `ai-cycle.sh --run`) +
+Claude Code (spec, verifica scope/test, fix mirato, review — stesso pattern
+di Fase 1: Cursor Agent non ha shell disponibile per verificare da sé)
+**Task:** TASK-007-2 (TASK-007 / Fase 2 — Backfill esteso permessi)
+**Branch:** task/documentale-permissions-backfill-extended
+
+**Operazioni eseguite:**
+
+1. Analisi preliminare (Claude Code, per grep mirato su tutto il progetto,
+   non solo lettura): dei 6 permission code esclusi dal backfill
+   conservativo (`view_projects`, `view_folder_ecns`,
+   `view_obsolete_documents`, `manage_rejected_drafts`,
+   `manage_project_documents`, `request_ecn`), nessuno ha motivazione
+   tecnica residua per restare escluso. `view_projects` è l'unico
+   consumato attivamente via resolver in `projects/permissions.py` e
+   `projects/views.py` (con `include_legacy_fallback=True`); gli altri 5
+   non sono consumati da nessun path applicativo tramite il resolver —
+   `ecn/permissions.py` bypassa completamente `FolderPermissionGrant`
+   usando `get_folder_role()` diretto. Spec scritta in
+   `docs/ai/TASKS.md` (sezione `TASK-007-2`).
+2. `projects/management/commands/backfill_folder_permission_grants.py`
+   (Cursor Agent): `BACKFILL_EXCLUDED_PERMISSIONS` svuotato
+   (`frozenset()`), mantenuto come costante/punto di estensione futuro con
+   commento aggiornato; `BACKFILL_ROLE_PERMISSIONS` ora identico a
+   `_LEGACY_ROLE_PERMISSIONS` per tutti e 5 i ruoli. Docstring del comando
+   aggiornato di conseguenza.
+3. `projects/tests.py` (Cursor Agent): `test_mapping_manager_conservative`
+   rinominato `test_mapping_manager_full` (verifica tutti i 12 permission
+   code + grant `allow` espliciti); `test_no_divergences_exit_code_0` e
+   `test_backfill_gap_detected_for_all_roles` (rinominato
+   `test_no_gap_after_extended_backfill_for_all_roles`) aggiornati per
+   aspettarsi **zero divergenze** dopo il backfill esteso (il gap G1/G2
+   dell'audit è ora chiuso).
+4. **Regressione trovata e corretta da Claude Code** (non prevista dalla
+   spec): `test_user_id_filter` e `test_folder_id_filter` fallivano perché
+   asserivano la presenza di username/codice cartella nell'output del
+   `compare` — testo che il comando stampa solo nelle righe di divergenza.
+   Con il backfill esteso il ruolo `reader` non produce più divergenze,
+   quindi quel testo non compare più indipendentemente dal filtro. Fix:
+   le due asserzioni ora verificano il conteggio
+   `Combinazioni analizzate : N` (dipendente da
+   `len(_LEGACY_ROLE_PERMISSIONS['reader'])`), che dimostra il filtro
+   indipendentemente dalla presenza di divergenze.
+5. Nessuna modifica a `compare_folder_permissions.py`, `resolver.py`,
+   `ecn/permissions.py`, modelli, migrazioni, view, template, settings.
+   Nessun tocco a `include_legacy_fallback` in nessun punto applicativo
+   (verificato con `git diff main -- <file codice> | grep
+   include_legacy_fallback` → vuoto). Nessuna migrazione dati, nessun
+   `--apply` su dati reali (gli `--apply` eseguiti sono tutti dentro test
+   Django su SQLite `:memory:`).
+6. `ai-cycle.sh --run` ha segnalato "ERROR: Cursor Agent fallito o
+   timeout" (limite 300s) ma le modifiche risultavano già scritte
+   correttamente sul disco — stesso pattern già osservato in TASK-007
+   Fase 1: verificato riga per riga con `git diff` prima di procedere,
+   legittimo e in scope.
+
+**Esito test (con venv `.venv` attiva):**
+
+```
+BackfillFolderPermissionGrantsTests: 15/15 PASS
+CompareFolderPermissionsTests: 7/7 PASS (incluso il fix su user/folder filter)
+FolderPermissionResolverTests + StepEFolderPermissionsIntegrationTests +
+  StepFProjectIntegrationTests + BulkResolverTests: 86/86 PASS
+Suite completa: Ran 1208 tests — OK
+System check identified no issues (0 silenced).
+Exit code: 0
+```
+
+**Problemi riscontrati:**
+
+- Spec Fase 2 indicava (erroneamente) di non toccare `test_user_id_filter`
+  e `test_folder_id_filter`: chiudere il gap per il ruolo `reader` ha
+  eliminato l'unico canale (testo di divergenza) da cui quei test
+  leggevano l'evidenza del filtro. Corretto da Claude Code, vedi punto 4.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Spostare TASK-007-2 in Completati dopo review.
+2. Fase 3 (refactor `ecn/permissions.py` su resolver, prioritario per
+   `view_folder_ecns`/`request_ecn` ora backfillati ma ancora inutilizzati
+   a runtime) resta task futuro separato.
+3. Fase 4 (rimozione fallback) resta bloccata finché Fase 3 non è
+   completa e verde.
