@@ -16,6 +16,25 @@
 > `docs/ai/TASKS.md` (sezioni TASK-007/Fase 1 e TASK-007-2) e
 > `docs/ai/RUN_LOG.md` per il dettaglio delle esecuzioni.
 
+> **Aggiornamento (TASK-013/014, 2026-07-08):** gap **G3** (§4.3, "codice
+> che bypassa il resolver") **parzialmente chiuso**. Audit completo in
+> `docs/ai/ECN_PERMISSIONS_AUDIT.md` (TASK-013): delle 2 funzioni di
+> `ecn/permissions.py` che leggevano solo `get_folder_role`/
+> `ProjectFolderMembership`, **`can_create_ecn` è stata migrata**
+> (TASK-014) a `has_folder_permission(..., 'request_ecn',
+> include_legacy_fallback=True)` — equivalenza 1:1 dimostrata e
+> verificata con test (`request_ecn` in `_LEGACY_ROLE_PERMISSIONS`
+> corrisponde esattamente a `WRITE_ROLES={author, manager}`).
+> **`can_view_ecn` resta invariata deliberatamente**: nessun
+> `permission_code` esistente corrisponde ad `AUDIT_ROLES={auditor,
+> manager}` senza causare un'escalation di permessi reale (il candidato
+> più vicino, `view_folder_ecns`, è concesso a **tutti** i ruoli in
+> `_LEGACY_ROLE_PERMISSIONS`, non solo auditor/manager). Migrare
+> `can_view_ecn` richiede una decisione di prodotto (nuovo permission
+> code dedicato, o accettazione esplicita che quel controllo resti su
+> legacy membership) — non un refactor meccanico. **Fallback legacy
+> ancora attivo ovunque**, nessuna migrazione dati.
+
 ---
 
 ## 1. Sintesi esecutiva
@@ -269,7 +288,7 @@ La suite `projects/tests.py` contiene copertura strutturata per fasi (Step B–F
 |---|-----|----------|-----------|
 | G1 | Compare non copre permessi esclusi dal backfill | **Alta** | Nessun test che segnali: backfill OK + compare OK + `view_projects` perso senza fallback |
 | G2 | Nessun test “post-migrazione completa” end-to-end | **Alta** | Manca scenario: backfill → fallback OFF → parità con comportamento pre-migrazione su **tutti** i 12 codici |
-| G3 | `get_folder_role` / ECN non coperti dal resolver | **Media** | Grant modulari o deny su cartella non influenzano `can_view_ecn` / `can_create_ecn` |
+| G3 | `get_folder_role` / ECN non coperti dal resolver | **Parzialmente risolto (TASK-014)** | `can_create_ecn` migrata al resolver (grant/deny ora influenzano); `can_view_ecn` resta su `get_folder_role` per assenza di permission code equivalente — vedi nota TASK-013/014 sopra |
 | G4 | Grant di gruppo vs membership utente | **Media** | Resolver testato; pochi test integrazione documenti/view con grant gruppo |
 | G5 | `inherit_to_children=False` post-backfill vs ereditarietà legacy | **Media** | Membership legacy vale solo sulla cartella esatta; backfill non eredita — comportamento già diverso se si usa solo grant |
 | G6 | Permessi esclusi dal backfill senza test dedicati | **Media** | Es. `view_obsolete_documents`, `manage_rejected_drafts`, `request_ecn` hanno test fallback runtime ma non backfill/compare |
