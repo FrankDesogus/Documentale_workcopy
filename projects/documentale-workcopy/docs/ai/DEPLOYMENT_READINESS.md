@@ -252,6 +252,13 @@ documentale come questo TASK-011), la prova dovrebbe:
       `docs/ai/DEPLOYMENT_DRYRUN_RESULT.md`), senza includere segreti.
 - [ ] Distruggere l'ambiente di prova al termine (DB, `.env`, VM).
 
+> **Aggiornamento (TASK-016, 2026-07-08):** questi acceptance criteria
+> sono stati formalizzati in un piano operativo completo:
+> `docs/ai/DEPLOY_REHEARSAL_PLAN.md` (20 sezioni: scopo, ambiente,
+> checklist, procedura dry-run e VM isolata, comandi vietati per un
+> agente AI, criteri di successo/stop, rollback, rischi residui).
+> Il piano **non è stato eseguito** — solo pianificato.
+
 ---
 
 ## 13. File analizzati

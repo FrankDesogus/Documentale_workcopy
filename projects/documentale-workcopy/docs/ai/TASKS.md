@@ -22,13 +22,12 @@ _Nessun task in corso._
 
 Backlog operativo derivato dalla roadmap di `docs/ai/PROJECT_ANALYSIS.md`
 (TASK-001), riordinato e raffinato in task piccoli e testabili.
-**Backlog operativo esaurito** (TASK-001→TASK-015 tutti completati).
+**Backlog operativo esaurito** (TASK-001→TASK-016 tutti completati).
 `can_view_ecn` resta deliberatamente su `get_folder_role` (vedi
-`docs/ai/PERMISSIONS_AUDIT.md`, nota TASK-013/014): una migrazione
-futura richiede una decisione di prodotto (nuovo permission code), non
-un task tecnico — da riprendere solo se richiesto esplicitamente.
-Prossimi candidati: prova di deploy controllata su VM isolata (vedi
-`docs/ai/DEPLOYMENT_READINESS.md` §12).
+`docs/ai/PERMISSIONS_AUDIT.md`, nota TASK-013/014). Prossimo candidato
+concreto: eseguire la prova di deploy pianificata in
+`docs/ai/DEPLOY_REHEARSAL_PLAN.md` (richiede una VM/container isolato e
+azione manuale dell'operatore — non un task Station automatizzabile).
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
@@ -53,6 +52,7 @@ Prossimi candidati: prova di deploy controllata su VM isolata (vedi
 | TASK-013 | Audit ECN permissions resolver bypass | — | 2026-07-08 |
 | TASK-014 | Refactor minimo ECN permissions verso resolver modulare (can_create_ecn) | — | 2026-07-08 |
 | TASK-015 | Consolidamento documentazione permessi | — | 2026-07-08 |
+| TASK-016 | Piano prova deploy controllata | — | 2026-07-08 |
 
 ---
 
@@ -1507,6 +1507,91 @@ dopo questo batch.
 #### Guardrail
 
 - Solo file `.md`.
+- No push, no merge, no commit da parte dell'implementatore.
+
+---
+
+### TASK-016 — Piano prova deploy controllata — Claude Code
+
+#### Obiettivo
+
+Preparare una procedura concreta, eseguibile passo-passo dall'operatore
+umano, per una prova di deploy del Documentale in ambiente isolato (VM
+locale o dry-run), **senza toccare sistemi aziendali reali**. Questo
+task **pianifica** la prova, non la esegue.
+
+#### Scope
+
+- Solo documentazione + dry-run/check sicuri già ammessi altrove
+  (`manage.py check`, `manage.py help`, verifiche di coerenza file).
+- Creare un solo file nuovo:
+  `projects/documentale-workcopy/docs/ai/DEPLOY_REHEARSAL_PLAN.md`.
+- **Nessuna modifica a codice applicativo, modelli, migrazioni,
+  template, UX.**
+- **`can_view_ecn` non toccata** (fuori scope, invariante da TASK-013/014).
+- Nessun `.env` creato o letto. Nessun server avviato. Nessuna
+  migrazione su DB reale. Nessun comando di deploy reale eseguito.
+
+#### File coinvolti
+
+- Analizzare (sola lettura): `docs/ai/DEPLOYMENT_READINESS.md`,
+  `DEPLOY.md`, `README.md`, `PROJECT_HANDOFF.md`, `AI_CONTEXT.md`,
+  `config/settings.py`, `config/test_settings.py`, `requirements.txt`,
+  `package.json`, `scripts/test.sh`, `docs/ai/TESTING_STATUS.md`,
+  `docs/ai/RUN_LOG.md`.
+- Creare: `docs/ai/DEPLOY_REHEARSAL_PLAN.md`.
+- Aggiornare: `docs/ai/TASKS.md`, `docs/ai/RUN_LOG.md`, nota di rimando
+  in `docs/ai/DEPLOYMENT_READINESS.md` (§11/§12) verso il nuovo piano.
+- Non modificare: nessun file applicativo.
+
+#### Contenuto richiesto di `DEPLOY_REHEARSAL_PLAN.md`
+
+Piano pratico e operativo (non generico), con le 20 sezioni concordate:
+scopo, cosa NON viene fatto, ambiente consigliato (VM isolata, DB/media
+vuoti, `.env` di test creato manualmente dall'operatore — mai da
+Claude), prerequisiti, checklist pre-flight, procedura dry-run locale,
+procedura VM isolata, comandi da eseguire manualmente dall'operatore,
+comandi che un agente AI non deve mai eseguire autonomamente, verifiche
+post-installazione, bootstrap gruppi/permessi (`setup_document_groups`,
+già corretto in TASK-011), static/Tailwind, database/migrazioni (solo
+su DB vuoto isolato), media e privacy (richiamare la nota
+`.gitkeep-note.txt`/TASK-012 sull'isolamento test), account demo/test,
+criteri di successo, criteri di stop, rollback/cleanup, rischi residui,
+prossimo task suggerito dopo la rehearsal.
+
+#### Acceptance criteria
+
+- [x] `docs/ai/DEPLOY_REHEARSAL_PLAN.md` creato con tutte le sezioni
+      richieste, specifico per questo progetto (non un template
+      generico di deploy Django).
+- [x] Distinzione esplicita tra dry-run locale, prova VM isolata e
+      futuro deploy aziendale reale.
+- [x] Nessuna azione irreversibile prevista senza conferma esplicita
+      dell'operatore in ciascuno step.
+- [x] Nessuna modifica a codice applicativo, `can_view_ecn` inclusa.
+- [x] Solo dry-run/check già dimostrati sicuri in TASK-011 (nessun
+      `runserver`, nessun `collectstatic` reale, nessuna migrazione,
+      nessun `.env`) — eseguiti `check` e `check --deploy`.
+- [x] Suite Django reale resta verde — **1210/1210 PASS**, invariata
+      (nessuna modifica applicativa in questo task).
+
+#### Test richiesti
+
+```bash
+source projects/documentale-workcopy/.venv/bin/activate
+projects/documentale-workcopy/scripts/test.sh
+pip check
+```
+
+#### Guardrail
+
+- Nessun deploy reale, nessun server aziendale avviato, nessuna
+  migrazione su DB reale, nessun segreto letto, nessun `.env`
+  creato/letto.
+- Non modificare `can_view_ecn` né alcun altro file applicativo.
+- Non aggiungere nuovo permission code in questo task (fuori scope,
+  serve decisione di prodotto separata).
+- Non modificare modelli o migrazioni.
 - No push, no merge, no commit da parte dell'implementatore.
 
 ---
