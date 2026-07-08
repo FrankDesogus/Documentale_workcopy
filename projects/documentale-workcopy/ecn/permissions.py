@@ -113,11 +113,16 @@ def can_create_ecn(user, document):
     # (da rivedere in MB5 con il grant request_ecn per-cartella)
     if _in_group(user, GROUP_AUTHORS, GROUP_MANAGERS):
         return True
-    # Ruolo per-cartella
+    # Ruolo per-cartella — via resolver modulare (grant + fallback legacy).
+    # Equivalente a WRITE_ROLES={author, manager}: request_ecn appartiene
+    # esattamente a quei due ruoli in _LEGACY_ROLE_PERMISSIONS (verificato
+    # in docs/ai/ECN_PERMISSIONS_AUDIT.md, TASK-013). can_view_ecn NON è
+    # stato migrato: nessun permission code equivalente ad AUDIT_ROLES
+    # esiste senza escalation (vedi stesso audit).
     folder = document.project_folder
     if folder is not None:
-        from projects.permissions import get_folder_role, WRITE_ROLES
-        if get_folder_role(user, folder) in WRITE_ROLES:
+        from projects.resolver import has_folder_permission
+        if has_folder_permission(user, folder, 'request_ecn', include_legacy_fallback=True):
             return True
     return False
 
