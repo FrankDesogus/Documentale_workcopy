@@ -16,6 +16,10 @@ media/
 staticfiles/
 local_settings.py
 
+# ── Test (config.test_settings) ────────────────────────────────────────────────
+# Upload isolati durante manage.py test — mai la media/ reale, vedi TASK-012.
+.test-media/
+
 # ── File di log ───────────────────────────────────────────────────────────────
 *.log
 
