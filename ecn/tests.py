@@ -24,7 +24,7 @@ from ecn.services import (
     set_change_notice_approvers,
     submit_change_notice,
 )
-from projects.models import ProjectFolder, ProjectFolderMembership
+from projects.models import FolderPermissionGrant, ProjectFolder, ProjectFolderMembership
 
 
 # ---------------------------------------------------------------------------
@@ -607,6 +607,45 @@ class ECNPermissionsTests(TestCase):
             created_by=self.manager,
         )
         self.assertTrue(can_create_ecn(fold_author, self.document))
+
+    def test_folder_grant_request_ecn_can_create_without_membership(self):
+        """
+        TASK-014: can_create_ecn ora passa dal resolver modulare
+        (has_folder_permission con 'request_ecn'), non più solo da
+        get_folder_role/ProjectFolderMembership. Un utente con SOLO un
+        grant modulare (nessuna membership legacy) deve poter creare ECN.
+        """
+        grant_user = _make_user('perm_fold_grant')
+        FolderPermissionGrant.objects.create(
+            folder=self.folder, user=grant_user,
+            permission_code='request_ecn', effect='allow',
+        )
+        self.assertFalse(
+            ProjectFolderMembership.objects.filter(
+                folder=self.folder, user=grant_user,
+            ).exists()
+        )
+        self.assertTrue(can_create_ecn(grant_user, self.document))
+
+    def test_folder_grant_deny_request_ecn_blocks_legacy_author(self):
+        """
+        TASK-014: un deny modulare su 'request_ecn' deve bloccare la
+        creazione ECN anche se la membership legacy sarebbe 'author' —
+        dimostra che il grant modulare ha precedenza (comportamento
+        atteso del resolver, diverso dal vecchio check diretto su
+        ProjectFolderMembership che non consultava mai i grant).
+        """
+        deny_user = _make_user('perm_fold_deny')
+        ProjectFolderMembership.objects.create(
+            folder=self.folder, user=deny_user,
+            role=ProjectFolderMembership.Role.AUTHOR,
+            created_by=self.manager,
+        )
+        FolderPermissionGrant.objects.create(
+            folder=self.folder, user=deny_user,
+            permission_code='request_ecn', effect='deny',
+        )
+        self.assertFalse(can_create_ecn(deny_user, self.document))
 
     # --- can_configure_ccb --------------------------------------------------
 
