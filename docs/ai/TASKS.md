@@ -22,13 +22,12 @@ _Nessun task in corso._
 
 Backlog operativo derivato dalla roadmap di `docs/ai/PROJECT_ANALYSIS.md`
 (TASK-001), riordinato e raffinato in task piccoli e testabili.
-**Prossimo task consigliato: TASK-011** (review deployment locale/VM —
-TASK-010 completato: documentazione allineata a 1208/1208 PASS, dipendenze
-correnti, gruppi Django corretti).
+**Prossimo task consigliato: TASK-012** (hardening configurazione test —
+TASK-011 completato: deployment readiness verificata, nessun blocco
+trovato, `docs/ai/DEPLOYMENT_READINESS.md` prodotto).
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
-| TASK-011 | Review deployment locale/VM | bassa | solo analisi/dry-run, nessun deploy reale aziendale |
 | TASK-012 | Hardening configurazione test | bassa | miglioria facoltativa a config/test_settings.py e scripts/test.sh |
 
 ## Completati
@@ -46,6 +45,7 @@ correnti, gruppi Django corretti).
 | TASK-008 | Audit dipendenze requirements | — | 2026-07-07 |
 | TASK-009 | Pulizia dipendenze inutilizzate (django-filter, djangorestframework, pillow) | — | 2026-07-07 |
 | TASK-010 | Allineamento documentazione progetto | — | 2026-07-07 |
+| TASK-011 | Review deployment locale/VM | — | 2026-07-08 |
 
 ---
 
