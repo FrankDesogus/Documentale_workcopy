@@ -22,11 +22,9 @@ _Nessun task in corso._
 
 Backlog operativo derivato dalla roadmap di `docs/ai/PROJECT_ANALYSIS.md`
 (TASK-001), riordinato e raffinato in task piccoli e testabili.
-**Backlog operativo esaurito** (TASK-001→TASK-017 tutti completati).
-Demo verificata presentabile con singolo account superuser (vedi
-`docs/ai/DEMO_FLOW_VALIDATION.md`). Nessun bug bloccante trovato.
-Miglioria facoltativa non bloccante: estendere `demo_full` con uno
-scenario `ProjectRevision` (§19 del report).
+**Backlog operativo esaurito** (TASK-001→TASK-018 tutti completati).
+Demo presentabile e ripetibile con runbook dedicato
+(`docs/ai/DEMO_OPERATOR_GUIDE.md`). Nessun bug bloccante trovato.
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
@@ -53,6 +51,7 @@ scenario `ProjectRevision` (§19 del report).
 | TASK-015 | Consolidamento documentazione permessi | — | 2026-07-08 |
 | TASK-016 | Piano prova deploy controllata | — | 2026-07-08 |
 | TASK-017 | Validazione flusso DEMO end-to-end | — | 2026-07-09 |
+| TASK-018 | Kit operativo demo ripetibile (runbook + scenario ProjectRevision) | — | 2026-07-09 |
 
 ---
 
@@ -1754,6 +1753,84 @@ La suite reale usa sempre `config.test_settings` — `config.demo_settings`
 Priorità Station cambiata dall'operatore per questo batch: la demo
 presentabile viene prima di ulteriori audit tecnici. Problemi non
 bloccanti per la demo vanno documentati nel report, non inseguiti.
+
+---
+
+### TASK-018 — Kit operativo demo ripetibile — Claude Code
+
+#### Obiettivo
+
+Rendere la demo (validata in TASK-017) **ripetibile e avviabile da un
+operatore** senza dover ricostruire il contesto: runbook pratico +
+colmare il gap non bloccante segnalato in TASK-017 (`ProjectRevision`
+mai esercitata da `demo_full`), se l'estensione resta piccola e sicura.
+
+#### Analisi già svolta
+
+`demo_full.py` non conteneva alcuno scenario `ProjectRevision`
+(verificato: 0 `ProjectRevision` create da `demo_full --reset`). In
+TASK-017 questo era già stato colmato **manualmente** in validazione
+(`create_project_revision` → `populate_project_revision_from_current_documents`
+→ `issue_project_revision`), dimostrando che l'aggiunta è piccola,
+sicura e segue esattamente il pattern degli altri scenari del comando
+(guardia idempotente `if ... .exists(): ... return`, uso di
+`self._step(...)`). Nessun test esistente copre `demo_full` (solo
+`demo_company`, verificato per grep) — rischio di regressione minimo.
+
+#### Scope
+
+- Estendere `documents/management/commands/demo_full.py` con un nuovo
+  metodo `_scenario_project_snapshot` (stesso pattern degli altri
+  scenari), che crea/popola/emette uno snapshot `ProjectRevision` per
+  `PRJ-DEMO-001`. Idempotente.
+- Creare `docs/ai/DEMO_OPERATOR_GUIDE.md`: runbook breve e pratico
+  (scopo, prerequisiti, creazione DB demo, creazione account,
+  popolamento dati, avvio server, percorso demo passo-passo,
+  chiarimenti progetto/ECN, cosa non è oggetto della demo,
+  troubleshooting).
+- **Nessuna modifica** a `can_view_ecn`, resolver, permessi avanzati,
+  modelli, migrazioni, nuove dipendenze.
+
+#### File coinvolti
+
+- `documents/management/commands/demo_full.py` — nuovo scenario (unica
+  modifica di codice applicativo, additiva e idempotente).
+- Creare: `docs/ai/DEMO_OPERATOR_GUIDE.md`.
+- `docs/ai/TASKS.md`, `docs/ai/RUN_LOG.md`.
+- Non toccare: `ecn/permissions.py`, `projects/permissions.py`,
+  `projects/resolver.py`, modelli, migrazioni, `config/demo_settings.py`
+  (già corretto da TASK-017).
+
+#### Acceptance criteria
+
+- [x] `demo_full --reset --no-email` crea uno snapshot `ProjectRevision`
+      per `PRJ-DEMO-001` senza errori (verificato: "PRJ-DEMO-001:
+      snapshot revisione 00 emesso (2 documenti congelati)").
+- [x] Scenario idempotente: verificato rieseguendo `demo_full` senza
+      `--reset` — "PRJ-DEMO-001: snapshot già esistente, saltato."
+- [x] `docs/ai/DEMO_OPERATOR_GUIDE.md` creato, breve e pratico.
+- [x] Nessuna modifica a `can_view_ecn`, permessi avanzati, modelli,
+      migrazioni (unica modifica di codice: nuovo metodo additivo in
+      `demo_full.py`).
+- [x] Nessuna nuova dipendenza.
+- [x] Suite Django reale (`config.test_settings`) resta verde —
+      **1210/1210 PASS** (invariata, `demo_full` non testato da
+      `scripts/test.sh`, verificato con grep prima della modifica).
+
+#### Test richiesti
+
+```bash
+source projects/documentale-workcopy/.venv/bin/activate
+projects/documentale-workcopy/scripts/test.sh
+pip check
+```
+
+#### Guardrail
+
+- Nessuna modifica a permessi avanzati, `can_view_ecn`, resolver.
+- Nessuna dipendenza nuova.
+- Server solo su `127.0.0.1`, mai `0.0.0.0`, sempre fermato.
+- No push, no merge, no commit da parte dell'implementatore.
 
 ---
 

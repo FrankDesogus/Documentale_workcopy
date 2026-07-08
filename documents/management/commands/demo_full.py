@@ -68,6 +68,7 @@ class Command(BaseCommand):
         self._scenario_ecn_exempt(supervisor, mario, lucia, folder)
         self._scenario_approval_policies(supervisor, mario, lucia, anna, folder)
         self._scenario_sanatoria(supervisor, mario)
+        self._scenario_project_snapshot(supervisor)
 
         self.stdout.write(self.style.SUCCESS('\nDemo full completato.'))
 
@@ -588,6 +589,42 @@ class Command(BaseCommand):
 
         self._step(
             f'Batch {BATCH_CODE}: {len(records)} record storici per DEMO-MULTI-001.'
+        )
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Scenario 8 — Snapshot di progetto (ProjectRevision)
+    # ──────────────────────────────────────────────────────────────────────
+
+    def _scenario_project_snapshot(self, supervisor):
+        """
+        demo_full non esercitava mai ProjectRevision: senza questo scenario
+        lo "Storico progetto" risulta vuoto in demo (gap scoperto in TASK-017,
+        colmato qui — vedi docs/ai/DEMO_FLOW_VALIDATION.md §19).
+        """
+        from projects.models import Project, ProjectRevision
+        from projects.services import (
+            create_project_revision,
+            populate_project_revision_from_current_documents,
+            issue_project_revision,
+        )
+
+        project = Project.objects.get(code='PRJ-DEMO-001')
+
+        if ProjectRevision.objects.filter(project=project).exists():
+            self._step(f'{project.code}: snapshot già esistente, saltato.')
+            return
+
+        snap = create_project_revision(
+            project, supervisor,
+            snapshot_type=ProjectRevision.SnapshotType.REVISION,
+            notes='Snapshot demo — storico progetto per presentazione.',
+        )
+        n_items = populate_project_revision_from_current_documents(snap)
+        snap = issue_project_revision(snap, supervisor)
+
+        self._step(
+            f'{project.code}: snapshot revisione {snap.revision_label} emesso '
+            f'({n_items} documenti congelati).'
         )
 
     # ──────────────────────────────────────────────────────────────────────
