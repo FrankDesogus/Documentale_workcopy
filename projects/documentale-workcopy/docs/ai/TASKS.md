@@ -22,12 +22,11 @@ _Nessun task in corso._
 
 Backlog operativo derivato dalla roadmap di `docs/ai/PROJECT_ANALYSIS.md`
 (TASK-001), riordinato e raffinato in task piccoli e testabili.
-**Backlog operativo esaurito** (TASK-001→TASK-016 tutti completati).
-`can_view_ecn` resta deliberatamente su `get_folder_role` (vedi
-`docs/ai/PERMISSIONS_AUDIT.md`, nota TASK-013/014). Prossimo candidato
-concreto: eseguire la prova di deploy pianificata in
-`docs/ai/DEPLOY_REHEARSAL_PLAN.md` (richiede una VM/container isolato e
-azione manuale dell'operatore — non un task Station automatizzabile).
+**Backlog operativo esaurito** (TASK-001→TASK-017 tutti completati).
+Demo verificata presentabile con singolo account superuser (vedi
+`docs/ai/DEMO_FLOW_VALIDATION.md`). Nessun bug bloccante trovato.
+Miglioria facoltativa non bloccante: estendere `demo_full` con uno
+scenario `ProjectRevision` (§19 del report).
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
@@ -53,6 +52,7 @@ azione manuale dell'operatore — non un task Station automatizzabile).
 | TASK-014 | Refactor minimo ECN permissions verso resolver modulare (can_create_ecn) | — | 2026-07-08 |
 | TASK-015 | Consolidamento documentazione permessi | — | 2026-07-08 |
 | TASK-016 | Piano prova deploy controllata | — | 2026-07-08 |
+| TASK-017 | Validazione flusso DEMO end-to-end | — | 2026-07-09 |
 
 ---
 
@@ -1593,6 +1593,167 @@ pip check
   serve decisione di prodotto separata).
 - Non modificare modelli o migrazioni.
 - No push, no merge, no commit da parte dell'implementatore.
+
+---
+
+### TASK-017 — Validazione flusso DEMO end-to-end — Claude Code
+
+#### Obiettivo
+
+Verificare che un singolo account admin/superuser possa attraversare il
+flusso completo del Documentale (progetto, documento, revisione,
+approvazione, ECN) in un ambiente demo **isolato**, senza dati reali.
+**Cambio di priorità esplicito dall'operatore:** non inseguire permessi
+fini, multiutente realistico, hardening produzione, PostgreSQL reale o
+il refactor di `can_view_ecn` — solo ciò che serve a rendere la demo
+presentabile.
+
+#### Analisi già svolta (da riusare, non ripetere da zero)
+
+Verificato per lettura diretta: esiste già un'infrastruttura demo
+completa e purpose-built, **non serve costruirla da zero**:
+
+- `documents/management/commands/demo_company.py` (629 righe): crea
+  `supervisor_demo` (**`is_superuser=True`, `is_staff=True`, esplicitamente
+  progettato per "presentazioni con singolo accesso"** — docstring
+  righe 5, 11) con tutti i ruoli aziendali rilevanti, più
+  `mario.rossi`/`lucia.bianchi`/`anna.neri` come utenti di supporto.
+- `documents/management/commands/demo_full.py` (596 righe): chiama
+  `demo_company` come base e aggiunge **tutti** gli scenari richiesti
+  dall'operatore: documento con 3 revisioni, revisione rifiutata, ECN
+  in tutti e 6 gli stati (draft→closed), ECN che origina una revisione,
+  documento esente ECN (revisione senza ECN), policy approvazione
+  ANY/SEQUENTIAL, record storici sanatoria.
+- **Superuser bypassa le assegnazioni di approvazione**: verificato in
+  `approvals/services.py` (righe 57, 81, 160, 232) — `supervisor_demo`
+  può approvare/rifiutare qualunque richiesta anche senza essere
+  esplicitamente assegnato come approvatore.
+- **I progetti sono revisionabili**, ma con un meccanismo diverso dai
+  documenti: `projects/models.py` — `Project` ha `version_scheme`/
+  `version` e `revision_scheme`/`revision` (assi manuali), e
+  `ProjectRevision` è uno **snapshot immutabile** (VERSION o REVISION)
+  del progetto, creato tramite viste dedicate (`project_snapshot_create`),
+  non un ciclo DRAFT→APPROVED come i documenti. Va documentato
+  chiaramente questo per non generare aspettative sbagliate in demo.
+- `config/demo_utils.py`: le deroghe sanatoria richiedono
+  `DOCUMENTALE_DEMO_MODE=true` **e** username esatto
+  `supervisor_demo` (default) — non attivabili per un utente
+  `demo_admin` generico senza impostare anche
+  `DOCUMENTALE_DEMO_SUPERVISOR_USERNAME`.
+- Nessun `config/demo_settings.py` esiste ancora — va creato (Opzione B
+  minima), sul modello di `config/test_settings.py` (stesso pattern:
+  `from config.settings import *`, override mirati).
+
+#### Strategia scelta (Opzione A + B minima)
+
+1. Creare `config/demo_settings.py`: eredita `config.settings`,
+   sovrascrive `DATABASES` con SQLite **file isolato**
+   (`BASE_DIR / '.demo' / 'db.sqlite3'`, mai `:memory:` perché la demo
+   deve persistere tra comandi separati) e `MEDIA_ROOT` con
+   `BASE_DIR / '.demo-media'`. Nessun `.env` richiesto (stesso pattern
+   di `test_settings.py`: `SECRET_KEY` fittizia via env var prima
+   dell'import).
+2. Aggiungere `.demo/` e `.demo-media/` a `.gitignore`.
+3. Eseguire, con le demo settings, in sequenza:
+   `migrate` → `demo_full --reset --no-email` (riusa l'infrastruttura
+   esistente, nessun nuovo fixture da scrivere).
+4. Creare in aggiunta un secondo superuser `demo_admin` (credenziali
+   esplicite fornite dall'operatore, solo locali) via ORM/management
+   command non interattivo — **non** tramite `createsuperuser`
+   interattivo (richiede prompt). Documentare che `demo_admin`, essendo
+   `is_superuser=True` puro (senza `DOCUMENTALE_DEMO_SUPERVISOR_USERNAME`
+   impostato su di lui), può fare tutto **tranne** le funzioni sanatoria
+   dedicate al supervisor (non bloccante per il flusso richiesto:
+   progetto/documento/revisione/approvazione/ECN non richiedono
+   sanatoria).
+5. Validare il flusso leggendo i dati creati da `demo_full` via
+   `manage.py shell` (query dirette sui modelli) — **preferito a un
+   avvio server**, più veloce e altrettanto probante. Un avvio
+   `runserver 127.0.0.1:<porta>` va fatto solo se la verifica da shell
+   lascia dubbi, e va sempre fermato subito dopo.
+
+#### Scope
+
+- Creare: `config/demo_settings.py`,
+  `docs/ai/DEMO_FLOW_VALIDATION.md`.
+- Modificare: `.gitignore` (nuove voci `.demo/`, `.demo-media/`),
+  `docs/ai/TASKS.md`, `docs/ai/RUN_LOG.md`; eventualmente una breve
+  sezione demo in `README.md` (facoltativo).
+- **Nessuna modifica a `ecn/permissions.py` (`can_view_ecn` incluso),
+  modelli, migrazioni, altri permessi.**
+- Nessun dato reale, nessun `.env` reale letto o creato, nessuna rete.
+- Se si avvia il server: solo `127.0.0.1`, mai `0.0.0.0`, sempre
+  fermato a fine verifica.
+
+#### Contenuto richiesto di `DEMO_FLOW_VALIDATION.md`
+
+Le 20 sezioni concordate: scopo, ambiente demo usato, file/settings
+demo, credenziali demo locali (`supervisor_demo` esistente +
+`demo_admin` nuovo), comandi preparazione/avvio, URL principali, esito
+verificato per ciascun flusso (progetto, documento, revisione,
+approvazione/firma, ECN, revisione senza ECN, audit log), chiarimento
+esplicito "progetti revisionabili: sì, ma via snapshot
+`ProjectRevision`, non ciclo approvativo come i documenti", cosa
+funziona oggi con un singolo superuser, gap noti, bug bloccanti (se
+presenti), modifiche minime consigliate, prossimo task orientato demo.
+
+#### Acceptance criteria
+
+- [x] `config/demo_settings.py` creato, isolato (DB file dedicato in
+      `.demo/db.sqlite3`, media in `.demo-media/`), nessun `.env`.
+- [x] `.demo/`, `.demo-media/` in `.gitignore`.
+- [x] `demo_full --reset --no-email` eseguito con successo sulle demo
+      settings, senza errori (13 documenti, 8 ECN in tutti gli stati,
+      86 voci audit log).
+- [x] `demo_admin` creato con le credenziali fornite, in DB demo
+      isolato.
+- [x] Flusso progetto verificato con azione reale (snapshot creato,
+      popolato con 2 documenti, emesso) — meccanismo chiarito in
+      `docs/ai/DEMO_FLOW_VALIDATION.md` §9.
+- [x] Flusso documento verificato con azione reale (creazione,
+      revisione draft, invio approvazione, auto-approvazione via
+      bypass superuser, stato finale `approved`/`is_current=True`).
+- [x] Flusso ECN verificato: 8 ECN nel dataset in tutti e 6 gli stati;
+      `can_create_ecn`/`can_view_ecn` per `demo_admin` confermati `True`;
+      revisione senza ECN verificata (`DEMO-NOSCOPE-001` + documento
+      creato in questa validazione).
+- [x] Audit log verificato: 86 voci dataset + 5 nuove da `demo_admin`,
+      consultabili per query diretta.
+- [x] `can_view_ecn` non toccata (nessuna riga di `ecn/permissions.py`
+      nel diff).
+- [x] Nessun dato reale, nessun `.env` reale, nessuna rete.
+- [x] Server avviato solo su `127.0.0.1:8765`, fermato subito dopo la
+      verifica (pagine principali: login 200, dashboard/documents/
+      projects/ecn 200 dopo login).
+- [x] Suite Django reale (`config.test_settings`) resta verde —
+      **1210/1210 PASS**, `pip check` pulito, `media/` reale e
+      `.test-media/` invariate/pulite.
+
+#### Test richiesti
+
+```bash
+source projects/documentale-workcopy/.venv/bin/activate
+projects/documentale-workcopy/scripts/test.sh
+pip check
+```
+
+La suite reale usa sempre `config.test_settings` — `config.demo_settings`
+è un ambiente separato, mai eseguito da `scripts/test.sh`.
+
+#### Guardrail
+
+- Nessuna modifica a `ecn/permissions.py` (`can_view_ecn` inclusa),
+  modelli, migrazioni.
+- Nessun dato reale, nessun `.env` reale letto/creato, nessuna
+  migrazione su DB non demo.
+- Server solo su `127.0.0.1`, mai `0.0.0.0`, sempre fermato.
+- No push, no merge, no commit da parte dell'implementatore.
+
+#### Note operative
+
+Priorità Station cambiata dall'operatore per questo batch: la demo
+presentabile viene prima di ulteriori audit tecnici. Problemi non
+bloccanti per la demo vanno documentati nel report, non inseguiti.
 
 ---
 

@@ -20,6 +20,11 @@ local_settings.py
 # Upload isolati durante manage.py test — mai la media/ reale, vedi TASK-012.
 .test-media/
 
+# ── Demo locale (config.demo_settings) ──────────────────────────────────────────
+# DB e media isolati per la validazione demo, mai reali, vedi TASK-017.
+.demo/
+.demo-media/
+
 # ── File di log ───────────────────────────────────────────────────────────────
 *.log
 
