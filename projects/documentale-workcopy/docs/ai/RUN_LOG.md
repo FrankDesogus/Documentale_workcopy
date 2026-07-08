@@ -868,3 +868,67 @@ manage.py check --deploy: 6 warning attesi (ambiente di test)
 1. Procedere con TASK-012 (hardening configurazione test, facoltativo)
    o, se prioritario, pianificare una prova di deploy controllata su VM
    isolata seguendo `docs/ai/DEPLOYMENT_READINESS.md` §12.
+
+---
+
+### Run — 2026-07-08 — TASK-012 Hardening configurazione test (isolamento media)
+
+**Agente:** Claude Code (esecuzione diretta)
+**Task:** TASK-012
+**Branch:** task/documentale-test-hardening
+
+**Operazioni eseguite:**
+
+1. **Verifica sicura `media/` reale** (pre-merge TASK-011, richiesta
+   esplicita operatore): `git ls-files -- media` vuoto (nessun file
+   tracciato), `git status --ignored` conferma l'intera cartella
+   ignorata, 521 file su disco tutti non tracciati/ignorati. Nessun
+   contenuto aperto. Bonificati con lista generata da
+   `git ls-files --others --ignored --exclude-standard` +
+   rimozione mirata (**mai `git clean`**), preservata la nota di
+   sicurezza `.gitkeep-note.txt`.
+2. Merge fast-forward di `task/documentale-deployment-readiness` su
+   `main` (dopo verifica media positiva).
+3. **Causa radice identificata**: `config/test_settings.py` non
+   sovrascriveva `MEDIA_ROOT`, quindi ogni test con upload file scriveva
+   nella `media/` reale — confermato empiricamente rieseguendo la suite
+   subito dopo la bonifica: **20 nuovi file** scritti nella `media/`
+   reale in un solo run (da 1 a 21).
+4. **Fix**: `config/test_settings.py` — aggiunto
+   `MEDIA_ROOT = BASE_DIR / '.test-media'` (isolata). `.gitignore` —
+   aggiunta voce `.test-media/`. `scripts/test.sh` — stampa il path di
+   `MEDIA_ROOT` di test, pulisce `.test-media/` prima di ogni run e di
+   nuovo dopo un run riuscito (mai tocca `media/` reale — verificato con
+   `shellcheck`/`shfmt` puliti).
+5. **Verifica del fix**: suite completa rieseguita — `media/` reale
+   rimasta a **21 file (invariata, 0 nuove scritture)**, `.test-media/`
+   creata durante il run e correttamente rimossa a fine run riuscito.
+6. Bonifica finale dei 20 file residui pre-fix rimasti in `media/`
+   (stesso metodo sicuro del punto 1).
+7. Nessuna modifica a codice applicativo, view, modelli, migrazioni,
+   logica funzionale — solo `config/test_settings.py` (1 riga + commento),
+   `scripts/test.sh` (path/pulizia), `.gitignore` (1 voce), docs AI.
+
+**Esito test (`scripts/test.sh`):**
+
+```
+Ran 1208 tests in 483.313s
+OK
+System check identified no issues (0 silenced).
+OK — manage.py test superato.
+media/ reale: 21 file prima e dopo (invariata)
+.test-media/: assente dopo il run (ripulita)
+```
+
+**Problemi riscontrati:**
+
+- Bug pre-esistente scoperto in TASK-011 (non introdotto da questo
+  task): i test scrivevano nella `media/` reale da quando esiste
+  `config/test_settings.py` (TASK-003). Corretto qui.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Backlog operativo TASK-001→TASK-012 esaurito. Pianificare come nuovo
+   task dedicato: Fase 3 di TASK-007 (refactor `ecn/permissions.py`) o
+   una prova di deploy controllata (`docs/ai/DEPLOYMENT_READINESS.md`
+   §12), quando prioritari.

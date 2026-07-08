@@ -22,13 +22,15 @@ _Nessun task in corso._
 
 Backlog operativo derivato dalla roadmap di `docs/ai/PROJECT_ANALYSIS.md`
 (TASK-001), riordinato e raffinato in task piccoli e testabili.
-**Prossimo task consigliato: TASK-012** (hardening configurazione test —
-TASK-011 completato: deployment readiness verificata, nessun blocco
-trovato, `docs/ai/DEPLOYMENT_READINESS.md` prodotto).
+**Backlog operativo esaurito** (TASK-001→TASK-012 tutti completati).
+Prossimi task da pianificare: Fase 3 di TASK-007 (refactor
+`ecn/permissions.py` su resolver, vedi `docs/ai/PERMISSIONS_AUDIT.md`)
+o una prova di deploy controllata su VM isolata (vedi
+`docs/ai/DEPLOYMENT_READINESS.md` §12), da raffinare come nuovo task
+dedicato quando prioritari.
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
-| TASK-012 | Hardening configurazione test | bassa | miglioria facoltativa a config/test_settings.py e scripts/test.sh |
 
 ## Completati
 
@@ -46,6 +48,7 @@ trovato, `docs/ai/DEPLOYMENT_READINESS.md` prodotto).
 | TASK-009 | Pulizia dipendenze inutilizzate (django-filter, djangorestframework, pillow) | — | 2026-07-07 |
 | TASK-010 | Allineamento documentazione progetto | — | 2026-07-07 |
 | TASK-011 | Review deployment locale/VM | — | 2026-07-08 |
+| TASK-012 | Hardening configurazione test (isolamento media di test) | — | 2026-07-08 |
 
 ---
 

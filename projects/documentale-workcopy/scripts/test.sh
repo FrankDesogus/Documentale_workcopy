@@ -8,6 +8,9 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 TEST_SETTINGS="${TEST_SETTINGS:-config.test_settings}"
 REQUIREMENTS_FILE="${PROJECT_ROOT}/requirements.txt"
+# Deve corrispondere a MEDIA_ROOT in config/test_settings.py. Isolato dalla
+# media/ reale: gli upload di test (FileField) non devono mai finire lì.
+TEST_MEDIA_DIR="${PROJECT_ROOT}/.test-media"
 
 usage() {
 	cat <<EOF
@@ -63,6 +66,11 @@ echo "== Test: documentale-workcopy =="
 echo "Root progetto: ${PROJECT_ROOT}"
 echo "Python: $($PYTHON --version 2>&1)"
 echo "Settings di test: ${TEST_SETTINGS}"
+echo "Media di test (isolata, mai la media/ reale): ${TEST_MEDIA_DIR}"
+
+# Pulizia preventiva: parte sempre da uno stato pulito. Tocca SOLO
+# .test-media/, mai la cartella media/ reale.
+rm -rf "${TEST_MEDIA_DIR}"
 
 if [[ ! -f "${REQUIREMENTS_FILE}" ]]; then
 	fail "File requirements.txt non trovato in ${PROJECT_ROOT}."
@@ -168,6 +176,10 @@ if ! "${PYTHON}" manage.py test --settings="${TEST_SETTINGS}" -v 1; then
 fi
 
 echo "OK — manage.py test superato."
+
+# Pulizia finale: rimuove gli artefatti di upload dei test riusciti.
+# Tocca SOLO .test-media/, mai la cartella media/ reale.
+rm -rf "${TEST_MEDIA_DIR}"
 
 echo ""
 echo "Tutti i controlli completati con successo."

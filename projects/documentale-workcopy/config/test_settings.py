@@ -4,6 +4,10 @@ Impostazioni Django sicure per controlli automatizzati (scripts/test.sh).
 - Nessun .env richiesto: SECRET_KEY fittizia impostata prima dell'import.
 - Database SQLite in memoria (:memory:), mai file persistente.
 - Email in memoria (locmem), nessun SMTP reale.
+- Upload file (FileField/ImageField) isolati in .test-media/, mai nella
+  media/ reale: senza questo override i test che caricano file scrivono
+  nella cartella media/ di sviluppo, inquinandola in modo permanente
+  (scoperto in TASK-011/TASK-012 — vedi docs/ai/TESTING_STATUS.md).
 """
 
 import os
@@ -29,3 +33,6 @@ DATABASES = {
 }
 
 EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+
+# Isolamento upload di test: mai nella media/ reale (BASE_DIR / 'media').
+MEDIA_ROOT = BASE_DIR / '.test-media'

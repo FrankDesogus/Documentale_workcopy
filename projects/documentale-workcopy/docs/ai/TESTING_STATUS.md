@@ -134,6 +134,32 @@ Dettaglio completo di ogni esecuzione in `docs/ai/RUN_LOG.md`.
   test usano SQLite `:memory:` per design (nessun DB reale), non è stata
   fatta alcuna verifica specifica su PostgreSQL.
 
+### TASK-012 (2026-07-08) — isolamento upload di test da `media/` reale
+
+**Bug scoperto durante TASK-011** (audit deployment readiness): `config/
+test_settings.py` non sovrascriveva `MEDIA_ROOT`, quindi ogni test che
+carica un file (`FileField`) scriveva realmente in
+`projects/documentale-workcopy/media/` — la stessa cartella usata in
+sviluppo/produzione. Effetto osservato: **521 file accumulati** in
+`media/` da run ripetuti della suite nel corso delle sessioni precedenti
+(confermato dal pattern di naming Django `nomefile_XXXXXXX.ext`, generato
+quando un file con lo stesso nome esiste già).
+
+**Verificato che non fossero dati reali** prima di qualunque bonifica:
+tutti i 521 file risultavano non tracciati e ignorati da git
+(`git ls-files` vuoto su `media/`, `git status --ignored` conferma
+l'intera cartella ignorata); nessun contenuto è stato aperto. Bonificati
+con `git ls-files --others --ignored --exclude-standard` +
+rimozione mirata (mai `git clean`), preservando solo la nota di sicurezza
+`.gitkeep-note.txt` già presente nella cartella.
+
+**Fix:** `config/test_settings.py` ora imposta
+`MEDIA_ROOT = BASE_DIR / '.test-media'` (cartella isolata, in
+`.gitignore`). `scripts/test.sh` pulisce `.test-media/` prima di ogni
+run e di nuovo dopo un run riuscito (mai la `media/` reale). Verificato:
+suite completa 1208/1208 PASS con `media/` reale **invariata** (0 nuovi
+file) e `.test-media/` correttamente rimossa a fine run.
+
 ## Interpretazione corretta di "test PASS" per questo progetto
 
 Da questo momento, un "TESTS: PASS" riportato da una review su
