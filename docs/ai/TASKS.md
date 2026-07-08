@@ -22,15 +22,15 @@ _Nessun task in corso._
 
 Backlog operativo derivato dalla roadmap di `docs/ai/PROJECT_ANALYSIS.md`
 (TASK-001), riordinato e raffinato in task piccoli e testabili.
-**Backlog operativo esaurito** (TASK-001→TASK-012 tutti completati).
-Prossimi task da pianificare: Fase 3 di TASK-007 (refactor
-`ecn/permissions.py` su resolver, vedi `docs/ai/PERMISSIONS_AUDIT.md`)
-o una prova di deploy controllata su VM isolata (vedi
-`docs/ai/DEPLOYMENT_READINESS.md` §12), da raffinare come nuovo task
-dedicato quando prioritari.
+**Prossimo task consigliato: TASK-013** (audit bypass resolver in
+`ecn/permissions.py` — TASK-007 Fase 1/2 completate, Fase 3 di TASK-007
+ora raffinata come TASK-013/014/015).
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
+| TASK-013 | Audit ECN permissions resolver bypass | alta | solo analisi/documentazione, nessuna modifica applicativa |
+| TASK-014 | Refactor minimo ECN permissions verso resolver modulare | alta | solo se TASK-013 dimostra sicurezza; fallback legacy resta attivo |
+| TASK-015 | Consolidamento documentazione permessi | media | aggiorna PERMISSIONS_AUDIT.md/TASKS.md/RUN_LOG.md con esito TASK-013/014 |
 
 ## Completati
 
@@ -1243,6 +1243,263 @@ projects/documentale-workcopy/scripts/test.sh
 
 Task opzionale e a bassa priorità: da fare solo se non toglie tempo a
 task applicativi più utili (TASK-006..010).
+
+---
+
+### TASK-013 — Audit ECN permissions resolver bypass — Cursor Agent
+
+#### Obiettivo
+
+Analizzare come `ecn/permissions.py` gestisce i permessi legati alla
+cartella e dove bypassa il resolver modulare (`projects/resolver.py`),
+usando invece `get_folder_role()`/`has_folder_role()` (solo legacy,
+`ProjectFolderMembership`, mai `FolderPermissionGrant`) — gap G3
+dell'audit `docs/ai/PERMISSIONS_AUDIT.md` §4.3 e §7.
+
+#### Analisi già svolta (da riusare, non ripetere da zero)
+
+Verificato per lettura diretta di `ecn/permissions.py` (327 righe, 13
+funzioni pubbliche): **solo 2 delle 13 funzioni** toccano i permessi di
+cartella, ed entrambe bypassano il resolver:
+
+- `can_view_ecn` (riga ~90-93): se l'ECN riguarda un documento con
+  cartella, controlla
+  `get_folder_role(user, folder) in AUDIT_ROLES` (`AUDIT_ROLES =
+  {auditor, manager}`, da `projects/permissions.py`).
+- `can_create_ecn` (riga ~116-121): controlla
+  `get_folder_role(user, folder) in WRITE_ROLES` (`WRITE_ROLES =
+  {author, manager}`).
+
+Le altre 11 funzioni (`can_configure_ccb`, `can_submit_ecn`,
+`can_review_ecn`, `can_close_ecn`, `can_compile_dossier`, `can_edit_ecn`,
+`can_reconfigure_ccb`, `can_reopen_ccb`, `can_add_ecn_attachment`,
+`can_download_ecn_attachment`, `_is_quality_manager`/
+`_can_consult_all_ecn`) operano solo su stato specifico dell'ECN
+(gruppo Quality Manager, `proposed_by`/`created_by`,
+`ChangeNoticeApprover` assegnato, `ccb_coordinator`) — **non toccano
+permessi di cartella**, quindi sono fuori scope per questo audit/refactor.
+
+**Verifica di equivalenza per un eventuale refactor** (confrontando
+`_LEGACY_ROLE_PERMISSIONS` in `projects/resolver.py` con i permission
+code oggi backfillati per intero, TASK-007-2):
+
+- `can_create_ecn` / `WRITE_ROLES` (`{author, manager}`): il permission
+  code `request_ecn` in `_LEGACY_ROLE_PERMISSIONS` appartiene
+  **esattamente** a `{author, manager}` (presente nel set author via
+  `_LEGACY_AUTHOR_PERMISSIONS` e nel set manager completo, assente da
+  reader/approver/auditor). **Match 1:1** — un refactor a
+  `has_folder_permission(user, folder, 'request_ecn',
+  include_legacy_fallback=True)` sarebbe comportamentalmente equivalente
+  con fallback legacy attivo.
+- `can_view_ecn` / `AUDIT_ROLES` (`{auditor, manager}`): il permission
+  code più vicino semanticamente, `view_folder_ecns`, appartiene invece
+  a **tutti e 5 i ruoli** in `_LEGACY_ROLE_PERMISSIONS` (fa parte del
+  set base reader, ereditato da author/approver/auditor/manager). **Non
+  c'è match**: un refactor ingenuo a `view_folder_ecns` sarebbe
+  un'**escalation di permessi reale** (reader/author/approver
+  otterrebbero visibilità ECN che oggi non hanno). Nessun altro
+  permission code nel modello corrisponde a "solo auditor/manager".
+
+**Conclusione preliminare (da confermare/formalizzare nel report):**
+`can_create_ecn` è un candidato sicuro per refactor minimo (TASK-014);
+`can_view_ecn` **non lo è** senza una decisione di prodotto (nuovo
+permission code dedicato, o accettare esplicitamente che
+`AUDIT_ROLES` resti più restrittivo di qualsiasi permission code
+esistente e quindi non migrabile al resolver così com'è).
+
+#### Scope
+
+- Solo analisi e documentazione. **Nessuna modifica applicativa in
+  questo task.**
+- Creare un solo file:
+  `projects/documentale-workcopy/docs/ai/ECN_PERMISSIONS_AUDIT.md`.
+- Riusare e formalizzare l'analisi sopra (già verificata), non ripetere
+  la lettura del codice da zero — verificarla comunque per accuratezza.
+
+#### File coinvolti
+
+- Analizzare (sola lettura): `ecn/permissions.py`, `projects/permissions.py`
+  (`get_folder_role`, `has_folder_role`, `WRITE_ROLES`, `AUDIT_ROLES`),
+  `projects/resolver.py` (`_LEGACY_ROLE_PERMISSIONS`,
+  `has_folder_permission`), `ecn/tests.py` (classi con `can_view_ecn`/
+  `can_create_ecn`), `docs/ai/PERMISSIONS_AUDIT.md` (§4.3, §7 gap G3).
+- Creare: `docs/ai/ECN_PERMISSIONS_AUDIT.md`.
+- Non modificare: nessun altro file (né `ecn/permissions.py` né test).
+
+#### Contenuto richiesto di `ECN_PERMISSIONS_AUDIT.md`
+
+- Funzioni e file coinvolti (le 2 funzioni che bypassano il resolver,
+  con numero di riga).
+- Flussi ECN interessati (visibilità ECN, proposta ECN).
+- Permessi verificati oggi (ruoli via `get_folder_role`) per ciascuna
+  delle 2 funzioni.
+- Differenza tra logica ECN attuale e resolver modulare — inclusa
+  l'analisi di equivalenza sopra (match per `request_ecn`, non-match
+  per `view_folder_ecns`), verificata contro `_LEGACY_ROLE_PERMISSIONS`.
+- Rischi di cambiare comportamento (in particolare il rischio di
+  escalation permessi se si migra `can_view_ecn` in modo ingenuo).
+- Test esistenti rilevanti (`ecn/tests.py`:
+  `test_folder_auditor_can_view`, `test_folder_author_can_create`, e le
+  classi che li contengono).
+- Gap di test (se emergono).
+- Proposta di refactor minimo per TASK-014: **solo `can_create_ecn`**
+  verso `has_folder_permission(..., 'request_ecn',
+  include_legacy_fallback=True)`; **`can_view_ecn` esplicitamente non
+  incluso**, con motivazione.
+- Acceptance criteria per TASK-014 (vedi sezione TASK-014 sotto).
+- Piano di rollback (revert della singola riga di refactor, fallback
+  legacy già attivo per design).
+- Cosa NON modificare: `can_view_ecn`, le altre 11 funzioni di
+  `ecn/permissions.py`, `projects/resolver.py`, modelli, migrazioni,
+  template, `ProjectFolderMembership`.
+
+#### Acceptance criteria
+
+- [ ] `docs/ai/ECN_PERMISSIONS_AUDIT.md` creato con tutte le sezioni
+      sopra.
+- [ ] Verifica di equivalenza `request_ecn`/`WRITE_ROLES` confermata o
+      corretta con evidenza (confronto esplicito con
+      `_LEGACY_ROLE_PERMISSIONS`).
+- [ ] Verifica di non-equivalenza `view_folder_ecns`/`AUDIT_ROLES`
+      confermata o corretta con evidenza.
+- [ ] Nessuna modifica applicativa.
+- [ ] Suite Django reale resta verde (nessuna modifica prevista, va
+      comunque confermato).
+
+#### Test richiesti
+
+```bash
+source projects/documentale-workcopy/.venv/bin/activate
+projects/documentale-workcopy/scripts/test.sh
+```
+
+#### Guardrail
+
+- Nessuna modifica a `ecn/permissions.py`, `projects/permissions.py`,
+  `projects/resolver.py`, modelli, migrazioni, template.
+- Non disattivare il fallback legacy in nessun punto (non applicabile,
+  nessun codice toccato).
+- No push, no merge, no commit da parte dell'implementatore.
+
+---
+
+### TASK-014 — Refactor minimo ECN permissions verso resolver modulare — Claude Code
+
+> Da eseguire **solo se** TASK-013 conferma che è sicuro. Sulla base
+> dell'analisi già svolta (vedi TASK-013), lo scope atteso è **solo
+> `can_create_ecn`** — `can_view_ecn` resta invariato perché non esiste
+> un permission code equivalente ad `AUDIT_ROLES` senza rischio di
+> escalation permessi (vedi TASK-013).
+
+#### Obiettivo
+
+Ridurre il bypass del resolver modulare in `ecn/permissions.py` dove è
+**dimostrabilmente sicuro**: sostituire in `can_create_ecn` il controllo
+`get_folder_role(user, folder) in WRITE_ROLES` con
+`has_folder_permission(user, folder, 'request_ecn',
+include_legacy_fallback=True)` (import da `projects.resolver`),
+comportamentalmente equivalente per costruzione (`request_ecn` in
+`_LEGACY_ROLE_PERMISSIONS` corrisponde esattamente a `{author,
+manager}`, backfillato per intero da TASK-007-2, fallback legacy
+attivo).
+
+#### Scope
+
+- Modificare **solo** `can_create_ecn` in `ecn/permissions.py`
+  (sostituzione dell'import e della chiamata `get_folder_role`/
+  `WRITE_ROLES` con `has_folder_permission`/`'request_ecn'`).
+- **Non modificare `can_view_ecn`** né alcuna altra funzione.
+- Aggiungere un test di regressione esplicito (in `ecn/tests.py`, vicino
+  a `test_folder_author_can_create`) che dimostri che un utente con un
+  grant modulare `FolderPermissionGrant(permission_code='request_ecn',
+  effect='allow')` (senza `ProjectFolderMembership`) può ora creare
+  un'ECN — prova che il refactor rende il resolver modulare
+  effettivamente utilizzabile per questo permesso (oggi impossibile:
+  solo `ProjectFolderMembership` veniva letto).
+- Nessuna modifica a modelli, migrazioni, template, UX, flusso
+  approvazioni ECN.
+
+#### File coinvolti
+
+- `ecn/permissions.py` — `can_create_ecn` (unica funzione modificata).
+- `ecn/tests.py` — nuovo test di regressione.
+- Non toccare: `can_view_ecn`, le altre funzioni di `ecn/permissions.py`,
+  `projects/permissions.py`, `projects/resolver.py`, modelli, migrazioni,
+  template, `ProjectFolderMembership`.
+
+#### Acceptance criteria
+
+- [ ] `can_create_ecn` usa `has_folder_permission(user, folder,
+      'request_ecn', include_legacy_fallback=True)` invece di
+      `get_folder_role(...) in WRITE_ROLES`.
+- [ ] `can_view_ecn` **non toccato**.
+- [ ] Test esistenti (`test_author_can_create`,
+      `test_folder_author_can_create`, `test_reader_cannot_create`,
+      `test_ccb_cannot_create_without_author_role`) restano verdi senza
+      modifiche (dimostra l'equivalenza comportamentale con fallback
+      legacy).
+- [ ] Nuovo test di regressione: grant modulare `request_ecn` (senza
+      membership legacy) → `can_create_ecn` restituisce `True`.
+- [ ] Fallback legacy invariato (`include_legacy_fallback=True` esplicito
+      nella nuova chiamata, non rimosso da nessuna parte).
+- [ ] Nessuna migrazione dati, nessuna modifica a
+      `ProjectFolderMembership`.
+- [ ] Nessuna modifica a template, UX, flusso ECN.
+- [ ] Suite Django reale verde (1208 + nuovo test, tutti PASS).
+
+#### Test richiesti
+
+```bash
+source projects/documentale-workcopy/.venv/bin/activate
+projects/documentale-workcopy/scripts/test.sh
+```
+
+Verificare in particolare la classe test con `can_create_ecn` in
+`ecn/tests.py` e il nuovo test di regressione sul grant modulare.
+
+#### Guardrail
+
+- Non disattivare il fallback legacy.
+- Non rimuovere o migrare `ProjectFolderMembership`.
+- Non modificare `can_view_ecn` (resta bypass legacy, per motivazione
+  TASK-013).
+- Non modificare modelli, migrazioni, template, UX, flusso approvazioni.
+- No push, no merge, no commit da parte dell'implementatore.
+
+---
+
+### TASK-015 — Consolidamento documentazione permessi — Claude Code
+
+#### Obiettivo
+
+Aggiornare la documentazione AI con l'esito di TASK-013 (e TASK-014, se
+eseguito) — riflettere lo stato reale della migrazione permessi cartella
+dopo questo batch.
+
+#### Scope
+
+- Solo documentazione. Nessuna modifica applicativa.
+- Aggiornare `docs/ai/PERMISSIONS_AUDIT.md` (nota di stato, come già
+  fatto in TASK-010 per Fase 1/2): esito TASK-013/014, gap G3 chiuso o
+  motivatamente rinviato.
+- Aggiornare `docs/ai/TASKS.md` (TASK-013/014/015 spostati in
+  Completati, backlog aggiornato).
+- Aggiornare `docs/ai/RUN_LOG.md` con le esecuzioni.
+- Aggiornare `docs/ai/TESTING_STATUS.md` solo se il conteggio test
+  cambia.
+
+#### Acceptance criteria
+
+- [ ] Stato reale rispecchiato: cosa fatto, cosa rinviato e perché.
+- [ ] Se TASK-014 rinviato: motivazione tecnica precisa (non generica).
+- [ ] Prossimo task consigliato indicato esplicitamente.
+- [ ] Nessuna modifica a codice applicativo.
+- [ ] Suite Django reale invariata (nessuna modifica prevista).
+
+#### Guardrail
+
+- Solo file `.md`.
+- No push, no merge, no commit da parte dell'implementatore.
 
 ---
 
