@@ -22,15 +22,16 @@ _Nessun task in corso._
 
 Backlog operativo derivato dalla roadmap di `docs/ai/PROJECT_ANALYSIS.md`
 (TASK-001), riordinato e raffinato in task piccoli e testabili.
-**Prossimo task consigliato: TASK-013** (audit bypass resolver in
-`ecn/permissions.py` — TASK-007 Fase 1/2 completate, Fase 3 di TASK-007
-ora raffinata come TASK-013/014/015).
+**Backlog operativo esaurito** (TASK-001→TASK-015 tutti completati).
+`can_view_ecn` resta deliberatamente su `get_folder_role` (vedi
+`docs/ai/PERMISSIONS_AUDIT.md`, nota TASK-013/014): una migrazione
+futura richiede una decisione di prodotto (nuovo permission code), non
+un task tecnico — da riprendere solo se richiesto esplicitamente.
+Prossimi candidati: prova di deploy controllata su VM isolata (vedi
+`docs/ai/DEPLOYMENT_READINESS.md` §12).
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
-| TASK-013 | Audit ECN permissions resolver bypass | alta | solo analisi/documentazione, nessuna modifica applicativa |
-| TASK-014 | Refactor minimo ECN permissions verso resolver modulare | alta | solo se TASK-013 dimostra sicurezza; fallback legacy resta attivo |
-| TASK-015 | Consolidamento documentazione permessi | media | aggiorna PERMISSIONS_AUDIT.md/TASKS.md/RUN_LOG.md con esito TASK-013/014 |
 
 ## Completati
 
@@ -49,6 +50,9 @@ ora raffinata come TASK-013/014/015).
 | TASK-010 | Allineamento documentazione progetto | — | 2026-07-07 |
 | TASK-011 | Review deployment locale/VM | — | 2026-07-08 |
 | TASK-012 | Hardening configurazione test (isolamento media di test) | — | 2026-07-08 |
+| TASK-013 | Audit ECN permissions resolver bypass | — | 2026-07-08 |
+| TASK-014 | Refactor minimo ECN permissions verso resolver modulare (can_create_ecn) | — | 2026-07-08 |
+| TASK-015 | Consolidamento documentazione permessi | — | 2026-07-08 |
 
 ---
 
@@ -1355,16 +1359,16 @@ esistente e quindi non migrabile al resolver così com'è).
 
 #### Acceptance criteria
 
-- [ ] `docs/ai/ECN_PERMISSIONS_AUDIT.md` creato con tutte le sezioni
+- [x] `docs/ai/ECN_PERMISSIONS_AUDIT.md` creato con tutte le sezioni
       sopra.
-- [ ] Verifica di equivalenza `request_ecn`/`WRITE_ROLES` confermata o
+- [x] Verifica di equivalenza `request_ecn`/`WRITE_ROLES` confermata o
       corretta con evidenza (confronto esplicito con
       `_LEGACY_ROLE_PERMISSIONS`).
-- [ ] Verifica di non-equivalenza `view_folder_ecns`/`AUDIT_ROLES`
+- [x] Verifica di non-equivalenza `view_folder_ecns`/`AUDIT_ROLES`
       confermata o corretta con evidenza.
-- [ ] Nessuna modifica applicativa.
-- [ ] Suite Django reale resta verde (nessuna modifica prevista, va
-      comunque confermato).
+- [x] Nessuna modifica applicativa.
+- [x] Suite Django reale resta verde — confermato 1208/1208 PASS
+      (`ai-cycle.sh` STEP 5).
 
 #### Test richiesti
 
@@ -1429,23 +1433,24 @@ attivo).
 
 #### Acceptance criteria
 
-- [ ] `can_create_ecn` usa `has_folder_permission(user, folder,
+- [x] `can_create_ecn` usa `has_folder_permission(user, folder,
       'request_ecn', include_legacy_fallback=True)` invece di
       `get_folder_role(...) in WRITE_ROLES`.
-- [ ] `can_view_ecn` **non toccato**.
-- [ ] Test esistenti (`test_author_can_create`,
+- [x] `can_view_ecn` **non toccato**.
+- [x] Test esistenti (`test_author_can_create`,
       `test_folder_author_can_create`, `test_reader_cannot_create`,
       `test_ccb_cannot_create_without_author_role`) restano verdi senza
       modifiche (dimostra l'equivalenza comportamentale con fallback
       legacy).
-- [ ] Nuovo test di regressione: grant modulare `request_ecn` (senza
-      membership legacy) → `can_create_ecn` restituisce `True`.
-- [ ] Fallback legacy invariato (`include_legacy_fallback=True` esplicito
+- [x] Nuovo test di regressione: grant modulare `request_ecn` (senza
+      membership legacy) → `can_create_ecn` restituisce `True` (più un
+      secondo test sul deny modulare, oltre il minimo richiesto).
+- [x] Fallback legacy invariato (`include_legacy_fallback=True` esplicito
       nella nuova chiamata, non rimosso da nessuna parte).
-- [ ] Nessuna migrazione dati, nessuna modifica a
+- [x] Nessuna migrazione dati, nessuna modifica a
       `ProjectFolderMembership`.
-- [ ] Nessuna modifica a template, UX, flusso ECN.
-- [ ] Suite Django reale verde (1208 + nuovo test, tutti PASS).
+- [x] Nessuna modifica a template, UX, flusso ECN.
+- [x] Suite Django reale verde — **1210/1210 PASS** (1208 + 2 nuovi test).
 
 #### Test richiesti
 
@@ -1490,11 +1495,14 @@ dopo questo batch.
 
 #### Acceptance criteria
 
-- [ ] Stato reale rispecchiato: cosa fatto, cosa rinviato e perché.
-- [ ] Se TASK-014 rinviato: motivazione tecnica precisa (non generica).
-- [ ] Prossimo task consigliato indicato esplicitamente.
-- [ ] Nessuna modifica a codice applicativo.
-- [ ] Suite Django reale invariata (nessuna modifica prevista).
+- [x] Stato reale rispecchiato: cosa fatto, cosa rinviato e perché.
+- [x] TASK-014 eseguito solo parzialmente (`can_create_ecn`); motivazione
+      tecnica precisa per `can_view_ecn` non migrata (nessun permission
+      code equivalente, escalation di permessi).
+- [x] Prossimo task consigliato indicato esplicitamente.
+- [x] Nessuna modifica a codice applicativo (solo `docs/ai/`).
+- [x] Suite Django reale invariata (1210/1210, nessuna modifica in
+      questo task).
 
 #### Guardrail
 

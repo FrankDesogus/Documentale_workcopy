@@ -932,3 +932,123 @@ media/ reale: 21 file prima e dopo (invariata)
    task dedicato: Fase 3 di TASK-007 (refactor `ecn/permissions.py`) o
    una prova di deploy controllata (`docs/ai/DEPLOYMENT_READINESS.md`
    §12), quando prioritari.
+
+---
+
+### Run — 2026-07-08 — TASK-013 Audit ECN permissions resolver bypass
+
+**Agente:** Cursor Agent (via `ai-cycle.sh --run`) + Claude Code (spec,
+verifica accuratezza, review)
+**Task:** TASK-013
+**Branch:** task/documentale-ecn-permissions-resolver
+
+**Operazioni eseguite:**
+
+1. Spec scritta da Claude Code in `docs/ai/TASKS.md` con analisi
+   preliminare già verificata (lettura diretta `ecn/permissions.py`,
+   `projects/permissions.py`, `projects/resolver.py`): solo 2 delle 13
+   funzioni pubbliche di `ecn/permissions.py` toccano permessi cartella
+   (`can_view_ecn`, `can_create_ecn`), entrambe via `get_folder_role`
+   (solo legacy).
+2. Cursor Agent ha prodotto `docs/ai/ECN_PERMISSIONS_AUDIT.md` (420
+   righe): conferma esatta dell'analisi preliminare, con righe di codice
+   precise (89-93, 116-121), tabelle di equivalenza verificate contro
+   `_LEGACY_ROLE_PERMISSIONS` — `request_ecn` = `WRITE_ROLES` esatto
+   (match 1:1), `view_folder_ecns` ⊋ `AUDIT_ROLES` (nessun match,
+   rischio escalation se migrato ingenuamente).
+3. Claude Code ha verificato a campione (non solo letto) le righe di
+   codice citate e il mapping `_LEGACY_ROLE_PERMISSIONS` via grep —
+   confermato accurato al 100%.
+4. Nessuna modifica applicativa (solo il nuovo file docs).
+
+**Esito test (`ai-cycle.sh` STEP 5):**
+
+```
+Ran 1208 tests in 481.136s — OK
+System check identified no issues (0 silenced).
+```
+
+**Problemi riscontrati:** nessuno.
+
+---
+
+### Run — 2026-07-08 — TASK-014 Refactor minimo ECN permissions verso resolver modulare
+
+**Agente:** Claude Code (esecuzione diretta — modifica chirurgica di 2
+righe, permessi-critica, precisione preferita a delega)
+**Task:** TASK-014
+**Branch:** task/documentale-ecn-permissions-resolver
+
+**Operazioni eseguite:**
+
+1. `ecn/permissions.py`, `can_create_ecn`: sostituito
+   `get_folder_role(user, folder) in WRITE_ROLES` con
+   `has_folder_permission(user, folder, 'request_ecn',
+   include_legacy_fallback=True)` (import da `projects.resolver`).
+   **`can_view_ecn` non toccato**, come da acceptance criteria TASK-013.
+2. `ecn/tests.py`: import `FolderPermissionGrant` aggiunto; 2 nuovi test
+   (oltre il minimo richiesto):
+   `test_folder_grant_request_ecn_can_create_without_membership` (grant
+   modulare senza membership legacy → può creare ECN) e
+   `test_folder_grant_deny_request_ecn_blocks_legacy_author` (deny
+   modulare blocca anche con membership legacy author — precedenza del
+   grant sul fallback).
+3. Guardrail verificati esplicitamente con `git diff | grep`:
+   `include_legacy_fallback` — unica occorrenza è la nuova riga con
+   `=True` esplicito, nessuna disattivazione; `ProjectFolderMembership`
+   — solo import riordinato (aggiunta `FolderPermissionGrant`), ancora
+   importato e usato; nessuna migrazione, nessun template, nessun
+   `.env` toccato.
+4. Test eseguiti in ordine crescente di scope: `ECNPermissionsTests`
+   (42/42), app `ecn` completa (317/317), suite completa
+   (1210/1210 = 1208 + 2 nuovi).
+
+**Esito test (con venv `.venv` attiva):**
+
+```
+ecn.tests.ECNPermissionsTests: 42/42 PASS
+App ecn completa: 317/317 PASS
+Suite completa: Ran 1210 tests — OK (1208 + 2 nuovi)
+System check identified no issues (0 silenced).
+pip check: No broken requirements found.
+```
+
+**Problemi riscontrati:** nessuno. Nessun rollback necessario.
+
+---
+
+### Run — 2026-07-08 — TASK-015 Consolidamento documentazione permessi
+
+**Agente:** Claude Code (esecuzione diretta, solo documentazione)
+**Task:** TASK-015
+**Branch:** task/documentale-ecn-permissions-resolver
+
+**Operazioni eseguite:**
+
+1. `docs/ai/PERMISSIONS_AUDIT.md`: aggiunta nota di aggiornamento
+   TASK-013/014 (gap G3 parzialmente chiuso: `can_create_ecn` migrata,
+   `can_view_ecn` deliberatamente non migrata per assenza di permission
+   code equivalente); riga G3 nella tabella gap aggiornata da "Media" a
+   "Parzialmente risolto (TASK-014)".
+2. `docs/ai/TASKS.md`: TASK-013/014/015 spostati in Completati, backlog
+   svuotato con nota esplicita sul perché `can_view_ecn` non è stata
+   migrata (decisione di prodotto, non task tecnico).
+3. `docs/ai/TESTING_STATUS.md`: non modificato in questo task (il
+   conteggio test 1210 è già documentato nell'entry TASK-014 di questo
+   RUN_LOG; nessuna sezione dedicata necessaria per un incremento di 2
+   test con causa già chiara).
+4. Nessuna modifica a codice applicativo.
+
+**Esito test:** invariato rispetto a TASK-014 (1210/1210 PASS, nessuna
+modifica applicativa in questo task).
+
+**Problemi riscontrati:** nessuno.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Backlog operativo `documentale-workcopy` (TASK-001→TASK-015) esaurito
+   di nuovo. `can_view_ecn` resta un bypass legacy intenzionale, non un
+   difetto da correggere senza decisione di prodotto.
+2. Candidato successivo: prova di deploy controllata su VM isolata
+   (`docs/ai/DEPLOYMENT_READINESS.md` §12), da pianificare come nuovo
+   task dedicato quando prioritario.
