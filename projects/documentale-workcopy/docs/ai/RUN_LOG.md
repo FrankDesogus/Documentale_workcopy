@@ -800,3 +800,71 @@ pip check: No broken requirements found.
 
 1. Procedere con TASK-011 (review deployment locale/VM, solo
    analisi/dry-run) dopo review/commit di questo task.
+
+---
+
+### Run — 2026-07-08 — TASK-011 Review deployment locale/VM
+
+**Agente:** Claude Code (esecuzione diretta, solo audit/dry-run sicuri)
+**Task:** TASK-011
+**Branch:** task/documentale-deployment-readiness
+
+**Operazioni eseguite:**
+
+1. Audit di `DEPLOY.md`, `README.md`, `AI_CONTEXT.md`,
+   `PROJECT_HANDOFF.md`, `manage.py`, `config/settings.py`,
+   `config/test_settings.py`, `config/wsgi.py`, `config/asgi.py`,
+   `.env.example` (solo chiavi), `requirements.txt`, `package.json`,
+   `tailwind.config.js`.
+2. Dry-run sicuri: `manage.py check` (0 problemi) e
+   `manage.py check --deploy` (6 warning, tutti attesi in ambiente di
+   test) con `config.test_settings` — nessun segreto reale coinvolto.
+3. Verificata esistenza di tutti i comandi citati in `DEPLOY.md`
+   (`migrate`, `collectstatic`, `createsuperuser`, `shell`) via
+   `manage.py help`, senza eseguirli.
+4. **Scoperto** comando custom `setup_document_groups`
+   (`documents/management/commands/setup_document_groups.py`),
+   idempotente, legge i 10 nomi gruppo dalle costanti `GROUP_*` del
+   codice — non documentato in `DEPLOY.md`, che usava invece uno snippet
+   Python manuale (già corretto in TASK-010, ma comunque più fragile).
+5. **Corretto `DEPLOY.md` §5**: sostituito lo snippet manuale con
+   `python manage.py setup_document_groups`.
+6. Verificata coerenza `.env.example` ↔ `config/settings.py`: tutte le
+   26 chiavi lette da `config()` sono presenti in `.env.example`,
+   nessuna mancante o extra.
+7. Verificata assenza di `db.sqlite3`, `staticfiles/`, `.env` in questa
+   workcopy (nessun deploy/collectstatic/migrate mai eseguito).
+8. `media/` locale: contati 501 file (**nessun contenuto letto**);
+   lettura della sola nota `.gitkeep-note.txt`, che dichiara che il
+   contenuto reale originale (235 file) fu rimosso in onboarding e non
+   va mai letto da un agente AI — segnalato in
+   `docs/ai/DEPLOYMENT_READINESS.md` come osservazione, nessuna azione.
+9. Creato `docs/ai/DEPLOYMENT_READINESS.md` (report completo: stack,
+   comandi, variabili richieste, checklist VM locale e pre-deploy,
+   rischi, errori documentali, cosa verificato/non eseguito,
+   raccomandazioni TASK-012, acceptance criteria per una prova deploy
+   futura controllata).
+10. Nessun deploy reale, nessun server avviato, nessuna migrazione
+    eseguita, nessun segreto letto, nessuna modifica a codice
+    applicativo o `requirements.txt`.
+
+**Esito test (`scripts/test.sh`):**
+
+```
+1208/1208 PASS (invariato)
+pip check: No broken requirements found.
+manage.py check: 0 problemi
+manage.py check --deploy: 6 warning attesi (ambiente di test)
+```
+
+**Problemi riscontrati:**
+
+- Nessuno bloccante. Vedi `docs/ai/DEPLOYMENT_READINESS.md` §7 per i
+  rischi non bloccanti individuati (compatibilità PostgreSQL mai
+  verificata, procedura mai eseguita end-to-end).
+
+**Prossimo passo per l'operatore umano:**
+
+1. Procedere con TASK-012 (hardening configurazione test, facoltativo)
+   o, se prioritario, pianificare una prova di deploy controllata su VM
+   isolata seguendo `docs/ai/DEPLOYMENT_READINESS.md` §12.

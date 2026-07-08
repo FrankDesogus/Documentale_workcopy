@@ -80,24 +80,18 @@ python manage.py createsuperuser
 
 ## 5. Creazione gruppi applicativi
 
-Nomi esatti attesi dal codice (`documents/permissions.py`,
-`ecn/permissions.py`) — attenzione a maiuscole/minuscole e singolare
-(es. `Quality Manager`, non `Quality Managers`: un nome errato crea un
-gruppo Django inutilizzato che non concede alcun permesso):
+Usare il comando dedicato (idempotente, legge i nomi direttamente dal
+codice — `documents/permissions.py`, `ecn/permissions.py` — quindi non
+può disallinearsi):
 
 ```bash
-python manage.py shell -c "
-from django.contrib.auth.models import Group
-for name in [
-    'Document Readers', 'Document Authors', 'Document Approvers',
-    'Document Auditors', 'Document Managers',
-    'Quality Manager', 'Quality Operator', 'Direction',
-    'ECN Proposers', 'Change Control Board',
-]:
-    Group.objects.get_or_create(name=name)
-print('Gruppi creati.')
-"
+python manage.py setup_document_groups
 ```
+
+Crea tutti e 10 i gruppi applicativi (`Document Readers`, `Document
+Authors`, `Document Approvers`, `Document Auditors`, `Document Managers`,
+`Quality Manager`, `Quality Operator`, `Direction`, `ECN Proposers`,
+`Change Control Board`) con una breve descrizione per ciascuno.
 
 ---
 
