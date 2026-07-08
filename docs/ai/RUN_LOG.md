@@ -1111,3 +1111,73 @@ media/ reale: invariata (1 file, solo la nota) prima e dopo la suite
 3. `can_view_ecn` resta aperta come decisione di prodotto (nuovo
    permission code o accettazione esplicita del comportamento attuale),
    non un task tecnico Station.
+
+---
+
+### Run — 2026-07-09 — TASK-017 Validazione flusso DEMO end-to-end
+
+**Agente:** Claude Code (esecuzione diretta, solo demo isolata)
+**Task:** TASK-017
+**Branch:** task/documentale-demo-flow-validation
+
+**Cambio di priorità dell'operatore:** focus su presentabilità demo,
+non su permessi fini/deploy/PostgreSQL/refactor `can_view_ecn`.
+
+**Operazioni eseguite:**
+
+1. Analisi: scoperto che esiste già un'infrastruttura demo completa
+   (`documents/management/commands/demo_company.py`,
+   `demo_full.py`) con un utente `supervisor_demo` **progettato
+   esplicitamente per presentazioni a singolo accesso** (docstring del
+   comando). Nessuna nuova fixture necessaria.
+2. Creato `config/demo_settings.py` (isolato: DB SQLite file in
+   `.demo/db.sqlite3`, media in `.demo-media/`, nessun `.env`), sul
+   modello di `config/test_settings.py`. `.gitignore` aggiornato.
+3. Eseguito `migrate` + `demo_full --reset --no-email` sul DB demo
+   isolato: 2 progetti, 8 cartelle, 13 documenti, 19 versioni, 18
+   richieste approvazione, 8 ECN (tutti e 6 gli stati), 86 voci audit
+   log.
+4. Creato `demo_admin` (superuser, credenziali fornite
+   dall'operatore) in aggiunta a `supervisor_demo`/`admin_demo` già
+   esistenti.
+5. **Validazione con azioni reali** (non solo lettura codice) via
+   `manage.py shell`: `demo_admin` (nessun gruppo, nessuna membership
+   cartella) ha creato un documento, una revisione, inviato in
+   approvazione assegnando sé stesso, approvato (bypass superuser in
+   `approvals/services.py`), verificato `can_create_ecn`/`can_view_ecn`
+   (entrambi `True` via bypass superuser), creato/popolato/emesso uno
+   snapshot `ProjectRevision`. Tutte le azioni hanno generato voci
+   `AuditLog` corrette.
+6. **Gap scoperto**: `demo_full` non crea `ProjectRevision` di esempio
+   — colmato manualmente in validazione, segnalato come miglioria non
+   bloccante nel report.
+7. Avviato `runserver 127.0.0.1:8765 --settings=config.demo_settings`
+   (solo loopback), verificate con `curl` le pagine principali
+   (login, dashboard, documents, projects, ecn — tutte 200 dopo login,
+   nessun 500), **fermato subito dopo**.
+8. Creato `docs/ai/DEMO_FLOW_VALIDATION.md` (20 sezioni). Nessuna
+   modifica a `ecn/permissions.py` (`can_view_ecn` inclusa), modelli,
+   migrazioni.
+
+**Esito test (`scripts/test.sh`, `config.test_settings` — non toccato
+dal lavoro demo):**
+
+```
+Ran 1210 tests in 488.201s — OK
+System check identified no issues (0 silenced).
+pip check: No broken requirements found.
+media/ reale: invariata (1 file) — il lavoro demo usa .demo-media/, mai media/
+.test-media/: assente dopo il run (ripulita)
+```
+
+**Problemi riscontrati:** nessun bug bloccante per la demo. Unico gap:
+`demo_full` non esercita `ProjectRevision` (non bloccante, colmato
+manualmente).
+
+**Prossimo passo per l'operatore umano:**
+
+1. Demo verificata presentabile con un singolo account superuser
+   (`demo_admin` o `supervisor_demo`) — nessuna azione Station
+   aggiuntiva necessaria prima di una presentazione.
+2. Migliorie facoltative non bloccanti in
+   `docs/ai/DEMO_FLOW_VALIDATION.md` §19.
