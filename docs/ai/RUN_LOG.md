@@ -1052,3 +1052,62 @@ modifica applicativa in questo task).
 2. Candidato successivo: prova di deploy controllata su VM isolata
    (`docs/ai/DEPLOYMENT_READINESS.md` §12), da pianificare come nuovo
    task dedicato quando prioritario.
+
+---
+
+### Run — 2026-07-08 — TASK-016 Piano prova deploy controllata
+
+**Agente:** Claude Code (esecuzione diretta, solo documentazione +
+dry-run sicuri)
+**Task:** TASK-016
+**Branch:** task/documentale-deploy-rehearsal-plan
+
+**Operazioni eseguite:**
+
+1. Riverificati (non solo riletti) `requirements.txt` (8 pacchetti,
+   coerente con TASK-009), chiavi `.env.example` (26, coerenti con
+   `config/settings.py`), presenza `static/css/tailwind.css` (58 KB),
+   assenza `db.sqlite3`/`staticfiles/`/`.env` nella workcopy.
+2. Dry-run sicuri: `manage.py check` (0 problemi),
+   `manage.py check --deploy` (6 warning attesi in ambiente di test,
+   invariati rispetto a TASK-011), `manage.py help
+   setup_document_groups` (comando confermato disponibile e idempotente).
+3. Creato `docs/ai/DEPLOY_REHEARSAL_PLAN.md` (20 sezioni): scopo, cosa
+   NON viene fatto, ambiente consigliato (VM isolata, DB/media vuoti,
+   `.env` di prova creato **solo** dall'operatore umano), prerequisiti,
+   checklist pre-flight, procedura dry-run locale, procedura VM isolata,
+   comandi da eseguire manualmente, comandi vietati per un agente AI,
+   verifiche post-installazione, bootstrap gruppi
+   (`setup_document_groups`), static/Tailwind, database/migrazioni
+   (solo DB vuoto isolato), media/privacy (richiamo TASK-012), account
+   demo/test, criteri di successo/stop, rollback/cleanup, rischi
+   residui, prossimo task suggerito.
+4. Aggiunta nota di rimando in `docs/ai/DEPLOYMENT_READINESS.md` §12
+   verso il nuovo piano.
+5. Nessuna modifica a codice applicativo. `can_view_ecn` non toccata
+   (non pertinente a questo task). Nessun `.env` creato/letto, nessun
+   server avviato, nessuna migrazione, nessun segreto letto.
+
+**Esito test (`scripts/test.sh`):**
+
+```
+Ran 1210 tests in 489.684s — OK
+System check identified no issues (0 silenced).
+pip check: No broken requirements found.
+media/ reale: invariata (1 file, solo la nota) prima e dopo la suite
+.test-media/: assente dopo il run (ripulita)
+```
+
+**Problemi riscontrati:** nessuno.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Backlog operativo `documentale-workcopy` (TASK-001→TASK-016) esaurito
+   di nuovo.
+2. Se prioritario: eseguire manualmente la prova di deploy pianificata
+   in `docs/ai/DEPLOY_REHEARSAL_PLAN.md`, in una VM/container isolato —
+   richiede azione umana diretta (creazione `.env`, `createsuperuser`),
+   non delegabile a un agente AI.
+3. `can_view_ecn` resta aperta come decisione di prodotto (nuovo
+   permission code o accettazione esplicita del comportamento attuale),
+   non un task tecnico Station.
