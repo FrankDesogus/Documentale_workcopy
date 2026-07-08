@@ -1181,3 +1181,57 @@ manualmente).
    aggiuntiva necessaria prima di una presentazione.
 2. Migliorie facoltative non bloccanti in
    `docs/ai/DEMO_FLOW_VALIDATION.md` §19.
+
+---
+
+### Run — 2026-07-09 — TASK-018 Kit operativo demo ripetibile
+
+**Agente:** Claude Code (esecuzione diretta)
+**Task:** TASK-018
+**Branch:** task/documentale-demo-operator-kit
+
+**Operazioni eseguite:**
+
+1. Merge fast-forward di `task/documentale-demo-flow-validation`
+   (TASK-017) su `main` (627d6d5), confermato con regressioni
+   Station + suite completa (1210/1210 PASS) prima di procedere.
+2. Colmato il gap segnalato in TASK-017: aggiunto
+   `_scenario_project_snapshot` a
+   `documents/management/commands/demo_full.py` (unico file di codice
+   applicativo toccato) — crea/popola/emette uno snapshot
+   `ProjectRevision` per `PRJ-DEMO-001`, stesso pattern idempotente
+   degli altri scenari del comando. Verificato: nessun test esistente
+   copre `demo_full` (solo `demo_company`), rischio di regressione
+   minimo.
+3. Verificato con esecuzione reale: `demo_full --reset --no-email` crea
+   lo snapshot senza errori; rieseguito senza `--reset` → scenario
+   correttamente saltato (idempotenza confermata).
+4. Creato `docs/ai/DEMO_OPERATOR_GUIDE.md`: runbook breve e pratico
+   (creazione DB demo, creazione account, popolamento dati, avvio/stop
+   server, percorso demo passo-passo, chiarimenti progetto/ECN, cosa
+   non è oggetto della demo, troubleshooting).
+5. Nessuna modifica a `can_view_ecn`, permessi avanzati, modelli,
+   migrazioni, `config/demo_settings.py` (già corretto in TASK-017).
+   Nessuna nuova dipendenza.
+
+**Esito test (`scripts/test.sh`, `config.test_settings` — non toccato
+dal lavoro demo):**
+
+```
+Ran 1210 tests in 487.301s — OK (invariato)
+System check identified no issues (0 silenced).
+pip check: No broken requirements found.
+media/ reale: invariata (1 file)
+.test-media/: assente
+.demo/: correttamente ignorata da git
+nessun server rimasto attivo
+```
+
+**Problemi riscontrati:** nessuno.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Demo ripetibile e documentata (`docs/ai/DEMO_OPERATOR_GUIDE.md`),
+   nessuna azione Station bloccante residua.
+2. Task tecnici già rinviati (refactor `can_view_ecn`, permessi
+   avanzati, deploy reale) restano backlog futuro, non urgenti.
