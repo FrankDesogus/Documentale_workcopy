@@ -16,7 +16,9 @@
 
 ## In corso
 
-_Nessun task in corso._
+| ID | Titolo | Agente |
+| -- | ------ | ------ |
+| TASK-021 | Archivio: storico completo documenti (permesso view_history) + dettaglio compatto altrove | Claude Code |
 
 ## Backlog
 
@@ -2140,6 +2142,143 @@ checkpoint (rimandata su richiesta esplicita dell'operatore).
 `approvals/`, `ecn/`, `projects/`, `workspace/` elencano documenti per
 codice senza mostrare il tipo — decisione dell'operatore di non
 espanderli in questo task.
+
+---
+
+### TASK-021 — Archivio: storico completo + dettaglio compatto altrove — Claude Code
+
+#### Obiettivo
+
+Rendere reale la sezione "Archivio" (oggi stub da TASK-019): deve
+permettere di aprire un documento e vederne lo **storico completo**
+(tutte le revisioni, tutte le ECN collegate, storico eventi/audit).
+Questo storico completo deve essere visibile **solo da lì**. In tutte
+le altre viste (Documenti, Cartelle, Progetti, workspace, ecc.), il
+dettaglio documento (`document_detail.html`) deve mostrare solo un
+riepilogo: l'ultimo approvatore della revisione corrente (già così
+oggi) e l'ultimo ECN con i suoi dettagli — non più le tabelle complete
+di tutte le revisioni e di tutti gli ECN.
+
+#### Decisioni dell'operatore (chiarite prima di iniziare)
+
+1. **Chi accede ad Archivio**: stessi utenti che oggi possono già
+   vedere lo storico (`can_view_audit`: superuser, Document
+   Manager/Auditor/Quality Manager, o permesso `view_history` sulla
+   cartella del documento) — nessun cambio al modello di sicurezza,
+   solo riorganizzazione della UI.
+2. **Ambito lista Archivio**: tutti gli stati documento (attivo,
+   obsoleto, archiviato — non solo attivo+approvato come la lista
+   Documenti normale). Le bozze/rifiutati privati di **altri utenti**
+   restano visibili solo al loro autore e al superuser — regola già
+   esistente (`_user_is_draft_author`), non derogata nemmeno per
+   Manager/Auditor/Quality Manager (vedi commento esplicito in
+   `documents/permissions.py`: "Nessun altro — inclusi Manager,
+   Auditor, Quality Manager, staff — può vederle").
+
+#### Analisi del codice esistente (riuso, non reinvenzione)
+
+- `can_view_document` (`documents/permissions.py`) già distingue
+  "documento pubblicato" da "sola bozza" e già nega l'accesso a
+  bozze/rifiutati altrui anche a ruoli privilegiati.
+- `can_view_version` già gestisce il caso `SUPERSEDED` con la stessa
+  regola `view_history` per-cartella che serve qui.
+- `document_detail` (view) già calcola `show_history =
+  can_view_audit(...)` e già filtra `versions` con `can_view_version`
+  — questa logica si sposta in Archivio, non si riscrive.
+- `doc_ecns` oggi è **sempre** la lista completa (non gated da
+  `show_history`): va confinata ad Archivio; nel dettaglio compatto
+  resta solo il più recente tra quelli visibili all'utente
+  (`can_view_ecn`, invariato).
+
+#### Scope
+
+- `documents/permissions.py`: nuova `can_view_archived_document(user,
+  document)` (stessa struttura di `can_view_document`, con
+  `view_history` al posto di `read_published`/membership per gli
+  utenti non privilegiati; `document_was_published` invece di
+  `document_is_published`, per includere obsoleti/archiviati/superati
+  che furono approvati almeno una volta) e `can_view_archive(user)`
+  (gate d'accesso alla sezione: privilegiati globali o almeno una
+  cartella con `view_history`).
+- `projects/permissions.py`: nuova `get_history_visible_folder_ids(user)`
+  (stesso pattern di `get_visible_folder_ids`/`get_writable_folder_ids`,
+  permesso `view_history`).
+- `documents/templatetags/nav_tags.py`: nuovo `user_can_view_archive`
+  (stesso pattern di `user_can_quality_workspace`).
+- `config/urls.py` + `documents/views.py`: `archive_placeholder` →
+  `archive_document_list` (lista completa, ricerca/filtri: testo,
+  cartella, tipo con optgroup, **nuovo filtro stato**) e nuova
+  `archive_document_detail` (tutte le revisioni, tutte le ECN, storico
+  eventi, sanatoria — stessa query logic di `document_detail` oggi,
+  gate `can_view_archived_document`).
+- `templates/documents/archive_document_list.html` (sostituisce
+  `archive_placeholder.html`), `templates/documents/archive_document_detail.html`
+  (nuovo).
+- `templates/documents/document_detail.html`: rimuovere sezione
+  "Tutte le revisioni" e "Storico eventi"; sezione ECN da tabella
+  completa a singola card con l'ECN più recente visibile
+  (codice, titolo, stato, proponente, data, link al dettaglio ECN).
+  Sezione "Approvazione revisione corrente" **invariata** (già mostra
+  solo l'ultima). Sezione sanatoria (`historical_records`) **invariata**
+  (fuori dallo scope esplicito di questo task).
+- `templates/base.html`: sezione sidebar "Archivio" reale (non più
+  "Prossimamente"/"in arrivo"), visibile solo se `user_can_view_archive`.
+- `documents/tests.py`: sostituire `ArchivePlaceholderTests` (il
+  placeholder non esiste più) con test per lista/dettaglio Archivio
+  (permessi, contenuto) e aggiornare eventuali test che assumevano la
+  tabella "Tutte le revisioni"/ECN completo nel `document_detail`
+  compatto.
+
+#### File coinvolti
+
+- Modificare: `documents/permissions.py`, `projects/permissions.py`,
+  `documents/templatetags/nav_tags.py`, `config/urls.py`,
+  `documents/views.py`, `templates/documents/document_detail.html`,
+  `templates/base.html`, `documents/tests.py`.
+- Creare: `templates/documents/archive_document_list.html`,
+  `templates/documents/archive_document_detail.html`.
+- Rimuovere: `templates/documents/archive_placeholder.html` (sostituito).
+- Non toccare: `Document.code`, modelli, migrazioni, `ecn/`,
+  `approvals/`, `auditlog/` (solo lettura).
+
+#### Acceptance criteria
+
+- [ ] Un utente con `can_view_audit` (es. `supervisor_demo`) vede la
+      voce "Archivio" in sidebar; un utente senza questo permesso non
+      la vede.
+- [ ] La lista Archivio mostra documenti in tutti gli stati (attivo,
+      obsoleto, archiviato), con ricerca/filtri (testo, cartella,
+      tipo, stato).
+- [ ] Bozze/rifiutati di **altri utenti** non appaiono in Archivio per
+      un utente che non ne è l'autore (salvo superuser).
+- [ ] Aprire un documento da Archivio mostra tutte le revisioni, tutti
+      gli ECN collegati, lo storico eventi.
+- [ ] Aprire lo stesso documento da `document_detail` (Documenti,
+      Cartelle, Progetti) mostra solo l'ultimo approvatore e l'ultimo
+      ECN — non la tabella revisioni né lo storico eventi.
+- [ ] Un utente senza `view_history` sulla cartella del documento non
+      può raggiungere la vista Archivio di quel documento (404), anche
+      conoscendo l'URL diretto.
+- [ ] `manage.py test documents --keepdb --failfast` verde.
+
+#### Test richiesti
+
+```bash
+cd projects/documentale-workcopy
+PATH="/c/Users/riccardo.dibiagio/PycharmProjects/AI-Station-documentale/.venv/Scripts:$PATH" \
+  python manage.py test documents --keepdb --failfast --settings=config.test_settings
+```
+
+Suite completa rimandata a un checkpoint successivo, come per i task
+precedenti.
+
+#### Guardrail
+
+- Non modificare `Document.code`, migrazioni, schema.
+- Non derogare la regola bozze/rifiutati privati (solo autore +
+  superuser) per nessun ruolo, nemmeno in Archivio.
+- Non toccare `ecn/permissions.py`, `approvals/`, modelli.
+- No push, no merge, no `reset --hard`, no `git clean`.
 
 ---
 
