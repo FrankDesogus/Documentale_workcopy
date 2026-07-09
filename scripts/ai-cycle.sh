@@ -8,6 +8,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+# Cursor CLI installato su Windows espone solo agent.cmd (nessun eseguibile
+# "agent" nudo risolvibile da Git Bash): usarlo come fallback quando "agent"
+# non è sul PATH, senza cambiare nulla su Linux/macOS dove "agent" esiste.
+AGENT_CMD="agent"
+if ! command -v agent >/dev/null 2>&1 && command -v agent.cmd >/dev/null 2>&1; then
+	AGENT_CMD="agent.cmd"
+fi
+
 usage() {
 	cat <<EOF
 Usage: $(basename "$0") --project NAME|PATH --task ID --dry-run
@@ -152,7 +160,7 @@ run_cycle() {
 	echo ""
 
 	echo "[STEP 4] Lancio Cursor Agent (timeout 300s)..."
-	if ! (cd "${REPO_ROOT}" && timeout 300s agent --trust --print "$(cat "${cursor_prompt_file}")"); then
+	if ! (cd "${REPO_ROOT}" && timeout 300s "${AGENT_CMD}" --trust --print "$(cat "${cursor_prompt_file}")"); then
 		printf "ERROR: Cursor Agent fallito o timeout.\n" >&2
 		exit 1
 	fi
