@@ -4,6 +4,9 @@
 # L'operatore deve revisionare l'output prima di procedere.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
 usage() {
 	cat <<EOF
 Usage: $(basename "$0") --project-name NAME --title TITLE --request TEXT [--output FILE]
@@ -133,7 +136,7 @@ Poi completare manualmente:
 Incollare il testo seguente a Claude Code per avviare lo scaffold e la definizione dei task:
 
 \`\`\`
-Sei Claude Code nel repository: ~/AI-Software-Station
+Sei Claude Code nel repository: ${REPO_ROOT}
 
 Crea lo scaffold per un nuovo progetto:
 

@@ -1,0 +1,5 @@
+# Gli script bash della Station sono scritti e usati anche su Linux/macOS.
+# Forzare LF indipendentemente da core.autocrlf locale evita che un checkout
+# Windows introduca CRLF che rompe shebang, heredoc e confronti di stringa
+# quando lo stesso repo viene clonato/eseguito su Linux, macOS o WSL.
+*.sh text eol=lf

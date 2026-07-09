@@ -50,14 +50,14 @@ generate_prompt() {
 
 | Campo | Valore |
 |-------|--------|
-| **Repository** | \`~/AI-Software-Station\` |
+| **Repository** | \`${REPO_ROOT}\` |
 | **Branch** | \`${branch}\` |
 | **Progetto** | \`${project_path}\` |
 | **Task** | \`${task_id}\` |
 
 ---
 
-## Sei Claude Code nel repository: ~/AI-Software-Station
+## Sei Claude Code nel repository: ${REPO_ROOT}
 
 Branch corrente: \`${branch}\`
 Progetto da revisionare: \`${project_path}\`
