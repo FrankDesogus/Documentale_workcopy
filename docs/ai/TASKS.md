@@ -54,6 +54,7 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | TASK-017 | Validazione flusso DEMO end-to-end | — | 2026-07-09 |
 | TASK-018 | Kit operativo demo ripetibile (runbook + scenario ProjectRevision) | — | 2026-07-09 |
 | TASK-019 | Stub pagina "Archivio" + voce sidebar (collaudo flusso Station) | — | 2026-07-09 |
+| TASK-020 | Tipo Documento come menu a cascata (dipendente da Categoria) + suffisso di riferimento | — | 2026-07-09 |
 
 ---
 
@@ -1958,6 +1959,187 @@ solo il wrapper `.cmd`). Dettagli completi in `docs/ai/RUN_LOG.md`
 (entry 2026-07-09 15:36). `REVIEW_LOG.md` non esiste in questo
 progetto (mai creato nei 18 task precedenti): la review è tracciata
 in `RUN_LOG.md`, coerente con la convenzione già in uso qui.
+
+### TASK-020 — Tipo Documento come menu a cascata + suffisso di riferimento — Claude Code
+
+#### Obiettivo
+
+Trasformare `Document.document_type` da testo libero a **vocabolario
+controllato**, con le scelte disponibili dipendenti dalla `Category`
+del documento (`QUALITY` → "documenti di sistema", `PROJECT` →
+"documenti di progetto"). Il tipo diventa un campo sempre visibile,
+in modo efficace, sia nel dettaglio documento sia nelle liste.
+
+#### Fonte dei dati
+
+Due elenchi forniti dall'operatore (file esterni al repository, non
+copiati qui per non versionare materiale aziendale non necessario):
+
+- **"documenti di sistema"** (categoria `QUALITY`): 35 tipi, es.
+  `CNTY` — Certificato di Conformità, `SYSP` — Procedure di Sistema.
+- **"documenti di progetto"** (categoria `PROJECT`): 44 tipi, es.
+  `ATP_` — Procedura dei test di Accettazione, `MCHD` — Disegno
+  Meccanico.
+
+Le due liste **non si sovrappongono** (nessun acronimo in comune) e
+corrispondono esattamente alla `Document.Category` già esistente nel
+modello (`documents/models.py`).
+
+#### Decisioni dell'operatore (chiarite prima di iniziare)
+
+1. **Cascata per categoria**: il menu Tipo Documento mostra solo i
+   tipi pertinenti alla Categoria selezionata (non un'unica lista
+   piatta con tutti e 79 i tipi).
+2. **Codice**: in questo giro il tipo/acronimo resta **solo un
+   riferimento visivo** — non viene generata/alterata automaticamente
+   la generazione del codice documento (oggi `Document.code` è al
+   100% testo libero, nessuna generazione automatica esiste nel
+   codice). La logica di un eventuale suffisso nel codice si valuta
+   in un task futuro separato, dopo aver visto il tipo in uso.
+3. **Anomalie nei dati sorgente**, normalizzate con criterio
+   ragionevole (non modificando i file sorgente esterni):
+   - `SCTY` compare due volte nell'elenco sistema con nomi diversi
+     ("Manuale Security" / "Procedura Security") — mantenute come
+     **due voci selezionabili distinte con lo stesso acronimo**
+     `SCTY`. Limite noto e accettato: una volta salvato, il valore
+     memorizzato è `SCTY` in entrambi i casi — non si può
+     distinguere a posteriori quale delle due etichette è stata
+     scelta (limite della sorgente dati, non introdotto da questo
+     task).
+   - `SDD__` (doppio underscore, unico caso nell'elenco progetto)
+     normalizzato a `SDD_`, coerente con lo schema a 4 caratteri
+     degli altri acronimi brevi (`ATP_`, `ECP_`, `DDT_`, ecc.).
+
+#### Scope
+
+- Nuovo modulo `documents/document_types.py`: due liste di scelte
+  `(acronimo, "acronimo — Nome Italiano")` (`SYSTEM_DOCUMENT_TYPE_CHOICES`,
+  `PROJECT_DOCUMENT_TYPE_CHOICES`, unione in un terzo elenco per il
+  campo modello) + helper `document_type_choices_for_category(category)`.
+  Scelte semplici (liste di tuple), non `TextChoices`/enum, per
+  permettere il duplicato `SCTY` (un `Enum` Python non lo consente
+  senza diventare un alias silenzioso).
+- `Document.document_type`: aggiungere `choices=` (unione delle due
+  liste), adeguare `max_length` se necessario. Restano invariati
+  `blank=True` (opzionale) e la non modificabilità dopo la creazione
+  (`document_type` non è in `DocumentMetadataEditForm` oggi e questo
+  task non lo aggiunge). Nuova migrazione Django (solo metadata
+  `choices`, nessuna modifica reale allo schema/colonna).
+- `DocumentCreateForm.document_type`: da `CharField` a `ChoiceField`
+  con le scelte unite; `clean()` verifica che il tipo scelto sia
+  coerente con la `category` inviata nello stesso submit (guardia
+  server-side indipendente dal JS).
+- `templates/documents/new_document.html`: select `document_type`
+  ripopolato via JavaScript vanilla (nessuna libreria nuova) quando
+  cambia la select `category`, coerente con lo stile già presente nel
+  progetto (niente React, niente HTMX se non necessario).
+- `templates/documents/document_detail.html`: mostrare tipo in modo
+  prominente (badge acronimo + nome esteso), stile coerente con i
+  badge già presenti.
+- `templates/documents/document_list.html`: colonna tabella con badge
+  acronimo (spazio limitato → solo acronimo, tooltip/title con nome
+  esteso); filtro di ricerca da input libero a `<select>` con
+  `<optgroup>` per categoria (Qualità / Progetto).
+- Comandi demo (`demo_workflow.py`, `demo_company.py`,
+  `demo_full.py`): oggi passano stringhe italiane generiche
+  ("Procedura", "Modulo", ecc.) che non corrispondono a nessun nuovo
+  acronimo — rimappate a valori validi coerenti con categoria/contesto
+  di ciascuno scenario. Dati demo isolati, nessun rischio.
+- **Non tocca**: generazione/validazione formato di `Document.code`,
+  `DocumentMetadataEditForm` (tipo resta non modificabile dopo la
+  creazione), permessi, modelli di `approvals`/`ecn`/`projects`.
+
+#### File coinvolti
+
+- Creare: `documents/document_types.py`,
+  `documents/migrations/00XX_document_type_choices.py`.
+- Modificare: `documents/models.py`, `documents/forms.py`,
+  `templates/documents/new_document.html`,
+  `templates/documents/document_detail.html`,
+  `templates/documents/document_list.html`,
+  `documents/management/commands/demo_workflow.py`,
+  `documents/management/commands/demo_company.py`,
+  `documents/management/commands/demo_full.py`,
+  `documents/tests.py`.
+
+#### Acceptance criteria
+
+- [ ] Creazione documento: Tipo Documento è un menu a tendina, non
+      più testo libero; le opzioni cambiano in base alla Categoria
+      selezionata.
+- [ ] Submit con tipo incoerente rispetto alla categoria (bypassando
+      il JS) viene rifiutato dal form con errore di validazione.
+- [ ] `document_detail.html` mostra sempre il tipo (acronimo + nome
+      esteso) quando presente.
+- [ ] `document_list.html` mostra il tipo in ogni riga (badge
+      acronimo) e il filtro è un select con optgroup per categoria.
+- [ ] I comandi demo (`demo_full --reset` incluso) girano senza
+      errori con i nuovi valori.
+- [ ] Test esistenti che postano `document_type` con valori liberi
+      (`''`, `'procedure'`) aggiornati a valori validi.
+- [ ] Nuovi test: coerenza categoria/tipo nel form, visualizzazione
+      tipo in dettaglio e lista.
+- [ ] `manage.py test documents --keepdb --failfast` verde.
+- [ ] Nessuna modifica a `Document.code`, permessi, altre app.
+
+#### Test richiesti
+
+```bash
+cd projects/documentale-workcopy
+PATH="/c/Users/riccardo.dibiagio/PycharmProjects/AI-Station-documentale/.venv/Scripts:$PATH" \
+  python manage.py test documents --keepdb --failfast --settings=config.test_settings
+```
+
+Suite completa (`scripts/test.sh`, ~60-70 minuti su questo hardware)
+**rimandata a un checkpoint successivo**, su richiesta esplicita
+dell'operatore — non eseguirla ad ogni singola modifica.
+
+#### Guardrail
+
+- Non modificare `Document.code`, generazione/validazione codice.
+- Non rendere `document_type` modificabile dopo la creazione (fuori
+  scope, non richiesto).
+- Non toccare permessi, `ecn/`, `approvals/`, `projects/` se non per
+  gli aggiornamenti ai comandi demo elencati.
+- Non installare pacchetti, non accedere alla rete.
+- No push, no merge, no `reset --hard`, no `git clean`.
+
+#### Note operative
+
+Task implementato direttamente da Claude Code (non via Cursor Agent):
+la logica di normalizzazione dei dati sorgente (SCTY, SDD__) richiede
+lettura diretta dei due allegati originali, meglio gestita qui che
+ri-spiegata in un prompt.
+
+#### Esito (2026-07-09)
+
+Implementato esattamente lo scope previsto. `documents/document_types.py`
+nuovo modulo con le due liste (35 tipi sistema, 44 tipi progetto, liste
+di tuple non `TextChoices` per permettere il duplicato `SCTY`).
+`Document.document_type` ora con `choices=` (migrazione
+`0006_alter_document_document_type`, solo metadata). `DocumentCreateForm`
+con select dipendente da categoria (widget custom `DocumentTypeSelect`
+con `data-category` per opzione) + validazione server-side incrociata in
+`clean()`. `new_document.html` con cascata via JS vanilla (nessuna
+libreria nuova). Badge `.badge-doctype` (nuova classe CSS, Tailwind
+ricompilato) mostrato in `document_detail.html` (header + meta) e
+`document_list.html` (colonna + filtro select con optgroup per
+categoria); filtro `doc_type` in `views.py` passato da `icontains` a
+match esatto. 7 comandi demo aggiornati ai nuovi valori. Verificato
+manualmente nel browser: cascata categoria→tipo funzionante, creazione
+documento reale con tipo `CNTY` salvata e visualizzata correttamente.
+
+**Test**: 5 test esistenti riverificati (nessuna modifica necessaria,
+`document_type=''` e valori liberi pre-esistenti restano innocui data la
+logica di `clean()`); 11 nuovi test aggiunti (`DocumentTypeFormValidationTests`,
+`DocumentTypeDisplayTests`). Suite app `documents` completa:
+**362/362 PASS** (~16 min). Suite globale non eseguita in questo
+checkpoint (rimandata su richiesta esplicita dell'operatore).
+
+**Nota fuori scope, segnalata non risolta**: altri ~13 template in
+`approvals/`, `ecn/`, `projects/`, `workspace/` elencano documenti per
+codice senza mostrare il tipo — decisione dell'operatore di non
+espanderli in questo task.
 
 ---
 

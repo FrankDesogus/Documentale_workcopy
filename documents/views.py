@@ -8,6 +8,7 @@ from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 
+from documents.document_types import PROJECT_DOCUMENT_TYPE_CHOICES, SYSTEM_DOCUMENT_TYPE_CHOICES
 from documents.models import Document, DocumentVersion
 from documents.permissions import (
     can_create_document,
@@ -263,7 +264,7 @@ def document_list(request):
 
     doc_type = request.GET.get('doc_type', '').strip()
     if doc_type:
-        qs = qs.filter(document_type__icontains=doc_type)
+        qs = qs.filter(document_type=doc_type)
 
     # Cartelle visibili per il filtro (solo quelle dell'utente)
     if user.is_superuser or is_document_manager(user) or is_document_auditor(user):
@@ -293,6 +294,8 @@ def document_list(request):
         'doc_type': doc_type,
         'filter_folders': filter_folders,
         'total_count': paginator.count,
+        'system_document_type_choices': SYSTEM_DOCUMENT_TYPE_CHOICES,
+        'project_document_type_choices': PROJECT_DOCUMENT_TYPE_CHOICES,
     })
 
 

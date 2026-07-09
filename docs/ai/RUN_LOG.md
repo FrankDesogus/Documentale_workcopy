@@ -1302,3 +1302,75 @@ System check identified no issues (0 silenced).
    ricordarsi il PATH ad ogni esecuzione, anche da `ai-cycle.sh`).
 3. Collaudo Station→Windows riuscito: il ciclo può considerarsi
    validato per un secondo task reale.
+
+---
+
+### Run — 2026-07-09 17:10 — TASK-020 Tipo Documento come vocabolario controllato
+
+**Agente:** Claude Code (implementazione diretta, non via Cursor Agent)
+**Task:** TASK-020 — Tipo Documento come menu a cascata (dipendente da
+Categoria) + suffisso di riferimento
+**Branch:** task/documentale-workcopy-tipo-documento
+
+**Operazioni eseguite:**
+
+1. Letti due allegati dell'operatore (elenco acronimi "documenti di
+   sistema", 35 tipi; elenco "documenti di progetto", 44 tipi) e
+   verificato che corrispondano esattamente a `Document.Category`
+   (QUALITY/PROJECT) già esistente, senza sovrapposizioni.
+2. Chiarite con l'operatore 3 decisioni prima di implementare: cascata
+   per categoria (sì), suffisso nel codice documento rimandato a task
+   futuro (solo riferimento visivo per ora), normalizzazione delle 2
+   anomalie nei dati sorgente (SCTY duplicato mantenuto come due voci
+   con lo stesso acronimo, SDD__ normalizzato a SDD_).
+3. Creato `documents/document_types.py` (liste di tuple, non
+   `TextChoices`, per supportare il duplicato SCTY e valori che
+   iniziano con cifra come `3DPD`/`3DAD`).
+4. `Document.document_type` con `choices=` (migrazione
+   `0006_alter_document_document_type`, solo metadata Django, nessun
+   impatto sullo schema DB).
+5. `DocumentCreateForm.document_type` da `CharField` a `ChoiceField`
+   con widget custom `DocumentTypeSelect` (annota `data-category` per
+   opzione) + validazione incrociata categoria/tipo in `clean()`.
+6. `new_document.html`: select ripopolato via JS vanilla in base alla
+   categoria scelta (nessuna libreria nuova).
+7. Nuova classe CSS `.badge-doctype` (+ variante dark), Tailwind
+   ricompilato (`npm install` + `npm run build`, node_modules non
+   presente inizialmente).
+8. `document_detail.html` e `document_list.html`: badge acronimo
+   visibile in header/riga tabella; filtro lista da testo libero a
+   select con optgroup per categoria; `views.py` filtro `doc_type` da
+   `icontains` a match esatto.
+9. 7 comandi demo (`demo_workflow.py`, `demo_company.py`,
+   `demo_full.py`) aggiornati dai vecchi valori liberi italiani ai
+   nuovi acronimi validi, coerenti con la categoria di ciascun
+   documento demo.
+10. Verifica manuale completa nel browser (demo server già attivo):
+    cascata categoria→tipo confermata via DOM (37 opzioni per QUALITY,
+    45 per PROJECT), badge visibili in lista e dettaglio, creazione
+    reale di un documento (`TEST-TIPO-001`, tipo `CNTY`) confermata via
+    shell Django.
+
+**Esito test (`manage.py test documents --keepdb --failfast`, non la suite globale su richiesta operatore):**
+
+```
+Ran 362 tests in 977.590s
+OK
+System check identified no issues (0 silenced).
+```
+
+**Problemi riscontrati:**
+
+- Nessuno bloccante. `node_modules/` non presente per il build
+  Tailwind: risolto con `npm install` (già documentato come step
+  standard in `README.md`).
+
+**Prossimo passo per l'operatore umano:**
+
+1. Review Claude Code + commit gated (`commit-if-approved.sh`).
+2. Valutare se estendere il badge Tipo Documento anche agli altri
+   template che elencano documenti (`approvals/`, `ecn/`, `projects/`,
+   `workspace/`) — non incluso in questo task su decisione esplicita
+   di scope.
+3. Suffisso del tipo nel codice documento: da valutare in un task
+   futuro separato, ora che il campo è in uso reale.

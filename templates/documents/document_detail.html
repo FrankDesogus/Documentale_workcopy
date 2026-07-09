@@ -18,6 +18,9 @@
   <div>
     <div class="flex items-center gap-3 mb-1 flex-wrap">
       <span class="text-2xl font-bold text-brand-900 font-mono">{{ document.code }}</span>
+      {% if document.document_type %}
+      <span class="badge badge-doctype" title="{{ document.get_document_type_display }}">{{ document.document_type }}</span>
+      {% endif %}
       {% if document.current_version %}
         {% with s=document.current_version.status %}
         {% if s == 'approved' %}
@@ -38,7 +41,7 @@
     </div>
     <h1 class="text-xl font-semibold text-gray-800">{{ document.title }}</h1>
     <div class="flex items-center gap-4 mt-2 text-sm text-gray-500 flex-wrap">
-      {% if document.document_type %}<span>{{ document.document_type }}</span>{% endif %}
+      {% if document.document_type %}<span>{{ document.get_document_type_display }}</span>{% endif %}
       <span>{{ document.get_category_display }}</span>
       <span>{{ document.owner.get_full_name|default:document.owner.username }}</span>
       {% if document.project_folder %}
