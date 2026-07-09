@@ -3,6 +3,7 @@ from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
 from documents.views import (
+    archive_placeholder,
     dashboard,
     download_version_file,
     edit_version,
@@ -16,6 +17,7 @@ from documents.views import (
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', dashboard, name='dashboard'),
+    path('archivio/', archive_placeholder, name='archive_placeholder'),
     path('workspace/my-work/', workspace_my_work, name='workspace_my_work'),
     path('workspace/quality/', workspace_quality, name='workspace_quality'),
     path('documents/', include('documents.urls')),

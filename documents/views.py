@@ -92,6 +92,11 @@ def dashboard(request):
 
 
 @login_required
+def archive_placeholder(request):
+    return render(request, 'documents/archive_placeholder.html')
+
+
+@login_required
 def workspace_my_work(request):
     """Workspace personale: bozze, approvazioni pendenti, decisioni CCB, ECN aperti."""
     from approvals.models import ApprovalRequest
