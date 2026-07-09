@@ -199,6 +199,7 @@ passare da un'ECN approvata — il ciclo di approvazione normale
 | Pagina 500 dopo `migrate` | DB demo corrotto/incompleto | Cancellare `.demo/` e rifare `migrate` + `demo_full --reset` |
 | Login fallisce | Password errata o utente non ancora creato | Rieseguire il comando di creazione `demo_admin` (§3) |
 | Server non raggiungibile | Porta occupata o server non avviato | Verificare `ps aux | grep runserver`, cambiare porta se necessario |
+| Windows: `UnicodeEncodeError: 'charmap' codec can't encode character...` durante `demo_full` (o altri comandi `manage.py` con output non-ASCII, es. `→`) | Console Windows di default usa il codepage cp1252, non UTF-8 | Impostare `PYTHONIOENCODING=utf-8` come variabile d'ambiente prima del comando (es. `set PYTHONIOENCODING=utf-8` in PowerShell/cmd, `export PYTHONIOENCODING=utf-8` in Git Bash). Non serve su Linux/macOS. |
 
 ---
 
