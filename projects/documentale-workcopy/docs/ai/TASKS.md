@@ -22,12 +22,15 @@ _Nessun task in corso._
 
 Backlog operativo derivato dalla roadmap di `docs/ai/PROJECT_ANALYSIS.md`
 (TASK-001), riordinato e raffinato in task piccoli e testabili.
-**Backlog operativo esaurito** (TASK-001→TASK-018 tutti completati).
-Demo presentabile e ripetibile con runbook dedicato
-(`docs/ai/DEMO_OPERATOR_GUIDE.md`). Nessun bug bloccante trovato.
+TASK-001→TASK-018 completati; demo presentabile e ripetibile con runbook
+dedicato (`docs/ai/DEMO_OPERATOR_GUIDE.md`). Nessun bug bloccante trovato.
+TASK-019 aggiunto per validare end-to-end il flusso Station su Windows
+(intake → prompt Cursor → test → review → commit gated) con una modifica
+volutamente minima e a rischio nullo.
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
+| TASK-019 | Stub pagina "Archivio" + voce sidebar (collaudo flusso Station) | Alta | Nessuna logica reale, solo per validare il ciclo completo |
 
 ## Completati
 
@@ -1831,6 +1834,112 @@ pip check
 - Nessuna dipendenza nuova.
 - Server solo su `127.0.0.1`, mai `0.0.0.0`, sempre fermato.
 - No push, no merge, no commit da parte dell'implementatore.
+
+---
+
+### TASK-019 — Stub pagina "Archivio" + voce sidebar — Cursor Agent
+
+#### Obiettivo
+
+Collaudare per la prima volta su Windows l'intero ciclo della Station
+(intake → prompt Cursor Agent → implementazione → test → review Claude
+Code → commit gated) con una modifica **volutamente minima e a rischio
+nullo**: una pagina placeholder "Archivio" (nessuna logica reale) più una
+voce nella sidebar sinistra che vi rimanda. Non è una richiesta di
+prodotto: serve solo a verificare che il flusso operativo funzioni davvero
+end-to-end su questo ambiente.
+
+#### Nota su naming (evitare ambiguità)
+
+La sidebar (`templates/base.html`) ha già una sezione intitolata
+**"Archivio"** che raggruppa i link esistenti Documenti/Cartelle/Progetti
+(`document_list`, `folder_list`, `project_list`). La nuova voce **non**
+va dentro quella sezione e **non** deve chiamarsi solo "Archivio" (rischio
+di confusione con quella sezione già esistente e con il concetto di
+documenti obsoleti/archiviati citato in `CLAUDE.md`). Usare invece una
+**nuova sezione sidebar** intitolata "Prossimamente" con una voce singola
+etichettata **"Archivio (in arrivo)"**, per segnalare senza ambiguità che
+è un placeholder e non una funzionalità reale.
+
+#### Scope
+
+- Nuova view minimale in `documents/views.py` (stesso pattern di
+  `dashboard`/`workspace_my_work`: `@login_required`, nessuna logica,
+  solo `render`).
+- Nuovo template `templates/documents/archive_placeholder.html`, estende
+  `base.html`, contenuto minimo: titolo "Archivio" + un paragrafo che
+  dichiara esplicitamente che la sezione è in costruzione e non ha ancora
+  funzionalità.
+- Nuova voce di `urlpatterns` in `config/urls.py` (URL `archivio/`, name
+  `archive_placeholder`), accanto alle altre view "di primo livello" già
+  importate da `documents.views` (stesso blocco di `dashboard`,
+  `workspace_my_work`, ecc.).
+- Nuova sezione "Prossimamente" in `templates/base.html`, dopo la sezione
+  "Sistema" esistente, con un solo link a `archive_placeholder`.
+- Un solo test nuovo in `documents/tests.py` (stesso stile dei test
+  esistenti su `dashboard`): utente autenticato → 200; utente anonimo →
+  redirect a login (comportamento standard di `@login_required`, non va
+  reinventato).
+- **Nessuna logica di archiviazione reale**: nessun modello nuovo, nessuna
+  migrazione, nessun collegamento a documenti/versioni/cartelle esistenti.
+- Non toccare nessun'altra view, modello, permesso o sezione di sidebar
+  già esistente.
+
+#### File coinvolti
+
+- Modificare: `documents/views.py` (nuova funzione), `config/urls.py`
+  (nuovo `path`), `templates/base.html` (nuova sezione sidebar),
+  `documents/tests.py` (nuovo test).
+- Creare: `templates/documents/archive_placeholder.html`.
+- Non toccare: modelli, migrazioni, `auditlog`, `approvals`, `ecn`,
+  `projects`, `accounts`, `notifications`, settings, `requirements.txt`.
+
+#### Acceptance criteria
+
+- [ ] GET su `/archivio/` da utente autenticato → 200, mostra il
+      template placeholder.
+- [ ] GET su `/archivio/` da utente anonimo → redirect a login (stesso
+      comportamento delle altre view `@login_required`).
+- [ ] Nuova sezione sidebar "Prossimamente" visibile con una sola voce
+      "Archivio (in arrivo)" che punta a `archive_placeholder`.
+- [ ] La sezione sidebar "Archivio" esistente (Documenti/Cartelle/
+      Progetti) resta invariata.
+- [ ] Nessuna migrazione generata (`manage.py makemigrations --check`
+      non deve proporre nulla di nuovo).
+- [ ] Nessuna modifica a modelli, permessi, view o URL esistenti.
+- [ ] Suite Django reale verde: 1210 test esistenti + il nuovo test,
+      tutti PASS.
+
+#### Test richiesti
+
+```bash
+projects/documentale-workcopy/scripts/test.sh
+```
+
+(usa il venv con le dipendenze già installate in
+`AI-Station-documentale/.venv`; verificare in particolare il nuovo test
+su `archive_placeholder` e che il totale salga a 1211 test PASS).
+
+#### Guardrail
+
+- Nessuna logica applicativa reale: è uno stub, non una feature.
+- Non modificare `ecn/permissions.py`, `projects/resolver.py`, modelli,
+  migrazioni, `requirements.txt`.
+- Non toccare la sezione sidebar "Archivio" esistente né i suoi link.
+- Non avviare il server in modo persistente; se serve verificare a video,
+  avviarlo solo su `127.0.0.1` e fermarlo subito dopo.
+- Non usare database reale, non leggere/riportare segreti.
+- No push, no merge, no `reset --hard`, no `git clean`.
+- No commit da parte dell'implementatore: il commit resta gated a valle
+  della review (`ai-review.sh` → `commit-if-approved.sh`).
+
+#### Note operative
+
+Task pensato esplicitamente per collaudare il flusso della Station su
+Windows, non per introdurre una funzionalità di archiviazione reale:
+qualunque estensione oltre al placeholder descritto è fuori scope e va
+proposta come task separato dopo aver visto funzionare questo primo
+ciclo.
 
 ---
 
