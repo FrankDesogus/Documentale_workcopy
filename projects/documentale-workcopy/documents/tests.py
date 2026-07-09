@@ -4157,3 +4157,20 @@ class ECNPolicyViewTests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn('show_create_revision', r.context)
         self.assertTrue(r.context['show_create_revision'])
+
+
+class ArchivePlaceholderTests(TestCase):
+    """Test per /archivio/ (stub placeholder)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('archive_user', password='pw')
+
+    def test_redirects_anonymous(self):
+        r = self.client.get(reverse('archive_placeholder'))
+        self.assertRedirects(r, '/accounts/login/?next=/archivio/', fetch_redirect_response=False)
+
+    def test_ok_for_authenticated(self):
+        self.client.force_login(self.user)
+        r = self.client.get(reverse('archive_placeholder'))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'Sezione in costruzione')

@@ -134,6 +134,14 @@
       </div>
       {% endif %}
 
+      <div class="sidebar-section border-t border-white/[0.06] pt-4">
+        <div class="sidebar-section-title">Prossimamente</div>
+        <a href="{% url 'archive_placeholder' %}"
+           class="sidebar-link {% if p == '/archivio/' %}sidebar-link-active{% endif %}">
+          <span>📦</span> Archivio (in arrivo)
+        </a>
+      </div>
+
     </nav>
     {% endwith %}
 

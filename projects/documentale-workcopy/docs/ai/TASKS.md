@@ -24,13 +24,11 @@ Backlog operativo derivato dalla roadmap di `docs/ai/PROJECT_ANALYSIS.md`
 (TASK-001), riordinato e raffinato in task piccoli e testabili.
 TASK-001→TASK-018 completati; demo presentabile e ripetibile con runbook
 dedicato (`docs/ai/DEMO_OPERATOR_GUIDE.md`). Nessun bug bloccante trovato.
-TASK-019 aggiunto per validare end-to-end il flusso Station su Windows
-(intake → prompt Cursor → test → review → commit gated) con una modifica
-volutamente minima e a rischio nullo.
+TASK-019 collaudo end-to-end del flusso Station su Windows (intake →
+prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
-| TASK-019 | Stub pagina "Archivio" + voce sidebar (collaudo flusso Station) | Alta | Nessuna logica reale, solo per validare il ciclo completo |
 
 ## Completati
 
@@ -55,6 +53,7 @@ volutamente minima e a rischio nullo.
 | TASK-016 | Piano prova deploy controllata | — | 2026-07-08 |
 | TASK-017 | Validazione flusso DEMO end-to-end | — | 2026-07-09 |
 | TASK-018 | Kit operativo demo ripetibile (runbook + scenario ProjectRevision) | — | 2026-07-09 |
+| TASK-019 | Stub pagina "Archivio" + voce sidebar (collaudo flusso Station) | — | 2026-07-09 |
 
 ---
 
@@ -1940,6 +1939,25 @@ Windows, non per introdurre una funzionalità di archiviazione reale:
 qualunque estensione oltre al placeholder descritto è fuori scope e va
 proposta come task separato dopo aver visto funzionare questo primo
 ciclo.
+
+#### Esito (2026-07-09)
+
+Primo collaudo end-to-end del flusso Station riuscito su Windows, con
+`ai-cycle.sh --run` e Cursor CLI (`agent.cmd`, autenticato via `agent
+login`). Implementato esattamente lo scope previsto: view
+`archive_placeholder`, URL `archivio/`, template
+`archive_placeholder.html`, sezione sidebar "Prossimamente" (sezione
+"Archivio" esistente invariata), 2 nuovi test
+(`ArchivePlaceholderTests`). Nessun file fuori scope toccato. Suite
+Django reale: **1212/1212 PASS** (1210 + 2 nuovi), ~67 minuti su
+questo hardware. Due correzioni infrastrutturali emerse durante il
+collaudo, non applicative: autenticazione Cursor CLI mancante alla
+prima esecuzione (risolta con `agent login`) e fallback `agent` →
+`agent.cmd` aggiunto a `ai-cycle.sh` (Cursor CLI su Windows espone
+solo il wrapper `.cmd`). Dettagli completi in `docs/ai/RUN_LOG.md`
+(entry 2026-07-09 15:36). `REVIEW_LOG.md` non esiste in questo
+progetto (mai creato nei 18 task precedenti): la review è tracciata
+in `RUN_LOG.md`, coerente con la convenzione già in uso qui.
 
 ---
 

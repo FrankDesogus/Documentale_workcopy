@@ -1235,3 +1235,70 @@ nessun server rimasto attivo
    nessuna azione Station bloccante residua.
 2. Task tecnici già rinviati (refactor `can_view_ecn`, permessi
    avanzati, deploy reale) restano backlog futuro, non urgenti.
+
+---
+
+### Run — 2026-07-09 15:36 — TASK-019 Stub pagina "Archivio" + voce sidebar
+
+**Agente:** Cursor Agent (via `ai-cycle.sh --run`) + Claude Code (review)
+**Task:** TASK-019 — Stub pagina "Archivio" + voce sidebar (collaudo flusso Station)
+**Branch:** task/documentale-workcopy-archivio-stub
+
+**Operazioni eseguite:**
+
+1. Primo collaudo end-to-end del flusso Station su Windows: intake →
+   `station-next-task.sh` → prompt via `cursor-prompt.sh` → Cursor
+   Agent CLI (`agent.cmd`, autenticato) → test reali → review Claude
+   Code → commit gated.
+2. Cursor Agent ha implementato lo stub esattamente nello scope
+   previsto: nuova view `archive_placeholder` (`documents/views.py`,
+   `@login_required`, nessuna logica), nuovo URL `archivio/`
+   (`config/urls.py`), nuovo template
+   `templates/documents/archive_placeholder.html`, nuova sezione
+   sidebar "Prossimamente" con singola voce "Archivio (in arrivo)"
+   (`templates/base.html`, sezione "Archivio" esistente invariata),
+   2 nuovi test in `documents/tests.py`
+   (`ArchivePlaceholderTests`: redirect anonimo, 200 per utente
+   autenticato).
+3. Nessun file fuori scope toccato (verificato con
+   `git diff --stat`: solo i 4 file previsti + 1 nuovo template).
+4. Nota infrastrutturale: la prima esecuzione di `ai-cycle.sh --run`
+   è fallita allo STEP 4 per mancata autenticazione di Cursor CLI
+   (`agent login` eseguito dall'operatore) e un'altra per un gap di
+   integrazione Windows (STEP 5 non trovava le dipendenze perché
+   `scripts/test.sh` risolve `python`/`python3` dal PATH ambientale,
+   non da un venv dedicato) — verificato manualmente attivando
+   `AI-Station-documentale/.venv` sul PATH. Corretto separatamente
+   anche un fallback `agent` → `agent.cmd` in `ai-cycle.sh` (Cursor
+   CLI su Windows espone solo il wrapper `.cmd`, non risolvibile da
+   Git Bash come comando nudo).
+
+**Esito test (`scripts/test.sh`, con `AI-Station-documentale/.venv` sul PATH):**
+
+```
+Ran 1212 tests in 4010.353s — OK (1210 esistenti + 2 nuovi)
+System check identified no issues (0 silenced).
+```
+
+**Problemi riscontrati:**
+
+- Suite completa ~67 minuti su questa macchina (hardware mobile,
+  Intel Core Ultra 7 265U) contro i ~40 minuti osservati in
+  precedenza — attribuito a differenza hardware/throttling termico
+  sotto carico prolungato, non a una regressione: nessun test
+  modificato tra le due run a parità di codice applicativo.
+- `scripts/test.sh` non individua automaticamente un venv locale:
+  richiede attivazione manuale o PATH esplicito prima
+  dell'esecuzione, sia in locale che da `ai-cycle.sh --run`. Non
+  corretto in questo task (fuori scope): candidato per un piccolo
+  task dedicato futuro.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Review Claude Code completata, verdetto approvato — procedere con
+   `commit-if-approved.sh`.
+2. Valutare un task dedicato per far rilevare a `scripts/test.sh` un
+   venv locale del progetto automaticamente (evita di dover
+   ricordarsi il PATH ad ogni esecuzione, anche da `ai-cycle.sh`).
+3. Collaudo Station→Windows riuscito: il ciclo può considerarsi
+   validato per un secondo task reale.
