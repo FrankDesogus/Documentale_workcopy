@@ -126,4 +126,37 @@
     <a href="{% if from_project %}{% url 'project_detail' from_project.pk %}{% else %}{% url 'dashboard' %}{% endif %}" class="btn-secondary">Annulla</a>
   </div>
 </form>
+
+<script>
+(function () {
+  // Filtra le opzioni di "Tipo documento" in base alla Categoria scelta (TASK-020).
+  // Ogni <option> di document_type ha un attributo data-category (vedi
+  // documents/forms.py:DocumentTypeSelect). Il form valida comunque lato
+  // server (documents/forms.py:DocumentCreateForm.clean) se il JS è disabilitato.
+  var categorySelect = document.getElementById('id_category');
+  var typeSelect = document.getElementById('id_document_type');
+  if (!categorySelect || !typeSelect) return;
+
+  var allOptions = Array.prototype.slice.call(typeSelect.options);
+
+  function refreshTypeOptions() {
+    var category = categorySelect.value;
+    var currentValue = typeSelect.value;
+    typeSelect.innerHTML = '';
+    allOptions.forEach(function (opt) {
+      var optCategory = opt.getAttribute('data-category');
+      if (!opt.value || optCategory === category) {
+        typeSelect.appendChild(opt.cloneNode(true));
+      }
+    });
+    var stillValid = Array.prototype.some.call(typeSelect.options, function (o) {
+      return o.value === currentValue;
+    });
+    typeSelect.value = stillValid ? currentValue : '';
+  }
+
+  categorySelect.addEventListener('change', refreshTypeOptions);
+  refreshTypeOptions();
+})();
+</script>
 {% endblock %}

@@ -189,7 +189,7 @@ class Command(BaseCommand):
             code=DEMO_DOCUMENT_CODE,
             title='Procedura demo gestione qualità',
             category=Document.Category.QUALITY,
-            document_type='Procedura',
+            document_type='SYSP',
             project_folder=doc_folder,
             owner=autore,
             created_by=autore,

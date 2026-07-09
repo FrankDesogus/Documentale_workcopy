@@ -4174,3 +4174,112 @@ class ArchivePlaceholderTests(TestCase):
         r = self.client.get(reverse('archive_placeholder'))
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, 'Sezione in costruzione')
+
+
+# ---------------------------------------------------------------------------
+# TASK-020: Tipo Documento come vocabolario controllato dipendente da Categoria
+# ---------------------------------------------------------------------------
+
+class DocumentTypeFormValidationTests(TestCase):
+    """DocumentCreateForm.document_type deve essere coerente con category."""
+
+    def setUp(self):
+        self.manager = User.objects.create_user('doctype_mgr', password='pw', is_staff=True)
+        from django.contrib.auth.models import Group
+        Group.objects.get_or_create(name='Document Managers')[0].user_set.add(self.manager)
+        self.folder = _make_folder(code='DOCTYPE-FOLD', owner=self.manager)
+
+    def _form_data(self, **overrides):
+        data = {
+            'code': 'DOCTYPE-001',
+            'title': 'Test tipo documento',
+            'category': 'QUALITY',
+            'document_type': '',
+            'description': '',
+            'project_folder': self.folder.pk,
+            'revision_scheme': 'numeric',
+            'revision_label': '00',
+            'revision_number': 0,
+            'change_summary': '',
+        }
+        data.update(overrides)
+        return data
+
+    def test_empty_document_type_is_valid(self):
+        from documents.forms import DocumentCreateForm
+        form = DocumentCreateForm(data=self._form_data(), user=self.manager)
+        self.assertNotIn('document_type', form.errors)
+
+    def test_quality_type_valid_for_quality_category(self):
+        from documents.forms import DocumentCreateForm
+        form = DocumentCreateForm(
+            data=self._form_data(category='QUALITY', document_type='CNTY'),
+            user=self.manager,
+        )
+        self.assertNotIn('document_type', form.errors)
+
+    def test_project_type_invalid_for_quality_category(self):
+        """ATP_ è un tipo "documenti di progetto": non valido con category QUALITY."""
+        from documents.forms import DocumentCreateForm
+        form = DocumentCreateForm(
+            data=self._form_data(category='QUALITY', document_type='ATP_'),
+            user=self.manager,
+        )
+        self.assertIn('document_type', form.errors)
+
+    def test_project_type_valid_for_project_category(self):
+        from documents.forms import DocumentCreateForm
+        form = DocumentCreateForm(
+            data=self._form_data(category='PROJECT', document_type='ATP_'),
+            user=self.manager,
+        )
+        self.assertNotIn('document_type', form.errors)
+
+    def test_quality_type_invalid_for_project_category(self):
+        from documents.forms import DocumentCreateForm
+        form = DocumentCreateForm(
+            data=self._form_data(category='PROJECT', document_type='CNTY'),
+            user=self.manager,
+        )
+        self.assertIn('document_type', form.errors)
+
+
+class DocumentTypeDisplayTests(TestCase):
+    """Il tipo documento è mostrato in document_detail e document_list (TASK-020)."""
+
+    def setUp(self):
+        self.viewer = User.objects.create_superuser('doctype_viewer', 'x@example.com', 'pw')
+        self.folder = _make_folder(code='DOCTYPEDISP-FOLD', owner=self.viewer)
+        self.doc, _ = _make_published_doc('DOCTYPEDISP-001', self.folder, self.viewer)
+        self.doc.document_type = 'ATP_'
+        self.doc.save(update_fields=['document_type'])
+        self.client.force_login(self.viewer)
+
+    def test_detail_shows_type_acronym_and_label(self):
+        response = self.client.get(reverse('document_detail', args=[self.doc.pk]))
+        self.assertContains(response, 'ATP_')
+        self.assertContains(response, self.doc.get_document_type_display())
+
+    def test_detail_hides_badge_when_type_blank(self):
+        self.doc.document_type = ''
+        self.doc.save(update_fields=['document_type'])
+        response = self.client.get(reverse('document_detail', args=[self.doc.pk]))
+        self.assertNotContains(response, 'badge-doctype')
+
+    def test_list_shows_type_badge_in_row(self):
+        response = self.client.get(reverse('document_list'))
+        self.assertContains(response, 'ATP_')
+
+    def test_list_filter_has_category_optgroups(self):
+        response = self.client.get(reverse('document_list'))
+        self.assertContains(response, 'Documenti di sistema (Qualità)')
+        self.assertContains(response, 'Documenti di progetto')
+
+    def test_list_filter_by_type_exact_match(self):
+        other, _ = _make_published_doc('DOCTYPEDISP-002', self.folder, self.viewer)
+        other.document_type = 'CNTY'
+        other.save(update_fields=['document_type'])
+        response = self.client.get(reverse('document_list'), {'doc_type': 'ATP_'})
+        codes = [d.code for d in response.context['documents']]
+        self.assertIn('DOCTYPEDISP-001', codes)
+        self.assertNotIn('DOCTYPEDISP-002', codes)

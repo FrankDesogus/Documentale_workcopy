@@ -232,9 +232,11 @@
   .badge-project { @apply bg-cyan-50 text-cyan-800 border-cyan-200; }
   .badge-orphan  { @apply bg-amber-50 text-amber-800 border-amber-200; }
   .badge-folder  { @apply bg-slate-100 text-slate-700 border-slate-200; }
+  .badge-doctype { @apply bg-indigo-50 text-indigo-800 border-indigo-200 font-mono; }
   .dark .badge-project { @apply bg-elt-cyan-500/13 text-elt-cyan-300 border-elt-cyan-300/20; }
   .dark .badge-orphan  { @apply bg-amber-400/14 text-amber-200 border-amber-300/20; }
   .dark .badge-folder  { @apply bg-white/[0.06] text-slate-300 border-white/10; }
+  .dark .badge-doctype { @apply bg-indigo-400/14 text-indigo-200 border-indigo-300/20; }
 
   /* Shell */
   .sidebar-shell {

@@ -266,7 +266,7 @@ class Command(BaseCommand):
             code=code,
             title='Procedura gestione documentale — Demo',
             category=Document.Category.QUALITY,
-            document_type='Procedura',
+            document_type='SYSP',
             project_folder=folder,
             owner=supervisor,
             created_by=supervisor,
@@ -299,7 +299,7 @@ class Command(BaseCommand):
             code=code,
             title='Bozza privata — Work in Progress (Demo)',
             category=Document.Category.QUALITY,
-            document_type='Istruzione operativa',
+            document_type='WIPO',
             project_folder=folder,
             owner=supervisor,
             created_by=supervisor,
@@ -328,7 +328,7 @@ class Command(BaseCommand):
             code=code,
             title='Documento in corso di approvazione — Demo',
             category=Document.Category.QUALITY,
-            document_type='Procedura',
+            document_type='PROP',
             project_folder=folder,
             owner=supervisor,
             created_by=supervisor,
@@ -367,7 +367,7 @@ class Command(BaseCommand):
             code=code,
             title='Standard tecnico da aggiornare — Demo ECN',
             category=Document.Category.QUALITY,
-            document_type='Standard',
+            document_type='SYSD',
             project_folder=folder,
             owner=supervisor,
             created_by=supervisor,
@@ -517,16 +517,19 @@ class Command(BaseCommand):
             self._step(f'{code}: documento demo creato e approvato.')
             return doc
 
+        # Nota: categoria QUALITY hardcoded in _make_approved_doc anche per questi
+        # documenti "di progetto" (preesistente, fuori scope TASK-020) -> il tipo
+        # deve venire dall'elenco sistema, non da quello progetto.
         _make_approved_doc(
             f'{PRJ_CODE}-SPEC-001',
             'Specifiche tecniche amplificatore RF — Demo',
-            'Specifica',
+            'SYSD',
             folder_spec,
         )
         _make_approved_doc(
             f'{PRJ_CODE}-TEST-001',
             'Piano di collaudo amplificatore RF — Demo',
-            'Piano di collaudo',
+            'SYSD',
             folder_coll,
         )
 

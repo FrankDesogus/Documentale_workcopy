@@ -36,7 +36,19 @@
   {% endif %}
   <div class="filter-group">
     <label class="form-label">Tipo</label>
-    <input type="text" name="doc_type" value="{{ doc_type }}" placeholder="Es. Procedura…" class="min-w-[130px]">
+    <select name="doc_type" class="min-w-[200px]">
+      <option value="">— tutti —</option>
+      <optgroup label="Documenti di sistema (Qualità)">
+        {% for value, label in system_document_type_choices %}
+        <option value="{{ value }}" {% if doc_type == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </optgroup>
+      <optgroup label="Documenti di progetto">
+        {% for value, label in project_document_type_choices %}
+        <option value="{{ value }}" {% if doc_type == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </optgroup>
+    </select>
   </div>
   <div class="filter-actions">
     <button type="submit" class="btn-primary btn-sm">🔍 Cerca</button>
@@ -68,7 +80,7 @@
       <tr class="cursor-pointer hover:bg-gray-50" onclick="window.location='{% url 'document_detail' doc.pk %}'">
         <td><a href="{% url 'document_detail' doc.pk %}" class="font-semibold text-brand-800 font-mono hover:underline" onclick="event.stopPropagation()">{{ doc.code }}</a></td>
         <td>{{ doc.title }}</td>
-        <td class="meta">{{ doc.document_type|default:"—" }}</td>
+        <td>{% if doc.document_type %}<span class="badge badge-doctype" title="{{ doc.get_document_type_display }}">{{ doc.document_type }}</span>{% else %}<span class="meta">—</span>{% endif %}</td>
         <td>{% if doc.current_version %}<a href="{% url 'version_detail' doc.current_version.pk %}" class="text-brand-600 hover:underline" onclick="event.stopPropagation()">Rev. {{ doc.current_version.revision_label }}</a>{% else %}—{% endif %}</td>
         <td class="meta whitespace-nowrap">{{ doc.current_version.approved_at|date:"d/m/Y"|default:"—" }}</td>
         <td class="meta">{{ doc.project_folder.code|default:"—" }}</td>

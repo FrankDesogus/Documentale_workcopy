@@ -3,6 +3,7 @@ from django.db import models
 from django.db.models import Q
 from django.contrib.auth.models import User
 
+from documents.document_types import DOCUMENT_TYPE_CHOICES
 from documents.versioning import SequenceScheme
 
 
@@ -142,7 +143,13 @@ class Document(models.Model):
     title = models.CharField(max_length=255, verbose_name='Titolo')
     description = models.TextField(blank=True, verbose_name='Descrizione')
     category = models.CharField(max_length=20, choices=Category.choices, verbose_name='Categoria')
-    document_type = models.CharField(max_length=100, blank=True, verbose_name='Tipo documento')
+    document_type = models.CharField(
+        max_length=100,
+        blank=True,
+        choices=DOCUMENT_TYPE_CHOICES,
+        verbose_name='Tipo documento',
+        help_text='Le scelte disponibili dipendono dalla Categoria selezionata.',
+    )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,

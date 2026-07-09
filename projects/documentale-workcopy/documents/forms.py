@@ -2,9 +2,26 @@ from django import forms
 from django.contrib.auth.models import User
 
 from auditlog.historical_forms import SanatoriaFieldsMixin
+from documents.document_types import (
+    CATEGORY_BY_DOCUMENT_TYPE_VALUE,
+    DOCUMENT_TYPE_CHOICES,
+    is_valid_document_type_for_category,
+)
 from documents.models import Document
 from documents.versioning import SequenceScheme, normalize_sequence_value, validate_sequence_value
 from projects.models import ProjectFolder
+
+
+class DocumentTypeSelect(forms.Select):
+    """Select con data-category per opzione, per il filtro a cascata via JS
+    in new_document.html (vedi TASK-020)."""
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex, attrs)
+        category = CATEGORY_BY_DOCUMENT_TYPE_VALUE.get(str(value), '')
+        if category:
+            option['attrs']['data-category'] = category
+        return option
 
 
 class DocumentCreateForm(SanatoriaFieldsMixin, forms.Form):
@@ -20,11 +37,12 @@ class DocumentCreateForm(SanatoriaFieldsMixin, forms.Form):
         label='Descrizione',
     )
     category = forms.ChoiceField(choices=Document.Category.choices, label='Categoria')
-    document_type = forms.CharField(
-        max_length=100,
+    document_type = forms.ChoiceField(
+        choices=[('', '— seleziona prima la categoria —')] + DOCUMENT_TYPE_CHOICES,
         required=False,
         label='Tipo documento',
-        help_text='Es. Procedura, Istruzione operativa, Modulo…',
+        help_text='Le opzioni disponibili dipendono dalla Categoria selezionata sopra.',
+        widget=DocumentTypeSelect,
     )
     project_folder = forms.ModelChoiceField(
         queryset=ProjectFolder.objects.none(),
@@ -100,6 +118,14 @@ class DocumentCreateForm(SanatoriaFieldsMixin, forms.Form):
                 cleaned['revision_label'] = label
             except Exception as exc:
                 self.add_error('revision_label', str(exc))
+
+        category = cleaned.get('category', '')
+        document_type = cleaned.get('document_type', '')
+        if document_type and not is_valid_document_type_for_category(document_type, category):
+            self.add_error(
+                'document_type',
+                'Il tipo selezionato non è valido per la categoria scelta.',
+            )
         return cleaned
 
 
