@@ -116,7 +116,7 @@ print("review_esito:" + (review.get("esito", "") if review else ""))
 missing = parse_last_run(Path("/tmp/nonexistent-log.md"))
 print("missing_none:" + ("1" if missing is None else "0"))
 PYEOF
-TASK003_OUT="$(python3 "${TMPPY}" \
+TASK003_OUT="$(python "${TMPPY}" \
 	"${PROJECT_ROOT}" \
 	"${PROJECT_ROOT}/docs/ai/RUN_LOG.md" \
 	"${PROJECT_ROOT}/docs/ai/REVIEW_LOG.md" 2>/dev/null || true)"

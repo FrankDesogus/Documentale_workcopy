@@ -37,10 +37,12 @@ def find_repo_root(start: Path) -> Path:
 
 
 def project_rel_path(project_dir: Path, repo_root: Path) -> str:
+    # as_posix() forza sempre "/" nell'output del prompt, indipendentemente
+    # dal separatore nativo dell'OS (Path su Windows userebbe altrimenti "\").
     try:
-        return str(project_dir.resolve().relative_to(repo_root.resolve()))
+        return project_dir.resolve().relative_to(repo_root.resolve()).as_posix()
     except ValueError:
-        return str(project_dir)
+        return Path(project_dir).as_posix()
 
 
 def expected_branch(task: Dict[str, str], project_dir: Path) -> str:
