@@ -1953,10 +1953,12 @@ class ECNViewTests(TestCase):
     # --- document_detail integration ----------------------------------------
 
     def test_document_detail_shows_ecn_section(self):
+        # TASK-021: document_detail mostra solo l'ultimo ECN ("Ultimo ECN / Variante"),
+        # non più la sezione con la tabella completa (spostata in Archivio).
         self.client.force_login(self.manager)
         r = self.client.get(f'/documents/{self.document.pk}/')
         self.assertEqual(r.status_code, 200)
-        self.assertContains(r, 'ECN / Varianti collegate')
+        self.assertContains(r, 'Ultimo ECN / Variante')
         self.assertContains(r, 'ECN-VIEW-001')
 
     def test_document_detail_shows_create_ecn_button_to_manager(self):

@@ -16,9 +16,7 @@
 
 ## In corso
 
-| ID | Titolo | Agente |
-| -- | ------ | ------ |
-| TASK-021 | Archivio: storico completo documenti (permesso view_history) + dettaglio compatto altrove | Claude Code |
+_Nessun task in corso._
 
 ## Backlog
 
@@ -57,6 +55,7 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | TASK-018 | Kit operativo demo ripetibile (runbook + scenario ProjectRevision) | — | 2026-07-09 |
 | TASK-019 | Stub pagina "Archivio" + voce sidebar (collaudo flusso Station) | — | 2026-07-09 |
 | TASK-020 | Tipo Documento come menu a cascata (dipendente da Categoria) + suffisso di riferimento | — | 2026-07-09 |
+| TASK-021 | Archivio: storico completo documenti (permesso view_history) + dettaglio compatto altrove | — | 2026-07-10 |
 
 ---
 
@@ -2279,6 +2278,61 @@ precedenti.
   superuser) per nessun ruolo, nemmeno in Archivio.
 - Non toccare `ecn/permissions.py`, `approvals/`, modelli.
 - No push, no merge, no `reset --hard`, no `git clean`.
+
+#### Esito (2026-07-10)
+
+Implementato esattamente lo scope previsto, riusando la logica di
+permesso esistente invece di reinventarla:
+
+- `documents/permissions.py`: `can_view_archive` (gate sezione) e
+  `can_view_archived_document` (gate per-documento, stessa struttura di
+  `can_view_document` con `view_history` al posto di
+  `read_published`/membership; `document_was_published` include
+  obsoleti/archiviati che furono approvati almeno una volta).
+- `projects/permissions.py`: `get_history_visible_folder_ids` (bulk,
+  stesso pattern di `get_visible_folder_ids`/`get_writable_folder_ids`).
+- `documents/templatetags/nav_tags.py`: `user_can_view_archive`.
+- Nuove view `archive_document_list` (tutti gli stati, filtri
+  testo/cartella/tipo/stato, filtro fine-grained in Python via
+  `can_view_archived_document` per la regola bozze private) e
+  `archive_document_detail` (tutte le revisioni, tutte le ECN, storico
+  eventi, sanatoria — stessa query logic che prima viveva in
+  `document_detail`).
+- `document_detail` ridotto: rimosse le sezioni "Tutte le revisioni" e
+  "Storico eventi"; "ECN / Varianti collegate" (tabella completa) →
+  "Ultimo ECN / Variante" (singola card con dettagli); aggiunto link
+  "Vedi storico completo" (visibile solo se
+  `can_view_archived_document`). Sezione sanatoria **invariata** (fuori
+  scope esplicito).
+- Sidebar: nuova sezione "Storico" (nome scelto per non collidere con
+  la sezione "Archivio" già esistente per Documenti/Cartelle/Progetti),
+  visibile solo con `user_can_view_archive`.
+- 3 vecchi test aggiornati (puntavano a `show_history`/`versions` nel
+  `document_detail` compatto, ora spostati su `archive_document_detail`);
+  intera classe `AuditUIDocumentDetailTests` rinominata e riscritta su
+  Archivio (`AuditUIArchiveDetailTests`); 1 test in `ecn/tests.py`
+  aggiornato al nuovo testo header. 22 nuovi test aggiunti
+  (`ArchivePermissionUnitTests`, `ArchiveDocumentListTests`,
+  `ArchiveDocumentDetailTests`, `DocumentDetailCompactHistoryTests`).
+
+**Verifica manuale nel browser**: lista Archivio con 14 documenti
+(incl. bozze private, visibili solo perché il viewer era superuser);
+dettaglio Archivio con tutte le revisioni/ECN/storico eventi;
+`document_detail` compatto senza quelle sezioni, con card "Ultimo ECN"
+e link "Vedi storico completo"; utente senza permesso → 404 diretto su
+`/archivio/` (link sidebar assente, URL diretta bloccata).
+
+**Test**: `manage.py test documents ecn --keepdb --failfast`:
+**700/700 PASS** (in `ecn/` perché ho toccato un'asserzione lì). Suite
+globale non eseguita in questo checkpoint, come da preferenza
+dell'operatore.
+
+**Nota per l'operatore**: il campo `document_was_published` in
+`can_view_archived_document` considera "storico" solo documenti con
+almeno una versione mai APPROVATA. Un documento con sole revisioni
+DRAFT/REJECTED/IN_APPROVAL resta visibile in Archivio solo al suo
+autore o al superuser, mai a Manager/Auditor/Quality Manager — nessuna
+deroga, come richiesto esplicitamente.
 
 ---
 
