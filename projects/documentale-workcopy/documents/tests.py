@@ -4452,3 +4452,37 @@ class DocumentTypeDisplayTests(TestCase):
         codes = [d.code for d in response.context['documents']]
         self.assertIn('DOCTYPEDISP-001', codes)
         self.assertNotIn('DOCTYPEDISP-002', codes)
+
+
+# ---------------------------------------------------------------------------
+# TASK-022 — UI: ECN semplice sostituisce "revisione senza ECN" come flusso
+# principale; il percorso legacy resta funzionante per dati esistenti.
+# ---------------------------------------------------------------------------
+
+class SimpleEcnUiTests(TestCase):
+
+    def setUp(self):
+        self.viewer = User.objects.create_superuser('simpleui_viewer', 'x@example.com', 'pw')
+        self.folder = _make_folder(code='SIMPLEUI-FOLD', owner=self.viewer)
+        self.client.force_login(self.viewer)
+
+    def test_new_document_form_has_no_ecn_exemption_checkbox(self):
+        response = self.client.get(reverse('document_new'))
+        self.assertNotContains(response, 'Consenti revisioni senza ECN obbligatorio')
+
+    def test_document_detail_shows_both_ecn_creation_buttons(self):
+        doc, _ = _make_published_doc('SIMPLEUI-DOC-001', self.folder, self.viewer)
+        response = self.client.get(reverse('document_detail', args=[doc.pk]))
+        self.assertContains(response, '+ Crea ECN semplice')
+        self.assertContains(response, '+ Richiedi ECN standard')
+
+    def test_legacy_document_keeps_direct_revision_path(self):
+        """Un documento esistente con requires_ecn_for_revision=False continua
+        a mostrare il percorso diretto invariato (retrocompatibilità, TASK-022
+        FASE 5 — non deroghiamo i dati esistenti)."""
+        doc, _ = _make_published_doc('SIMPLEUI-LEGACY-001', self.folder, self.viewer)
+        doc.requires_ecn_for_revision = False
+        doc.save(update_fields=['requires_ecn_for_revision'])
+        response = self.client.get(reverse('document_detail', args=[doc.pk]))
+        self.assertContains(response, 'approvazione diretta senza ECN')
+        self.assertContains(response, '+ Nuova revisione</a>')

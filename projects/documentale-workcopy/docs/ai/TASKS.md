@@ -18,7 +18,6 @@
 
 | ID | Titolo | Agente |
 | -- | ------ | ------ |
-| TASK-022 | Flusso ECN semplice per revisioni rapide | Claude Code |
 
 ## Backlog
 
@@ -58,6 +57,7 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | TASK-019 | Stub pagina "Archivio" + voce sidebar (collaudo flusso Station) | — | 2026-07-09 |
 | TASK-020 | Tipo Documento come menu a cascata (dipendente da Categoria) + suffisso di riferimento | — | 2026-07-09 |
 | TASK-021 | Archivio: storico completo documenti (permesso view_history) + dettaglio compatto altrove | — | 2026-07-10 |
+| TASK-022 | Flusso ECN semplice per revisioni rapide (sostituisce "revisione senza ECN" come percorso demo) | — | 2026-07-10 |
 
 ---
 
@@ -2522,6 +2522,77 @@ checkpoint finale (FASE 9), non ad ogni modifica.
 - Non fare deploy, non installare pacchetti, non accedere alla rete.
 - No push, no merge finale su `main` senza conferma esplicita
   dell'operatore.
+
+#### Esito (2026-07-10)
+
+Implementato esattamente lo scope previsto, in modo interamente
+additivo rispetto al flusso ECN standard:
+
+- `ecn/models.py`: `ChangeNotice.FlowType` (`STANDARD`/`SIMPLE`) +
+  campo `flow_type` (default `STANDARD`); migrazione
+  `ecn/migrations/0004_changenotice_flow_type.py` (nessun impatto sui
+  dati esistenti, tutti gli ECN pre-esistenti restano `STANDARD`).
+- `ecn/services.py`: `_generate_simple_ecn_code()` (`ECN-S-<anno>-NNNN`,
+  stesso pattern anti-collisione di `_generate_ecn_code`) e
+  `create_simple_ecn(document, proposed_by, title, description='', ...)`:
+  crea il `ChangeNotice` direttamente in `APPROVED`, `flow_type=SIMPLE`,
+  nessun `ChangeNoticeApprover`/`ChangeNoticeDecision`, 2 voci
+  `AuditLog` (`ECN_CREATED`+`ECN_APPROVED`). Verificato via shell che
+  `create_new_revision(doc, user, label, num, ecn=<simple_ecn>)`
+  funziona **senza alcuna modifica** al service esistente.
+- `ecn/forms.py` (`SimpleEcnForm`), `ecn/views.py`
+  (`ecn_create_simple`, riusa `can_create_ecn` — nessun permesso
+  nuovo), `ecn/urls.py`, `templates/ecn/ecn_create_simple.html` (nuovo).
+- `document_detail.html`: due pulsanti distinti ("+ Crea ECN semplice"
+  e "+ Richiedi ECN standard") al posto dell'unico "+ Richiedi ECN".
+  `new_revision.html`: colonna "Tipo" (badge "Semplice"/"Standard")
+  nella tabella ECN disponibili.
+- `new_document.html`: rimossa la checkbox "Consenti revisioni senza
+  ECN obbligatorio" dalla UI. **Non rimossi** dal modello/form:
+  `Document.requires_ecn_for_revision` e `ecn_exemption` restano per
+  compatibilità con i documenti esistenti che li usano già (percorso
+  "+ Nuova revisione" diretto invariato per loro).
+- `demo_full.py`: scenario `_scenario_ecn_exempt` →
+  `_scenario_simple_ecn` (`DEMO-NOSCOPE-001` → `DEMO-ECN-SIMPLE-001`),
+  ora esercita realmente `create_simple_ecn` + `create_new_revision`
+  (non un mock). Verificato via run reale:
+  `>> DEMO-ECN-SIMPLE-001: Rev. 00 + ECN-S-2026-0001 (ECN semplice,
+  autoapprovato) + Rev. 01 eseguita tramite ECN semplice.`
+  `demo_company.py`/`demo_workflow.py`: nessun riferimento al bypass,
+  nessuna modifica necessaria.
+- `docs/ai/SIMPLE_ECN_FLOW.md` (nuovo): guida completa standard vs
+  semplice, generazione codice, autoapprovazione, collegamento a
+  `create_new_revision`, flusso UI, permessi, visibilità
+  dettaglio/Archivio, legacy, backlog.
+  `docs/ai/DEMO_OPERATOR_GUIDE.md`: punto 7 e sezione 9 aggiornati per
+  riflettere il nuovo scenario/flusso.
+- Test: 14 nuovi test in `ecn/tests.py` (`SimpleEcnServiceTests`,
+  `SimpleEcnViewTests`, `SimpleEcnStandardFlowUnaffectedTests`) + 3 nuovi
+  in `documents/tests.py` (`SimpleEcnUiTests`, incl. verifica esplicita
+  che il percorso legacy resti funzionante per documenti esistenti).
+
+**Test mirati** (`manage.py test documents ecn --keepdb --failfast`):
+**718/718 PASS**.
+
+**Suite completa** (`scripts/test.sh`, tutte le app): **1261/1261 PASS**,
+`manage.py check` OK, `compileall` OK. `pip check`: nessuna dipendenza
+rotta. Regressioni Station (`cursor-prompt-builder`, `log-analyzer`,
+`ai-cycle-dogfood`): tutte verdi.
+
+**Verifica stato finale**: `.test-media/` ripulita automaticamente da
+`scripts/test.sh` a fine run; `media/` reale invariata (0 file);
+`.demo/`/`.demo-media/` isolate e in `.gitignore`; nessun server in
+esecuzione.
+
+**Cosa succede alla vecchia modalità "revisione senza ECN"**: resta
+supportata **solo** per compatibilità con documenti già esistenti con
+`requires_ecn_for_revision=False` — non più proposta nella creazione di
+un nuovo documento né nello scenario demo principale.
+
+**Backlog residuo** (fuori scope, vedi `SIMPLE_ECN_FLOW.md`): rimozione
+definitiva di `requires_ecn_for_revision`/`ecn_exemption` dal modello;
+badge "Tipo" in `ecn_list.html`/`ecn_detail.html`; permessi dedicati per
+ECN semplice (oggi riusa `can_create_ecn` senza distinzioni).
 
 ---
 
