@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Archivio{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+  <h1 class="text-2xl font-bold text-brand-900">Archivio</h1>
+  {% if total_count is not None %}
+  <span class="meta">{{ total_count }} document{% if total_count == 1 %}o{% else %}i{% endif %}</span>
+  {% endif %}
+</div>
+<p class="text-sm text-gray-500 mb-4">
+  Storico completo: tutti gli stati, tutte le revisioni, tutte le ECN collegate.
+  Apri un documento per vederne il dettaglio completo.
+</p>
+
+<!-- Filtri -->
+<form method="get" class="filter-bar">
+  <div class="filter-group">
+    <label class="form-label">Ricerca</label>
+    <input type="text" name="q" value="{{ q }}" placeholder="Codice, titolo, tipo…" class="min-w-[200px]">
+  </div>
+  {% if filter_folders %}
+  <div class="filter-group">
+    <label class="form-label">Cartella</label>
+    <select name="folder">
+      <option value="">— tutte —</option>
+      {% for f in filter_folders %}
+      <option value="{{ f.pk }}" {% if folder_id == f.pk|stringformat:"s" %}selected{% endif %}>{{ f.code }} — {{ f.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  <div class="filter-group">
+    <label class="form-label">Tipo</label>
+    <select name="doc_type" class="min-w-[200px]">
+      <option value="">— tutti —</option>
+      <optgroup label="Documenti di sistema (Qualità)">
+        {% for value, label in system_document_type_choices %}
+        <option value="{{ value }}" {% if doc_type == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </optgroup>
+      <optgroup label="Documenti di progetto">
+        {% for value, label in project_document_type_choices %}
+        <option value="{{ value }}" {% if doc_type == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </optgroup>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label class="form-label">Stato</label>
+    <select name="status">
+      <option value="">— tutti —</option>
+      {% for value, label in document_status_choices %}
+      <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="filter-actions">
+    <button type="submit" class="btn-primary btn-sm">🔍 Cerca</button>
+    {% if q or folder_id or doc_type or status %}
+    <a href="{% url 'archive_document_list' %}" class="btn-secondary btn-sm">✕ Reset</a>
+    {% endif %}
+  </div>
+</form>
+
+{% if documents %}
+<div class="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden mb-4">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Codice</th>
+        <th>Titolo</th>
+        <th>Tipo</th>
+        <th>Stato</th>
+        <th>Revisione corrente</th>
+        <th>Cartella</th>
+        <th class="w-20"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for doc in documents %}
+      <tr class="cursor-pointer hover:bg-gray-50" onclick="window.location='{% url 'archive_document_detail' doc.pk %}'">
+        <td><a href="{% url 'archive_document_detail' doc.pk %}" class="font-semibold text-brand-800 font-mono hover:underline" onclick="event.stopPropagation()">{{ doc.code }}</a></td>
+        <td>{{ doc.title }}</td>
+        <td>{% if doc.document_type %}<span class="badge badge-doctype" title="{{ doc.get_document_type_display }}">{{ doc.document_type }}</span>{% else %}<span class="meta">—</span>{% endif %}</td>
+        <td>
+          {% if doc.status == 'active' %}<span class="badge-status-approved">Attivo</span>
+          {% elif doc.status == 'obsolete' %}<span class="badge-status-superseded">Obsoleto</span>
+          {% elif doc.status == 'archived' %}<span class="badge-status-archived">Archiviato</span>
+          {% else %}<span>{{ doc.get_status_display }}</span>
+          {% endif %}
+        </td>
+        <td class="meta">{% if doc.current_version %}Rev. {{ doc.current_version.revision_label }} ({{ doc.current_version.get_status_display }}){% else %}—{% endif %}</td>
+        <td class="meta">{{ doc.project_folder.code|default:"—" }}</td>
+        <td onclick="event.stopPropagation()"><a href="{% url 'archive_document_detail' doc.pk %}" class="btn-secondary btn-sm">Apri</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% include "_pagination.html" with page_obj=page_obj total_count=total_count %}
+
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <div class="empty-state-icon">🔍</div>
+    <div class="empty-state-title">Nessun documento trovato</div>
+    <div class="empty-state-desc">
+      {% if q or folder_id or doc_type or status %}
+      Nessun risultato per i filtri selezionati. <a href="{% url 'archive_document_list' %}" class="text-brand-600 hover:underline">Mostra tutti</a>
+      {% else %}
+      Non ci sono ancora documenti nell'archivio.
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

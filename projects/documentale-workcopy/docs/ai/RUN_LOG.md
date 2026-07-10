@@ -1374,3 +1374,70 @@ System check identified no issues (0 silenced).
    di scope.
 3. Suffisso del tipo nel codice documento: da valutare in un task
    futuro separato, ora che il campo è in uso reale.
+
+---
+
+### Run — 2026-07-10 — TASK-021 Archivio: storico completo + dettaglio compatto
+
+**Agente:** Claude Code (implementazione diretta, non via Cursor Agent)
+**Task:** TASK-021 — Archivio: storico completo documenti (permesso
+`view_history`) + dettaglio compatto altrove
+**Branch:** task/documentale-workcopy-archivio-storico
+
+**Operazioni eseguite:**
+
+1. Analizzato il codice esistente prima di scrivere qualunque riga:
+   `can_view_document`/`can_view_version` già implementano la regola
+   "bozze/rifiutati privati solo autore+superuser, nessuna deroga" e il
+   pattern `view_history` per-cartella con fallback legacy — riusati,
+   non reinventati.
+2. Chiarite con l'operatore 2 decisioni prima di iniziare: chi accede
+   ad Archivio (stesso permesso di `can_view_audit`, non aperto a
+   tutti) e ambito della lista (tutti gli stati documento, bozze
+   private altrui sempre escluse).
+3. Nuove funzioni permesso: `can_view_archive`,
+   `can_view_archived_document` (`documents/permissions.py`),
+   `get_history_visible_folder_ids` (`projects/permissions.py`),
+   `user_can_view_archive` (nav tag).
+4. Nuove view `archive_document_list`/`archive_document_detail`
+   (sostituiscono lo stub `archive_placeholder` di TASK-019) + 2 nuovi
+   template. `document_detail` ridotto: via tabella revisioni e
+   storico eventi, ECN da tabella completa a card "Ultimo ECN".
+   Aggiunto link "Vedi storico completo" condizionale.
+5. Sidebar: sezione "Storico" (nome scelto per evitare collisione con
+   la sezione "Archivio" già esistente per Documenti/Cartelle/Progetti),
+   visibile solo con permesso.
+6. Aggiornati 3 test esistenti + riscritta un'intera classe
+   (`AuditUIDocumentDetailTests` → `AuditUIArchiveDetailTests`) che
+   testava la funzionalità ora spostata; 1 assert aggiornato in
+   `ecn/tests.py`. Aggiunti 22 nuovi test sui permessi e sul contenuto
+   delle nuove viste.
+7. Verifica manuale completa nel browser (demo server già attivo):
+   lista Archivio con tutti gli stati, dettaglio con storico completo,
+   vista compatta senza storico, 404 diretto su `/archivio/` per
+   utente senza permesso.
+
+**Esito test (`manage.py test documents ecn --keepdb --failfast`):**
+
+```
+Ran 700 tests in 58788.902s (PC sospeso a metà esecuzione, poi ripreso)
+OK
+System check identified no issues (0 silenced).
+```
+
+**Problemi riscontrati:**
+
+- Nessuno bloccante. Il PC è stato sospeso (sleep) a metà della corsa
+  test per esigenza dell'operatore: il processo è ripreso
+  automaticamente al risveglio senza reimpostare nulla, confermando
+  che la sospensione (non lo spegnimento) è sicura per processi in
+  background su questa macchina.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Review Claude Code + commit gated (`commit-if-approved.sh`).
+2. Valutare se estendere lo stesso pattern "storico confinato in
+   Archivio" anche a `projects/project_detail.html` (ha una sua
+   sezione "Storico eventi" separata, non toccata in questo task).
+3. Suffisso del tipo nel codice documento (rimandato da TASK-020):
+   ancora da valutare.

@@ -179,6 +179,60 @@ def can_view_document(user, document):
     return True
 
 
+def can_view_archive(user):
+    """
+    True se l'utente può accedere alla sezione Archivio (TASK-021, storico
+    completo). Stesso gruppo di can_view_audit, esteso a "almeno una
+    cartella con view_history" per chi ha solo un grant per-cartella.
+    """
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    if _in_group(user, GROUP_MANAGERS, GROUP_AUDITORS, GROUP_QUALITY_MANAGER):
+        return True
+    from projects.permissions import get_history_visible_folder_ids
+    return bool(get_history_visible_folder_ids(user))
+
+
+def can_view_archived_document(user, document):
+    """
+    Determina se l'utente può vedere lo storico completo di un documento in
+    Archivio (TASK-021). Stessa struttura di can_view_document: la regola
+    "bozze/rifiutati privati solo per l'autore" resta identica e non è
+    derogata per nessun ruolo, Archivio incluso.
+
+    Differenza rispetto a can_view_document: usa view_history invece di
+    read_published/membership, e considera "storico" anche un documento
+    non più ACTIVE (OBSOLETE/ARCHIVED) purché sia stato approvato almeno
+    una volta — un documento mai pubblicato resta invece Caso A (solo
+    autore + superuser), qualunque sia il suo status attuale.
+    """
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+
+    document_was_published = (
+        document.current_version is not None
+        and document.current_version.status == DocumentVersion.Status.APPROVED
+    ) or document.versions.filter(status=DocumentVersion.Status.APPROVED).exists()
+
+    # L'autore di una bozza può sempre vedere lo storico della propria bozza
+    if _user_is_draft_author(user, document):
+        return True
+
+    # Auditor / Manager / Quality Manager: qualunque documento già pubblicato
+    if _in_group(user, GROUP_AUDITORS, GROUP_MANAGERS, GROUP_QUALITY_MANAGER):
+        return document_was_published
+
+    if not document_was_published:
+        return False
+    if document.project_folder_id:
+        return _resolve_folder_perm(user, document.project_folder_id, 'view_history')
+    return False
+
+
 def can_view_version(user, version):
     """
     Determina se l'utente può vedere una specifica revisione.

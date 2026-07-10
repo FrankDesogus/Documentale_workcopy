@@ -203,3 +203,31 @@ def get_project_visible_folder_ids(user) -> list:
     resolver = PermissionResolver(user, include_legacy_fallback=True)
     results = resolver.resolve_bulk(folders, 'view_projects')
     return [pk for pk, allowed in results.items() if allowed]
+
+
+def get_history_visible_folder_ids(user) -> list:
+    """
+    Restituisce i pk delle cartelle dove l'utente ha view_history (TASK-021,
+    sezione Archivio). Stesso gruppo di ruoli globali di
+    documents.permissions.can_view_audit (Manager/Auditor/Quality Manager),
+    non solo Document Manager come _is_global_manager.
+    """
+    if not getattr(user, 'is_authenticated', False):
+        return []
+    from projects.models import ProjectFolder
+    if user.is_superuser:
+        return list(ProjectFolder.objects.filter(
+            status=ProjectFolder.Status.ACTIVE
+        ).values_list('pk', flat=True))
+    from documents.permissions import is_document_manager, is_document_auditor, is_quality_manager
+    if is_document_manager(user) or is_document_auditor(user) or is_quality_manager(user):
+        return list(ProjectFolder.objects.filter(
+            status=ProjectFolder.Status.ACTIVE
+        ).values_list('pk', flat=True))
+    from projects.resolver import PermissionResolver
+    folders = list(
+        ProjectFolder.objects.filter(status=ProjectFolder.Status.ACTIVE).only('pk', 'path')
+    )
+    resolver = PermissionResolver(user, include_legacy_fallback=True)
+    results = resolver.resolve_bulk(folders, 'view_history')
+    return [pk for pk, allowed in results.items() if allowed]

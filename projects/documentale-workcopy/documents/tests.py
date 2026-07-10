@@ -593,7 +593,7 @@ class PermissionGroupTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, self.document.code)
 
-    def test_document_auditor_sees_version_history_in_detail(self):
+    def test_document_auditor_sees_version_history_via_archive(self):
         from approvals.services import approve_version
         v1 = create_new_revision(self.document, self.author, 'A', 1)
         req = submit_version_for_approval(v1, self.author, [self.approver])
@@ -603,8 +603,13 @@ class PermissionGroupTests(TestCase):
         self.client.login(username='pg_auditor', password='pw')
         response = self.client.get(reverse('document_detail', args=[self.document.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.context['show_history'])
-        self.assertIsNotNone(response.context['versions'])
+        self.assertContains(response, 'Vedi storico completo')
+
+        archive_response = self.client.get(
+            reverse('archive_document_detail', args=[self.document.pk])
+        )
+        self.assertEqual(archive_response.status_code, 200)
+        self.assertIsNotNone(archive_response.context['versions'])
 
     def test_no_group_user_cannot_create_revision(self):
         from approvals.services import approve_version
@@ -1131,8 +1136,8 @@ class NewDocumentFolderRequiredTests(TestCase):
 # ---------------------------------------------------------------------------
 
 @override_settings(EMAIL_BACKEND=LOCMEM)
-class AuditUIDocumentDetailTests(TestCase):
-    """Sezione 'Storico eventi' nel dettaglio documento."""
+class AuditUIArchiveDetailTests(TestCase):
+    """Sezione 'Storico eventi' — spostata in Archivio da document_detail (TASK-021)."""
 
     def setUp(self):
         from django.contrib.auth.models import Group
@@ -1158,39 +1163,34 @@ class AuditUIDocumentDetailTests(TestCase):
         doc.refresh_from_db()
         return v
 
-    # 1. Auditor vede "Storico eventi"
-    def test_auditor_sees_storico_eventi(self):
+    # 1. Auditor vede "Storico eventi" in Archivio
+    def test_auditor_sees_storico_eventi_in_archive(self):
         self._approve_doc()
         self.client.login(username='au_auditor', password='pw')
-        response = self.client.get(reverse('document_detail', args=[self.doc.pk]))
+        response = self.client.get(reverse('archive_document_detail', args=[self.doc.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.context['show_history'])
         self.assertContains(response, 'Storico eventi')
 
-    # 2. Manager vede "Storico eventi"
-    def test_manager_sees_storico_eventi(self):
+    # 2. Manager vede "Storico eventi" in Archivio
+    def test_manager_sees_storico_eventi_in_archive(self):
         self._approve_doc()
         self.client.login(username='au_manager', password='pw')
-        response = self.client.get(reverse('document_detail', args=[self.doc.pk]))
+        response = self.client.get(reverse('archive_document_detail', args=[self.doc.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.context['show_history'])
         self.assertContains(response, 'Storico eventi')
 
-    # 3. Reader normale NON vede "Storico eventi"
-    def test_reader_does_not_see_storico_eventi(self):
+    # 3. Reader normale non può nemmeno aprire Archivio per quel documento (404)
+    def test_reader_cannot_open_archive_detail(self):
         self._approve_doc()
         self.client.login(username='au_reader', password='pw')
-        response = self.client.get(reverse('document_detail', args=[self.doc.pk]))
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(response.context['show_history'])
-        self.assertNotContains(response, 'Storico eventi')
-        self.assertIsNone(response.context['audit_logs'])
+        response = self.client.get(reverse('archive_document_detail', args=[self.doc.pk]))
+        self.assertEqual(response.status_code, 404)
 
     # 4. Con AuditLog presenti il contesto non è vuoto
     def test_audit_logs_present_in_context_when_events_exist(self):
         self._approve_doc()
         self.client.login(username='au_auditor', password='pw')
-        response = self.client.get(reverse('document_detail', args=[self.doc.pk]))
+        response = self.client.get(reverse('archive_document_detail', args=[self.doc.pk]))
         self.assertEqual(response.status_code, 200)
         audit_logs = list(response.context['audit_logs'])
         self.assertGreater(len(audit_logs), 0)
@@ -1202,13 +1202,13 @@ class AuditUIDocumentDetailTests(TestCase):
         AuditLog.objects.all().delete()
 
         self.client.login(username='au_auditor', password='pw')
-        response = self.client.get(reverse('document_detail', args=[self.doc.pk]))
+        response = self.client.get(reverse('archive_document_detail', args=[self.doc.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(list(response.context['audit_logs'])), 0)
         self.assertContains(response, 'Nessun evento registrato per questo documento.')
 
     # 6. Folder-auditor (membership cartella) vede lo storico del documento nella cartella
-    def test_folder_auditor_sees_storico_in_document_with_folder(self):
+    def test_folder_auditor_sees_storico_in_archive_with_folder(self):
         from projects.models import ProjectFolder, ProjectFolderMembership
         folder_auditor = User.objects.create_user('au_foldaud', password='pw')
         folder = ProjectFolder.objects.create(
@@ -1232,10 +1232,17 @@ class AuditUIDocumentDetailTests(TestCase):
         doc_in_folder.refresh_from_db()
 
         self.client.login(username='au_foldaud', password='pw')
-        response = self.client.get(reverse('document_detail', args=[doc_in_folder.pk]))
+        response = self.client.get(reverse('archive_document_detail', args=[doc_in_folder.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.context['show_history'])
         self.assertContains(response, 'Storico eventi')
+
+    # 7. Lo stesso reader/auditor NON vede più "Storico eventi" nel document_detail compatto
+    def test_storico_eventi_absent_from_compact_document_detail(self):
+        self._approve_doc()
+        self.client.login(username='au_auditor', password='pw')
+        response = self.client.get(reverse('document_detail', args=[self.doc.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Storico eventi')
 
 
 # ---------------------------------------------------------------------------
@@ -4159,21 +4166,183 @@ class ECNPolicyViewTests(TestCase):
         self.assertTrue(r.context['show_create_revision'])
 
 
-class ArchivePlaceholderTests(TestCase):
-    """Test per /archivio/ (stub placeholder)."""
+class ArchivePermissionUnitTests(TestCase):
+    """Test diretti delle funzioni permessi Archivio (TASK-021)."""
 
     def setUp(self):
-        self.user = User.objects.create_user('archive_user', password='pw')
+        from django.contrib.auth.models import Group
+        self.manager = User.objects.create_user('perm_mgr', password='pw')
+        Group.objects.get_or_create(name='Document Managers')[0].user_set.add(self.manager)
+        self.plain = User.objects.create_user('perm_plain', password='pw')
+        self.author = User.objects.create_user('perm_author', password='pw')
+        self.folder = _make_folder(code='PERM-FOLD', owner=self.manager)
 
-    def test_redirects_anonymous(self):
-        r = self.client.get(reverse('archive_placeholder'))
+    def test_can_view_archive_true_for_manager(self):
+        from documents.permissions import can_view_archive
+        self.assertTrue(can_view_archive(self.manager))
+
+    def test_can_view_archive_false_for_plain_user(self):
+        from documents.permissions import can_view_archive
+        self.assertFalse(can_view_archive(self.plain))
+
+    def test_can_view_archive_true_with_folder_grant(self):
+        from documents.permissions import can_view_archive
+        _grant(self.folder, user=self.plain, perm='view_history')
+        self.assertTrue(can_view_archive(self.plain))
+
+    def test_can_view_archived_document_denies_other_users_draft(self):
+        from documents.permissions import can_view_archived_document
+        doc = _make_draft_doc('PERM-DRAFT-001', self.folder, author=self.author)
+        self.assertFalse(can_view_archived_document(self.manager, doc))
+
+    def test_can_view_archived_document_allows_author_own_draft(self):
+        from documents.permissions import can_view_archived_document
+        doc = _make_draft_doc('PERM-DRAFT-002', self.folder, author=self.author)
+        self.assertTrue(can_view_archived_document(self.author, doc))
+
+    def test_can_view_archived_document_allows_obsolete_published(self):
+        from documents.permissions import can_view_archived_document
+        doc, _ = _make_published_doc('PERM-OBS-001', self.folder, self.manager)
+        doc.status = Document.Status.OBSOLETE
+        doc.save(update_fields=['status'])
+        self.assertTrue(can_view_archived_document(self.manager, doc))
+
+
+class ArchiveDocumentListTests(TestCase):
+    """Lista Archivio (TASK-021): permessi d'accesso, ambito storico completo."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        self.manager = User.objects.create_user('arc_mgr', password='pw')
+        Group.objects.get_or_create(name='Document Managers')[0].user_set.add(self.manager)
+        self.plain_user = User.objects.create_user('arc_plain', password='pw')
+        self.author = User.objects.create_user('arc_author', password='pw')
+        self.folder = _make_folder(code='ARC-FOLD', owner=self.manager)
+
+    def test_anonymous_redirects_to_login(self):
+        r = self.client.get(reverse('archive_document_list'))
         self.assertRedirects(r, '/accounts/login/?next=/archivio/', fetch_redirect_response=False)
 
-    def test_ok_for_authenticated(self):
-        self.client.force_login(self.user)
-        r = self.client.get(reverse('archive_placeholder'))
+    def test_plain_user_without_permission_gets_404(self):
+        self.client.force_login(self.plain_user)
+        r = self.client.get(reverse('archive_document_list'))
+        self.assertEqual(r.status_code, 404)
+
+    def test_manager_sees_archive_list(self):
+        self.client.force_login(self.manager)
+        r = self.client.get(reverse('archive_document_list'))
         self.assertEqual(r.status_code, 200)
-        self.assertContains(r, 'Sezione in costruzione')
+
+    def test_folder_view_history_grant_allows_access(self):
+        _grant(self.folder, user=self.plain_user, perm='view_history')
+        self.client.force_login(self.plain_user)
+        r = self.client.get(reverse('archive_document_list'))
+        self.assertEqual(r.status_code, 200)
+
+    def test_obsolete_document_appears_in_archive(self):
+        doc, _ = _make_published_doc('ARC-OBS-001', self.folder, self.manager)
+        doc.status = Document.Status.OBSOLETE
+        doc.save(update_fields=['status'])
+        self.client.force_login(self.manager)
+        r = self.client.get(reverse('archive_document_list'))
+        codes = [d.code for d in r.context['documents']]
+        self.assertIn('ARC-OBS-001', codes)
+
+    def test_obsolete_document_not_in_normal_document_list(self):
+        doc, _ = _make_published_doc('ARC-OBS-002', self.folder, self.manager)
+        doc.status = Document.Status.OBSOLETE
+        doc.save(update_fields=['status'])
+        self.client.force_login(self.manager)
+        r = self.client.get(reverse('document_list'))
+        codes = [d.code for d in r.context['documents']]
+        self.assertNotIn('ARC-OBS-002', codes)
+
+    def test_other_users_private_draft_hidden_even_for_manager(self):
+        _make_draft_doc('ARC-DRAFT-001', self.folder, author=self.author)
+        self.client.force_login(self.manager)
+        r = self.client.get(reverse('archive_document_list'))
+        codes = [d.code for d in r.context['documents']]
+        self.assertNotIn('ARC-DRAFT-001', codes)
+
+    def test_author_sees_own_draft_in_archive_even_without_folder_grant(self):
+        folder2 = _make_folder(code='ARC-FOLD-2', owner=self.manager)
+        _grant(folder2, user=self.author, perm='view_history')
+        _make_draft_doc('ARC-DRAFT-003', self.folder, author=self.author)
+        self.client.force_login(self.author)
+        r = self.client.get(reverse('archive_document_list'))
+        codes = [d.code for d in r.context['documents']]
+        self.assertIn('ARC-DRAFT-003', codes)
+
+
+class ArchiveDocumentDetailTests(TestCase):
+    """Dettaglio Archivio (TASK-021): storico completo, permessi."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        self.manager = User.objects.create_user('arcd_mgr', password='pw')
+        Group.objects.get_or_create(name='Document Managers')[0].user_set.add(self.manager)
+        self.plain_user = User.objects.create_user('arcd_plain', password='pw')
+        self.folder = _make_folder(code='ARCD-FOLD', owner=self.manager)
+        self.doc, self.ver = _make_published_doc('ARCD-DOC-001', self.folder, self.manager)
+
+    def test_plain_user_without_permission_gets_404(self):
+        self.client.force_login(self.plain_user)
+        r = self.client.get(reverse('archive_document_detail', args=[self.doc.pk]))
+        self.assertEqual(r.status_code, 404)
+
+    def test_manager_sees_full_revisions_table(self):
+        create_new_revision(self.doc, self.manager, '01', 1, _bypass_ecn_check=True)
+        self.client.force_login(self.manager)
+        r = self.client.get(reverse('archive_document_detail', args=[self.doc.pk]))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'Tutte le revisioni')
+        self.assertContains(r, self.ver.revision_label)
+
+    def test_manager_sees_audit_history_section(self):
+        self.client.force_login(self.manager)
+        r = self.client.get(reverse('archive_document_detail', args=[self.doc.pk]))
+        self.assertContains(r, 'Storico eventi')
+
+
+class DocumentDetailCompactHistoryTests(TestCase):
+    """document_detail fuori da Archivio non mostra più lo storico completo (TASK-021)."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        self.manager = User.objects.create_user('cmp_mgr', password='pw')
+        Group.objects.get_or_create(name='Document Managers')[0].user_set.add(self.manager)
+        self.folder = _make_folder(code='CMP-FOLD', owner=self.manager)
+        self.doc, self.ver = _make_published_doc('CMP-DOC-001', self.folder, self.manager)
+
+    def test_compact_detail_has_no_full_revisions_table(self):
+        create_new_revision(self.doc, self.manager, '01', 1, _bypass_ecn_check=True)
+        self.client.force_login(self.manager)
+        r = self.client.get(reverse('document_detail', args=[self.doc.pk]))
+        self.assertNotContains(r, 'Tutte le revisioni')
+
+    def test_compact_detail_has_no_audit_history_section(self):
+        self.client.force_login(self.manager)
+        r = self.client.get(reverse('document_detail', args=[self.doc.pk]))
+        self.assertNotContains(r, 'Storico eventi')
+
+    def test_compact_detail_shows_latest_ecn_header(self):
+        self.client.force_login(self.manager)
+        r = self.client.get(reverse('document_detail', args=[self.doc.pk]))
+        self.assertContains(r, 'Ultimo ECN / Variante')
+        self.assertNotContains(r, 'ECN / Varianti collegate')
+
+    def test_compact_detail_shows_archive_link_for_privileged_user(self):
+        self.client.force_login(self.manager)
+        r = self.client.get(reverse('document_detail', args=[self.doc.pk]))
+        self.assertContains(r, 'Vedi storico completo')
+
+    def test_compact_detail_hides_archive_link_for_plain_user(self):
+        plain = User.objects.create_user('cmp_plain', password='pw')
+        _grant(self.folder, user=plain, perm='read_published')
+        self.client.force_login(plain)
+        r = self.client.get(reverse('document_detail', args=[self.doc.pk]))
+        self.assertEqual(r.status_code, 200)
+        self.assertNotContains(r, 'Vedi storico completo')
 
 
 # ---------------------------------------------------------------------------

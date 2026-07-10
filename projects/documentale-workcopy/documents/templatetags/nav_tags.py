@@ -102,6 +102,15 @@ def user_can_quality_workspace(user):
 
 
 @register.simple_tag
+def user_can_view_archive(user):
+    """True se l'utente può accedere alla sezione Archivio (TASK-021)."""
+    if not user or not user.is_authenticated:
+        return False
+    from documents.permissions import can_view_archive
+    return can_view_archive(user)
+
+
+@register.simple_tag
 def user_can_create_doc(user):
     """True se l'utente può creare nuovi documenti."""
     if not user or not user.is_authenticated:

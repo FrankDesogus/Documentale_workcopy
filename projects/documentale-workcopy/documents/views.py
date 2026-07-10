@@ -16,6 +16,8 @@ from documents.permissions import (
     can_edit_document_metadata,
     can_edit_version,
     can_submit_for_approval,
+    can_view_archive,
+    can_view_archived_document,
     can_view_audit,
     can_view_document,
     can_view_version,
@@ -93,8 +95,154 @@ def dashboard(request):
 
 
 @login_required
-def archive_placeholder(request):
-    return render(request, 'documents/archive_placeholder.html')
+def archive_document_list(request):
+    """Lista completa documenti (tutti gli stati) per la sezione Archivio.
+    Accesso gated da can_view_archive (TASK-021)."""
+    from django.core.paginator import Paginator
+    from projects.models import ProjectFolder
+
+    user = request.user
+    if not can_view_archive(user):
+        raise Http404
+
+    qs = Document.objects.select_related(
+        'current_version', 'owner', 'project_folder'
+    ).order_by('code')
+
+    q = request.GET.get('q', '').strip()
+    if q:
+        qs = qs.filter(
+            Q(code__icontains=q)
+            | Q(title__icontains=q)
+            | Q(document_type__icontains=q)
+            | Q(description__icontains=q)
+        )
+
+    folder_id = request.GET.get('folder', '')
+    if folder_id:
+        try:
+            qs = qs.filter(project_folder_id=int(folder_id))
+        except (ValueError, TypeError):
+            pass
+
+    doc_type = request.GET.get('doc_type', '').strip()
+    if doc_type:
+        qs = qs.filter(document_type=doc_type)
+
+    status = request.GET.get('status', '').strip()
+    if status:
+        qs = qs.filter(status=status)
+
+    # Filtro fine-grained in Python: stessa regola bozze/rifiutati privati
+    # di can_view_document, nessuna deroga per ruoli privilegiati.
+    documents = [d for d in qs if can_view_archived_document(user, d)]
+
+    paginator = Paginator(documents, 20)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+
+    filter_folders = ProjectFolder.objects.filter(
+        status=ProjectFolder.Status.ACTIVE
+    ).order_by('code')
+
+    return render(request, 'documents/archive_document_list.html', {
+        'documents': page_obj,
+        'page_obj': page_obj,
+        'q': q,
+        'folder_id': folder_id,
+        'doc_type': doc_type,
+        'status': status,
+        'filter_folders': filter_folders,
+        'total_count': len(documents),
+        'system_document_type_choices': SYSTEM_DOCUMENT_TYPE_CHOICES,
+        'project_document_type_choices': PROJECT_DOCUMENT_TYPE_CHOICES,
+        'document_status_choices': Document.Status.choices,
+    })
+
+
+@login_required
+def archive_document_detail(request, document_id):
+    """Storico completo di un documento (tutte le revisioni, tutti gli ECN,
+    storico eventi, sanatoria). Accesso gated da can_view_archived_document
+    (TASK-021) — non raggiungibile da document_detail se non autorizzati."""
+    doc = get_object_or_404(Document, pk=document_id)
+
+    if not can_view_archived_document(request.user, doc):
+        raise Http404
+
+    all_versions = doc.versions.select_related(
+        'created_by', 'approved_by'
+    ).order_by('-revision_number')
+    versions = [v for v in all_versions if can_view_version(request.user, v)]
+
+    from auditlog.models import AuditLog
+    audit_logs = AuditLog.objects.filter(
+        changes__document_id=doc.pk
+    ).select_related('user').order_by('-timestamp')[:20]
+
+    latest_approval_request = None
+    latest_approval_approvers = []
+    if doc.current_version:
+        from approvals.models import ApprovalRequest
+        latest_approval_request = (
+            doc.current_version.approval_requests
+            .filter(status=ApprovalRequest.Status.APPROVED)
+            .order_by('-completed_at')
+            .first()
+        )
+        if latest_approval_request:
+            latest_approval_approvers = list(
+                latest_approval_request.approvers
+                .select_related('approver')
+                .order_by('order')
+            )
+
+    latest_approval_attachments = (
+        list(latest_approval_request.attachments.all())
+        if latest_approval_request else []
+    )
+
+    doc_ecns = []
+    try:
+        from ecn.permissions import can_view_ecn
+        raw_ecns = doc.ecns.select_related('proposed_by').order_by('-proposed_at')
+        doc_ecns = [e for e in raw_ecns if can_view_ecn(request.user, e)]
+    except Exception:
+        pass
+
+    from auditlog.models import HistoricalRecord
+    historical_records = list(
+        HistoricalRecord.objects.filter(
+            target_app='documents',
+            target_model='document',
+            target_id=str(doc.pk),
+        ).select_related('recorded_by', 'import_batch').order_by('-historical_date')
+    )
+    if versions:
+        version_ids = [str(v.pk) for v in versions]
+        ver_records = list(
+            HistoricalRecord.objects.filter(
+                target_app='documents',
+                target_model='documentversion',
+                target_id__in=version_ids,
+            ).select_related('recorded_by', 'import_batch').order_by('-historical_date')
+        )
+        historical_records = sorted(
+            historical_records + ver_records,
+            key=lambda r: (r.historical_date or __import__('datetime').date.min),
+            reverse=True,
+        )
+
+    return render(request, 'documents/archive_document_detail.html', {
+        'document': doc,
+        'versions': versions,
+        'audit_logs': audit_logs,
+        'latest_approval_request': latest_approval_request,
+        'latest_approval_approvers': latest_approval_approvers,
+        'latest_approval_attachments': latest_approval_attachments,
+        'doc_ecns': doc_ecns,
+        'historical_records': historical_records,
+    })
 
 
 @login_required
@@ -306,20 +454,10 @@ def document_detail(request, document_id):
     if not can_view_document(request.user, doc):
         raise Http404
 
+    # show_history non pilota più tabelle inline (spostate in Archivio,
+    # TASK-021): resta solo per il gate della sezione sanatoria, invariato.
     show_history = can_view_audit(request.user, folder=doc.project_folder)
-
-    versions = None
-    audit_logs = None
-    if show_history:
-        all_versions = doc.versions.select_related(
-            'created_by', 'approved_by'
-        ).order_by('-revision_number')
-        # Filtra le versioni a quelle visibili all'utente (bozze private escluse)
-        versions = [v for v in all_versions if can_view_version(request.user, v)]
-        from auditlog.models import AuditLog
-        audit_logs = AuditLog.objects.filter(
-            changes__document_id=doc.pk
-        ).select_related('user').order_by('-timestamp')[:20]
+    can_open_archive = can_view_archived_document(request.user, doc)
 
     latest_approval_request = None
     latest_approval_approvers = []
@@ -343,13 +481,14 @@ def document_detail(request, document_id):
         if latest_approval_request else []
     )
 
-    # ECN collegati al documento (visibili all'utente)
-    doc_ecns = []
+    # Solo l'ECN più recente visibile all'utente (storico completo → Archivio, TASK-021)
+    latest_ecn = None
     show_create_ecn = False
     try:
         from ecn.permissions import can_create_ecn, can_view_ecn
         raw_ecns = doc.ecns.select_related('proposed_by').order_by('-proposed_at')
-        doc_ecns = [e for e in raw_ecns if can_view_ecn(request.user, e)]
+        visible_ecns = [e for e in raw_ecns if can_view_ecn(request.user, e)]
+        latest_ecn = visible_ecns[0] if visible_ecns else None
         show_create_ecn = (
             doc.current_version is not None
             and can_create_ecn(request.user, doc)
@@ -357,7 +496,9 @@ def document_detail(request, document_id):
     except Exception:
         pass
 
-    # Record storici sanatoria visibili all'auditor/supervisor
+    # Record storici sanatoria visibili all'auditor/supervisor (sezione
+    # invariata da TASK-021: non fa parte dello storico revisioni/ECN spostato
+    # in Archivio).
     historical_records = []
     from auditlog.permissions import can_use_sanatoria
     if show_history or can_use_sanatoria(request.user):
@@ -369,8 +510,11 @@ def document_detail(request, document_id):
                 target_id=str(doc.pk),
             ).select_related('recorded_by', 'import_batch').order_by('-historical_date')
         )
-        if versions:
-            version_ids = [str(v.pk) for v in versions]
+        if show_history:
+            versions_for_sanatoria = [
+                v for v in doc.versions.all() if can_view_version(request.user, v)
+            ]
+            version_ids = [str(v.pk) for v in versions_for_sanatoria]
             ver_records = list(
                 HistoricalRecord.objects.filter(
                     target_app='documents',
@@ -386,16 +530,15 @@ def document_detail(request, document_id):
 
     return render(request, 'documents/document_detail.html', {
         'document': doc,
-        'versions': versions,
         'show_history': show_history,
-        'audit_logs': audit_logs,
         'latest_approval_request': latest_approval_request,
         'latest_approval_approvers': latest_approval_approvers,
         'latest_approval_attachments': latest_approval_attachments,
-        'doc_ecns': doc_ecns,
+        'latest_ecn': latest_ecn,
         'show_create_ecn': show_create_ecn,
         'show_create_revision': can_create_revision(request.user, doc),
         'show_edit_metadata': can_edit_document_metadata(request.user, doc),
+        'can_open_archive': can_open_archive,
         'historical_records': historical_records,
     })
 
