@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% load nav_tags %}
+{% block title %}Miei documenti — Documentale{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="flex items-start justify-between gap-4 flex-wrap">
+    <div>
+      <h1>Miei documenti</h1>
+      <p class="page-header-sub">Documenti di cui sei autore, nella versione più aggiornata</p>
+    </div>
+    <a href="{% url 'document_new' %}" class="btn-primary">+ Nuovo documento</a>
+  </div>
+</div>
+
+{% if documents %}
+<div class="table-container">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Codice</th>
+        <th>Titolo</th>
+        <th>Tipo</th>
+        <th>La tua ultima versione</th>
+        <th>Cartella</th>
+        <th class="w-32"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for doc in documents %}
+      <tr>
+        <td><a href="{% url 'document_detail' doc.pk %}" class="font-semibold text-brand-800 font-mono hover:underline">{{ doc.code }}</a></td>
+        <td>{{ doc.title }}</td>
+        <td class="meta">{{ doc.get_document_type_display|default:"—" }}</td>
+        <td>
+          {% if doc.my_latest_version %}
+          <a href="{% url 'version_detail' doc.my_latest_version.pk %}" class="text-brand-600 hover:underline">Rev. {{ doc.my_latest_version.revision_label }}</a>
+          <span class="{{ doc.my_latest_version.status|status_badge_class }} ml-1">{{ doc.my_latest_version.get_status_display }}</span>
+          {% if doc.current_version_id and doc.my_latest_version.pk != doc.current_version_id %}
+          <div class="text-xs text-gray-500 mt-0.5">Non ancora la versione pubblica (corrente per tutti: Rev. {{ doc.current_version.revision_label }})</div>
+          {% endif %}
+          {% else %}
+          <span class="meta">Nessuna versione</span>
+          {% endif %}
+        </td>
+        <td class="meta">{{ doc.project_folder.code|default:"—" }}</td>
+        <td>
+          <a href="{% url 'document_detail' doc.pk %}" class="btn-primary btn-sm">Apri</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <div class="empty-state-icon">📄</div>
+    <div class="empty-state-title">Nessun documento</div>
+    <div class="empty-state-desc">Non hai ancora creato documenti.</div>
+    <div class="mt-4">
+      <a href="{% url 'document_new' %}" class="btn-primary">Crea il primo documento</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

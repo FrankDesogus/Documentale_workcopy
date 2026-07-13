@@ -1532,3 +1532,69 @@ ai-cycle-dogfood): tutte verdi
    per ECN semplice.
 3. Merge finale di `task/documentale-simple-ecn-flow` su `main`: **non
    eseguito**, in attesa di conferma esplicita dell'operatore.
+
+---
+
+### Run — 2026-07-13 — TASK-023 Chiarezza bozza-revisione + Mie revisioni/Miei documenti
+
+**Agente:** Claude Code
+**Task:** TASK-023 — Chiarezza bozza-revisione + sezioni personali
+**Branch:** task/documentale-my-revisions-documents
+
+**Operazioni eseguite:**
+
+1. Verificato allineamento repo con `origin/main` (nessun branch
+   pendente, working tree pulito) e rieseguita la suite completa
+   (1261/1261 PASS) prima di iniziare, per confermare la baseline.
+2. Creato branch `task/documentale-my-revisions-documents` da `main`.
+3. `templates/documents/new_revision.html`: bottone "Crea bozza" →
+   "Crea bozza revisione", per distinguerlo da "Crea documento e
+   prima bozza" (creazione documento).
+4. Aggiunte viste `my_revisions` e `my_documents` in
+   `documents/views.py`, URL dedicati in `config/urls.py`, due nuovi
+   template (`my_revisions.html`, `my_documents.html`) e due voci
+   sidebar in `templates/base.html` (sezione "Attività").
+5. Aggiunti 8 test in `documents/tests.py`
+   (`NewRevisionButtonLabelTests`, `MyRevisionsViewTests`,
+   `MyDocumentsViewTests`) — tutti verdi.
+6. Rieseguita l'intera app `documents` (394/394 PASS) per escludere
+   regressioni.
+7. **Correzione post-review (operatore)**: `my_documents` mostrava
+   `document.current_version` (la versione pubblica/approvata visibile
+   a tutti in "Documenti"). L'operatore ha chiarito che in "Miei
+   documenti" deve invece comparire l'**ultima versione creata
+   dall'autore stesso**, anche se non ancora approvata/pubblica.
+   Corretta la vista (`my_documents`) per calcolare
+   `doc.my_latest_version` = ultima `DocumentVersion` con
+   `created_by=request.user` per quel documento; template aggiornato
+   con avviso quando differisce dalla versione pubblica corrente.
+   Aggiunto 1 nuovo test
+   (`test_shows_my_latest_version_even_if_not_yet_public_current`).
+
+**Esito test:**
+
+```
+manage.py test documents.tests.NewRevisionButtonLabelTests
+  documents.tests.MyRevisionsViewTests documents.tests.MyDocumentsViewTests: 9/9 PASS
+manage.py test documents: Ran 394 tests — OK (prima della correzione punto 7)
+scripts/test.sh (completo, dopo la correzione): vedi esito registrato subito sotto
+```
+
+**Problemi riscontrati:**
+
+- Il primo test del bottone falliva con 403: `can_create_revision`
+  richiede appartenenza al gruppo "Document Authors" quando il
+  documento non ha una cartella progetto — risolto aggiungendo
+  l'utente al gruppo nel `setUp()` del test (stesso pattern usato
+  altrove nel file).
+- Comportamento di `my_documents` corretto in review (vedi punto 7):
+  non era un bug bloccante, ma un fraintendimento della richiesta
+  originale chiarito dall'operatore prima del commit.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Eseguire la suite completa (`scripts/test.sh`) e le regressioni
+   Station prima del commit gated.
+2. Review + commit gated (`commit-if-approved.sh`) — solo locale,
+   nessun push, nessun merge di questa branch su `main` senza
+   conferma esplicita.

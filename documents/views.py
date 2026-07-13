@@ -605,6 +605,35 @@ def my_drafts(request):
 
 
 @login_required
+def my_revisions(request):
+    """Storico personale: tutte le revisioni create dall'utente, in ogni stato."""
+    versions = DocumentVersion.objects.filter(
+        created_by=request.user,
+    ).select_related('document').order_by('-created_at')
+    return render(request, 'documents/my_revisions.html', {'versions': versions})
+
+
+@login_required
+def my_documents(request):
+    """
+    Documenti di cui l'utente è autore, con l'ULTIMA versione creata da lui.
+
+    Diverso da 'current_version' (la versione pubblica/approvata visibile
+    a tutti in 'Documenti'): se l'autore ha già creato una revisione più
+    recente non ancora approvata, qui deve vedere quella, non quella
+    pubblica corrente.
+    """
+    documents = Document.objects.filter(
+        created_by=request.user,
+    ).select_related('current_version', 'owner', 'project_folder').order_by('code')
+    for doc in documents:
+        doc.my_latest_version = DocumentVersion.objects.filter(
+            document=doc, created_by=request.user,
+        ).order_by('-revision_number').first()
+    return render(request, 'documents/my_documents.html', {'documents': documents})
+
+
+@login_required
 def new_document(request):
     from documents.forms import DocumentCreateForm
     from projects.models import Project

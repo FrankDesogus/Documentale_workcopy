@@ -107,6 +107,16 @@
         <span class="flex items-center gap-2.5"><span>📝</span> Mie bozze</span>
         {% if sb_n_drafts %}<span class="sidebar-count sidebar-count-warn">{{ sb_n_drafts }}</span>{% endif %}
       </a>
+
+      <a href="{% url 'my_revisions' %}"
+         class="sidebar-link {% if p == '/my-revisions/' %}sidebar-link-active{% endif %}">
+        <span>🕓</span> Mie revisioni
+      </a>
+
+      <a href="{% url 'my_documents' %}"
+         class="sidebar-link {% if p == '/my-documents/' %}sidebar-link-active{% endif %}">
+        <span>🗎</span> Miei documenti
+      </a>
       </div>
 
       {% if sb_can_quality %}

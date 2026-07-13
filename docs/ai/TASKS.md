@@ -58,6 +58,7 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | TASK-020 | Tipo Documento come menu a cascata (dipendente da Categoria) + suffisso di riferimento | — | 2026-07-09 |
 | TASK-021 | Archivio: storico completo documenti (permesso view_history) + dettaglio compatto altrove | — | 2026-07-10 |
 | TASK-022 | Flusso ECN semplice per revisioni rapide (sostituisce "revisione senza ECN" come percorso demo) | — | 2026-07-10 |
+| TASK-023 | Chiarezza bozza-revisione + sezioni personali "Mie revisioni"/"Miei documenti" | — | 2026-07-13 |
 
 ---
 
@@ -2593,6 +2594,90 @@ un nuovo documento né nello scenario demo principale.
 definitiva di `requires_ecn_for_revision`/`ecn_exemption` dal modello;
 badge "Tipo" in `ecn_list.html`/`ecn_detail.html`; permessi dedicati per
 ECN semplice (oggi riusa `can_create_ecn` senza distinzioni).
+
+---
+
+### TASK-023 — Chiarezza bozza-revisione + sezioni personali "Mie revisioni"/"Miei documenti" — Claude Code
+
+#### Obiettivo
+
+Segnalato dall'operatore usando la demo: dopo l'approvazione di un ECN,
+la creazione della revisione collegata mostra un bottone "Crea bozza"
+identico (nel testo) a quello di creazione di un nuovo documento,
+generando ambiguità. Inoltre non esiste un posto dove vedere **tutto**
+lo storico personale delle revisioni (non solo quelle aperte) né i
+documenti di cui si è autori nella loro versione più aggiornata.
+
+#### Analisi
+
+- `templates/documents/new_revision.html:177` — bottone genericamente
+  "Crea bozza", indistinguibile da "Crea documento e prima bozza" di
+  `new_document.html:114`.
+- `my_drafts` (`documents/views.py:599`) mostra solo
+  `DocumentVersion` con `status in (DRAFT, REJECTED)` create
+  dall'utente — non uno storico completo.
+- Non esisteva alcuna vista per "tutti i documenti di cui sono
+  autore" nella loro versione corrente.
+
+#### Soluzione
+
+- `new_revision.html`: bottone rinominato in **"Crea bozza revisione"**
+  (nessun'altra label toccata).
+- Nuova vista `my_revisions` (`documents/views.py`): tutte le
+  `DocumentVersion` con `created_by=request.user`, **ogni stato**
+  (non solo bozze), ordinate per data di creazione decrescente.
+  Azioni condizionate allo stato: Modifica/Invia approvazione solo se
+  draft/rejected, altrimenti solo Visualizza.
+- Nuova vista `my_documents` (`documents/views.py`): tutti i
+  `Document` con `created_by=request.user` ("autore" = campo
+  `created_by`, coerente con `my_drafts`/`workspace_my_work` che usano
+  la stessa convenzione). Mostra, per ciascun documento, **l'ultima
+  `DocumentVersion` creata dall'utente stesso** — non
+  `document.current_version` (la versione pubblica/approvata visibile
+  a tutti in "Documenti"). Se l'autore ha già creato una revisione più
+  recente non ancora approvata, qui vede quella, con un avviso quando
+  differisce dalla versione pubblica corrente (chiarito
+  dall'operatore durante la review).
+- URL: `my-revisions/` → `my_revisions`, `my-documents/` →
+  `my_documents` (`config/urls.py`).
+- Sidebar (`templates/base.html`, sezione "Attività"): due nuove voci
+  "🕓 Mie revisioni" e "🗎 Miei documenti", accanto a "Mie bozze".
+  Nessun contatore badge aggiunto (fuori scope, non richiesto).
+- Nuovi template: `documents/my_revisions.html`,
+  `documents/my_documents.html` (stesso stile Tailwind di
+  `my_drafts.html`/`document_list.html`).
+
+#### File coinvolti
+
+- `templates/documents/new_revision.html` (testo bottone)
+- `documents/views.py` (+`my_revisions`, +`my_documents`)
+- `config/urls.py` (import + 2 nuovi path)
+- `templates/base.html` (2 nuove voci sidebar)
+- `templates/documents/my_revisions.html` (nuovo)
+- `templates/documents/my_documents.html` (nuovo)
+- `documents/tests.py` (+`NewRevisionButtonLabelTests`,
+  +`MyRevisionsViewTests`, +`MyDocumentsViewTests`, 9 test)
+
+#### Test
+
+- Bottone: verifica testuale "Crea bozza revisione" sulla pagina di
+  creazione revisione.
+- `my_revisions`: redirect anonimo, mostra revisioni proprie in ogni
+  stato, non mostra revisioni di altri utenti.
+- `my_documents`: redirect anonimo, mostra documenti propri con/senza
+  versione, non mostra documenti di altri utenti, e — caso chiave
+  segnalato in review — mostra l'ultima versione **propria** anche
+  quando non coincide ancora con la versione pubblica corrente
+  (`test_shows_my_latest_version_even_if_not_yet_public_current`).
+- Suite mirata: **9/9 PASS**. Suite completa (`scripts/test.sh`, tutte
+  le app): vedi esito finale registrato in `RUN_LOG.md`.
+
+#### Backlog (fuori scope)
+
+- Contatori badge sidebar per "Mie revisioni"/"Miei documenti" (non
+  richiesti).
+- Filtri/ricerca dentro le due nuove sezioni (elenco semplice per ora,
+  coerente con "soluzione semplice ma corretta").
 
 ---
 

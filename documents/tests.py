@@ -4486,3 +4486,111 @@ class SimpleEcnUiTests(TestCase):
         response = self.client.get(reverse('document_detail', args=[doc.pk]))
         self.assertContains(response, 'approvazione diretta senza ECN')
         self.assertContains(response, '+ Nuova revisione</a>')
+
+
+class NewRevisionButtonLabelTests(TestCase):
+    """TASK-023: il bottone di creazione revisione deve distinguersi da
+    quello di creazione documento ('Crea documento e prima bozza')."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        self.author = User.objects.create_user('rev_btn_author', password='pw')
+        self.author.groups.add(Group.objects.get_or_create(name='Document Authors')[0])
+        self.doc = make_document('REVBTN-001', owner=self.author)
+        create_new_revision(self.doc, self.author, '00', 0)
+
+    def test_new_revision_button_says_crea_bozza_revisione(self):
+        self.client.force_login(self.author)
+        response = self.client.get(reverse('document_new_revision', args=[self.doc.pk]))
+        self.assertContains(response, 'Crea bozza revisione')
+
+
+class MyRevisionsViewTests(TestCase):
+    """Test per /my-revisions/ (TASK-023)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('myrev_user', password='pw')
+        self.other = User.objects.create_user('myrev_other', password='pw')
+
+    def test_redirects_anonymous(self):
+        r = self.client.get(reverse('my_revisions'))
+        self.assertRedirects(r, '/accounts/login/?next=/my-revisions/', fetch_redirect_response=False)
+
+    def test_shows_all_statuses_for_own_versions(self):
+        doc = make_document('MYREV-001', owner=self.user)
+        draft_version = create_new_revision(doc, self.user, '00', 0)
+
+        doc2 = make_document('MYREV-002', owner=self.user)
+        approved_version = create_new_revision(doc2, self.user, '00', 0)
+        from approvals.services import approve_version
+        req = submit_version_for_approval(approved_version, self.user, [self.user])
+        approve_version(req, self.user)
+
+        self.client.force_login(self.user)
+        r = self.client.get(reverse('my_revisions'))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'MYREV-001')
+        self.assertContains(r, 'MYREV-002')
+
+    def test_does_not_show_other_users_revisions(self):
+        doc = make_document('MYREV-003', owner=self.other)
+        create_new_revision(doc, self.other, '00', 0)
+
+        self.client.force_login(self.user)
+        r = self.client.get(reverse('my_revisions'))
+        self.assertNotContains(r, 'MYREV-003')
+
+
+class MyDocumentsViewTests(TestCase):
+    """Test per /my-documents/ (TASK-023)."""
+
+    def setUp(self):
+        self.author = User.objects.create_user('mydoc_author', password='pw')
+        self.other = User.objects.create_user('mydoc_other', password='pw')
+
+    def test_redirects_anonymous(self):
+        r = self.client.get(reverse('my_documents'))
+        self.assertRedirects(r, '/accounts/login/?next=/my-documents/', fetch_redirect_response=False)
+
+    def test_shows_own_documents_with_current_version(self):
+        doc = make_document('MYDOC-001', owner=self.author)
+        version = create_new_revision(doc, self.author, '00', 0)
+        from approvals.services import approve_version
+        req = submit_version_for_approval(version, self.author, [self.author])
+        approve_version(req, self.author)
+
+        self.client.force_login(self.author)
+        r = self.client.get(reverse('my_documents'))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'MYDOC-001')
+        self.assertContains(r, 'Rev. 00')
+
+    def test_shows_own_document_without_current_version(self):
+        make_document('MYDOC-002', owner=self.author)
+        self.client.force_login(self.author)
+        r = self.client.get(reverse('my_documents'))
+        self.assertContains(r, 'MYDOC-002')
+        self.assertContains(r, 'Nessuna versione')
+
+    def test_does_not_show_other_users_documents(self):
+        make_document('MYDOC-003', owner=self.other)
+        self.client.force_login(self.author)
+        r = self.client.get(reverse('my_documents'))
+        self.assertNotContains(r, 'MYDOC-003')
+
+    def test_shows_my_latest_version_even_if_not_yet_public_current(self):
+        """La versione pubblica in 'Documenti' resta quella approvata (Rev. 00);
+        'Miei documenti' deve invece mostrare la Rev. 01 appena creata
+        dall'autore, ancora in bozza e non visibile agli altri utenti."""
+        doc = make_document('MYDOC-004', owner=self.author)
+        v00 = create_new_revision(doc, self.author, '00', 0)
+        from approvals.services import approve_version
+        req = submit_version_for_approval(v00, self.author, [self.author])
+        approve_version(req, self.author)
+
+        create_new_revision(doc, self.author, '01', 1, _bypass_ecn_check=True)
+
+        self.client.force_login(self.author)
+        r = self.client.get(reverse('my_documents'))
+        self.assertContains(r, 'Rev. 01')
+        self.assertContains(r, 'Non ancora la versione pubblica')
