@@ -191,6 +191,16 @@ def approval_detail(request, approval_request_id):
     decisions = ar.decisions.select_related('approver').order_by('decided_at')
     approvers = ar.approvers.select_related('approver').order_by('order')
 
+    # ECN che ha originato questa revisione (stesso pattern di documents.version_detail)
+    ecn_origin = None
+    try:
+        from ecn.permissions import can_view_ecn
+        ecn_origin = version.ecns_executed.select_related('proposed_by').first()
+        if ecn_origin and not can_view_ecn(request.user, ecn_origin):
+            ecn_origin = None
+    except Exception:
+        pass
+
     # Per SEQUENTIAL: individua il prossimo approvatore atteso
     next_approver = None
     if ar.approval_policy == ApprovalRequest.Policy.SEQUENTIAL and ar.status == ApprovalRequest.Status.PENDING:
@@ -215,6 +225,7 @@ def approval_detail(request, approval_request_id):
         'decisions': decisions,
         'approvers': approvers,
         'next_approver': next_approver,
+        'ecn_origin': ecn_origin,
         'form': sanatoria_form,
         'historical_records': historical_records,
         'sanatoria_available': can_use_sanatoria(request.user),

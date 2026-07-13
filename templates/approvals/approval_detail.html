@@ -74,6 +74,35 @@
   </dl>
 </div>
 
+<!-- ECN di origine -->
+{% if ecn_origin %}
+<div class="card mb-4">
+  <div class="card-header">
+    <h2 class="section-title mb-0">ECN di origine</h2>
+  </div>
+  <div class="detail-grid">
+    <div class="detail-item">
+      <span class="detail-label">Codice ECN</span>
+      <span class="detail-value">
+        <a href="{% url 'ecn:ecn_detail' ecn_origin.pk %}" class="link font-mono">{{ ecn_origin.code }}</a>
+      </span>
+    </div>
+    <div class="detail-item">
+      <span class="detail-label">Titolo</span>
+      <span class="detail-value">{{ ecn_origin.title }}</span>
+    </div>
+    <div class="detail-item">
+      <span class="detail-label">Proponente</span>
+      <span class="detail-value">{{ ecn_origin.proposed_by.get_full_name|default:ecn_origin.proposed_by.username }}</span>
+    </div>
+    <div class="detail-item">
+      <span class="detail-label">Stato ECN</span>
+      <span class="detail-value">{{ ecn_origin.get_status_display }}</span>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <!-- Approvatori -->
 {% if approvers %}
 <h2 class="text-lg font-semibold text-brand-900 mb-3">Approvatori</h2>

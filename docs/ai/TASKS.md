@@ -59,6 +59,7 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | TASK-021 | Archivio: storico completo documenti (permesso view_history) + dettaglio compatto altrove | — | 2026-07-10 |
 | TASK-022 | Flusso ECN semplice per revisioni rapide (sostituisce "revisione senza ECN" come percorso demo) | — | 2026-07-10 |
 | TASK-023 | Chiarezza bozza-revisione + sezioni personali "Mie revisioni"/"Miei documenti" | — | 2026-07-13 |
+| TASK-024 | Mostrare l'ECN di origine nella pagina di approvazione revisione | — | 2026-07-13 |
 
 ---
 
@@ -2678,6 +2679,64 @@ documenti di cui si è autori nella loro versione più aggiornata.
   richiesti).
 - Filtri/ricerca dentro le due nuove sezioni (elenco semplice per ora,
   coerente con "soluzione semplice ma corretta").
+
+---
+
+### TASK-024 — Mostrare l'ECN di origine nella pagina di approvazione revisione — Claude Code
+
+#### Obiettivo
+
+Segnalato dall'operatore: quando un approvatore esamina la richiesta
+di approvazione di una revisione, non vede da quale ECN la revisione
+sia scaturita. Informazione importante perché la revisione è
+giuridicamente/tecnicamente legata all'ECN che l'ha autorizzata.
+
+#### Analisi
+
+- Il collegamento esiste già lato dati:
+  `ChangeNotice.executed_version` (FK, `related_name='ecns_executed'`
+  su `DocumentVersion`, `ecn/models.py:215`), popolato da
+  `create_new_revision(..., ecn=ecn)` in `documents/services.py`.
+  `templates/documents/version_detail.html` mostra già questa
+  informazione ("ECN di origine": codice, titolo, proponente, stato),
+  calcolata in `documents/views.py:version_detail`
+  (`version.ecns_executed.select_related('proposed_by').first()`,
+  filtrato da `can_view_ecn`).
+- `templates/approvals/approval_detail.html` (pagina che un
+  approvatore usa per esaminare/approvare/rifiutare) **non aveva
+  alcuna informazione ECN** — gap confermato.
+
+#### Soluzione
+
+- `approvals/views.py:approval_detail`: aggiunto lo stesso calcolo di
+  `ecn_origin` usato in `documents.views.version_detail` (stesso
+  pattern, stesso controllo `can_view_ecn`), passato al template.
+- `templates/approvals/approval_detail.html`: aggiunta la stessa
+  sezione "ECN di origine" (codice con link a `ecn:ecn_detail`,
+  titolo, proponente, stato), subito dopo i metadati principali e
+  prima della tabella approvatori. Nessuna modifica a
+  `version_detail.html` (già corretto).
+
+#### File coinvolti
+
+- `approvals/views.py`
+- `templates/approvals/approval_detail.html`
+- `approvals/tests.py` (+`test_approval_detail_shows_ecn_origin`,
+  +`test_approval_detail_no_ecn_section_when_not_from_ecn`)
+
+#### Test
+
+- Revisione creata da ECN semplice (`create_simple_ecn`, TASK-022):
+  la pagina di approvazione mostra codice, titolo e la sezione "ECN
+  di origine".
+- Revisione senza ECN di origine: la sezione non compare.
+- Suite mirata: **2/2 PASS**. App `approvals` completa: **52/52
+  PASS** (nessuna regressione).
+
+#### Backlog (fuori scope)
+
+- Nessuno: modifica puramente additiva, riusa dati e permessi già
+  esistenti (`can_view_ecn`).
 
 ---
 

@@ -264,6 +264,36 @@ class ApprovalViewTests(TestCase):
         req.refresh_from_db()
         self.assertEqual(req.status, ApprovalRequest.Status.REJECTED)
 
+    def test_approval_detail_shows_ecn_origin(self):
+        """TASK-024: la revisione scaturita da un ECN deve mostrare i dati
+        dell'ECN nella pagina di esame della richiesta di approvazione,
+        non solo in version_detail."""
+        from ecn.services import create_simple_ecn
+
+        v00 = create_new_revision(self.document, self.author, '00', 0)
+        req00 = submit_version_for_approval(v00, self.author, [self.approver])
+        approve_version(req00, self.approver)
+
+        ecn = create_simple_ecn(
+            self.document, self.approver, 'Aggiornamento urgente',
+            send_notifications=False,
+        )
+        v01 = create_new_revision(self.document, self.author, '01', 1, ecn=ecn)
+        req01 = submit_version_for_approval(v01, self.author, [self.approver])
+
+        self.client.login(username='approver', password='pw')
+        response = self.client.get(reverse('approval_detail', args=[req01.pk]))
+        self.assertContains(response, '<h2 class="section-title mb-0">ECN di origine</h2>')
+        self.assertContains(response, ecn.code)
+        self.assertContains(response, ecn.title)
+
+    def test_approval_detail_no_ecn_section_when_not_from_ecn(self):
+        """Revisione senza ECN di origine: la sezione non deve comparire."""
+        _, req = self._make_pending()
+        self.client.login(username='approver', password='pw')
+        response = self.client.get(reverse('approval_detail', args=[req.pk]))
+        self.assertNotContains(response, '<h2 class="section-title mb-0">ECN di origine</h2>')
+
 
 # ---------------------------------------------------------------------------
 # Policy-aware tests

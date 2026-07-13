@@ -1598,3 +1598,49 @@ scripts/test.sh (completo, dopo la correzione): vedi esito registrato subito sot
 2. Review + commit gated (`commit-if-approved.sh`) — solo locale,
    nessun push, nessun merge di questa branch su `main` senza
    conferma esplicita.
+
+---
+
+### Run — 2026-07-13 — TASK-024 ECN di origine nella pagina di approvazione
+
+**Agente:** Claude Code
+**Task:** TASK-024 — Mostrare l'ECN di origine nella pagina di approvazione
+**Branch:** task/documentale-my-revisions-documents (continuazione)
+
+**Operazioni eseguite:**
+
+1. Segnalazione operatore: la pagina di esame di una richiesta di
+   approvazione non mostra l'ECN da cui è scaturita la revisione,
+   pur essendo il dato già presente in `version_detail.html`.
+2. Individuato il collegamento dati esistente
+   (`ChangeNotice.executed_version` / `DocumentVersion.ecns_executed`)
+   e il pattern già usato in `documents.views.version_detail`.
+3. Replicato lo stesso pattern in `approvals/views.py:approval_detail`
+   (stesso controllo `can_view_ecn`) e nel template
+   `templates/approvals/approval_detail.html` (stessa sezione "ECN di
+   origine": codice, titolo, proponente, stato).
+4. Aggiunti 2 test in `approvals/tests.py` — un'assertion iniziale
+   ("ECN di origine") falliva sempre (sia True che False) perché
+   coincideva col testo del commento HTML sempre presente nel
+   template; corretta usando l'h2 completo come stringa di verifica.
+5. Rieseguita l'intera app `approvals` (52/52 PASS).
+
+**Esito test:**
+
+```
+manage.py test approvals.tests.ApprovalViewTests: 7/7 PASS
+manage.py test approvals: Ran 52 tests — OK
+```
+
+**Problemi riscontrati:**
+
+- Assertion di test inizialmente non discriminante (vedi punto 4
+  sopra) — corretta prima di considerare i test affidabili.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Eseguire la suite completa (`scripts/test.sh`) e le regressioni
+   Station.
+2. Commit locale diretto (repo standalone, vedi `AGENTS.md` — nessuno
+   script di gated-commit dedicato qui). Nessun push, nessun merge su
+   `main` senza conferma esplicita.
