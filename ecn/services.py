@@ -693,14 +693,21 @@ def close_change_notice(change_notice, user, close_notes='', send_notifications=
     """
     Il Responsabile Qualità chiude l'ECN: APPROVED → CLOSED.
 
-    Richiede che executed_version sia già stato impostato (la nuova revisione
-    eseguita deve essere collegata prima di chiudere l'ECN).
+    Richiede che executed_version sia già stato impostato E che quella
+    revisione sia stata effettivamente APPROVATA (TASK-025): la sola
+    creazione della bozza di revisione dimostra solo che l'attuazione è
+    iniziata, non che sia stata completata e verificata. Se la revisione
+    è ancora in bozza/in approvazione, o è stata rifiutata, l'ECN resta
+    APPROVED e non è chiudibile finché non esiste una revisione collegata
+    e approvata.
     Invia email al proponente.
 
     Raises:
       PermissionDenied: se l'utente non è Document Manager/staff.
-      ValidationError: se lo stato non è APPROVED o executed_version è None.
+      ValidationError: se lo stato non è APPROVED, se executed_version è
+        None, o se la revisione collegata non è ancora APPROVATA.
     """
+    from documents.models import DocumentVersion
     from ecn.models import ChangeNotice
     from ecn.permissions import can_close_ecn
 
@@ -717,6 +724,15 @@ def close_change_notice(change_notice, user, close_notes='', send_notifications=
         raise ValidationError(
             "Impossibile chiudere l'ECN: nessuna revisione di esecuzione collegata. "
             "Crea prima la nuova revisione del documento a partire da questo ECN."
+        )
+
+    if change_notice.executed_version.status != DocumentVersion.Status.APPROVED:
+        raise ValidationError(
+            f"Impossibile chiudere l'ECN: la revisione collegata "
+            f"(Rev. {change_notice.executed_version.revision_label}) non è ancora "
+            f"approvata (stato attuale: "
+            f"{change_notice.executed_version.get_status_display()}). "
+            f"La modifica deve essere completata e approvata prima della chiusura formale dell'ECN."
         )
 
     old_status = change_notice.status

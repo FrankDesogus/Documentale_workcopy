@@ -60,6 +60,7 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | TASK-022 | Flusso ECN semplice per revisioni rapide (sostituisce "revisione senza ECN" come percorso demo) | — | 2026-07-10 |
 | TASK-023 | Chiarezza bozza-revisione + sezioni personali "Mie revisioni"/"Miei documenti" | — | 2026-07-13 |
 | TASK-024 | Mostrare l'ECN di origine nella pagina di approvazione revisione | — | 2026-07-13 |
+| TASK-025 | Chiusura ECN solo con revisione collegata approvata | — | 2026-07-13 |
 
 ---
 
@@ -2737,6 +2738,110 @@ giuridicamente/tecnicamente legata all'ECN che l'ha autorizzata.
 
 - Nessuno: modifica puramente additiva, riusa dati e permessi già
   esistenti (`can_view_ecn`).
+
+---
+
+### TASK-025 — Chiusura ECN solo con revisione collegata approvata — Claude Code
+
+#### Obiettivo
+
+Segnalato dall'operatore, poi confrontato con le prassi reali di
+change management (ISO 9001, AS9100, PTC Windchill, NASA CR/PR — vedi
+analisi esterna allegata a questo task): oggi un ECN può essere
+chiuso (`CLOSED`, "modifica completata") anche mentre la revisione
+documento che dovrebbe attuarlo è ancora in Bozza, in approvazione, o
+è stata rifiutata. La creazione della bozza di revisione dimostra
+solo che l'attuazione è *iniziata*, non che sia stata *completata e
+verificata*.
+
+#### Analisi (confermata leggendo il codice)
+
+- `create_new_revision(..., ecn=ecn)` imposta `ecn.executed_version`
+  ed `ecn.executed_at` nell'istante in cui la nuova revisione viene
+  **creata** (stato DRAFT), non quando viene approvata.
+- `close_change_notice` (`ecn/services.py`) controllava solo:
+  `status == APPROVED` e `executed_version_id is not None` — mai lo
+  stato della revisione collegata.
+- `can_close_ecn` (`ecn/permissions.py`) è puramente un controllo di
+  ruolo (Quality Manager/superuser), corretto così: la regola "quando"
+  si può chiudere è una regola di business, non di permesso.
+- `templates/ecn/ecn_detail.html` invitava già alla chiusura
+  ("Procedi con la chiusura formale") appena `executed_version` era
+  presente, indipendentemente dal suo stato.
+- `approve_version`/`reject_version` (`approvals/services.py`) non
+  toccano mai il `ChangeNotice` collegato: se la revisione viene
+  rifiutata dopo che l'ECN è (teoricamente) chiudibile, nulla riapre
+  né corregge l'ECN — da qui la scelta di bloccare la chiusura a
+  monte piuttosto che gestire una riapertura a valle.
+
+#### Soluzione (opzione "A+", vedi analisi esterna)
+
+- `ecn/services.py:close_change_notice`: nuovo controllo — se
+  `executed_version.status != DocumentVersion.Status.APPROVED`,
+  solleva `ValidationError` con messaggio esplicito (stato attuale
+  della revisione). L'ECN resta `APPROVED` (non chiudibile, non
+  riaperto/richiuso automaticamente).
+- `ecn/views.py:ecn_close`: calcola `warn_revision_not_approved`
+  (stesso pattern di `warn_no_version` già esistente).
+- `templates/ecn/ecn_close_form.html`: avviso esplicito e bottone
+  "Conferma chiusura ECN" **disabilitato** quando la chiusura
+  fallirebbe comunque lato server (nessuna revisione collegata, o
+  revisione non ancora approvata). Corretto anche il testo
+  fuorviante del vecchio avviso "Puoi procedere con la chiusura..."
+  (falso: il service la bloccava comunque).
+- `templates/ecn/ecn_detail.html`: il messaggio "Prossima azione" per
+  stato `approved` ora distingue revisione approvata (pronta per la
+  chiusura) da revisione ancora in bozza/in approvazione/rifiutata
+  (spiega perché non è ancora chiudibile). Il bottone "Chiudi ECN"
+  nella barra azioni compare solo quando la revisione collegata è
+  realmente approvata.
+- `documents/templatetags/nav_tags.py:nav_ecn_to_close`: il contatore
+  sidebar "ECN pronti per la chiusura" ora richiede
+  `executed_version__status=APPROVED`, non solo
+  `executed_version__isnull=False` — altrimenti il badge segnalava
+  come "pronti" ECN che in realtà il service avrebbe rifiutato.
+
+#### File coinvolti
+
+- `ecn/services.py`
+- `ecn/views.py`
+- `templates/ecn/ecn_detail.html`
+- `templates/ecn/ecn_close_form.html`
+- `documents/templatetags/nav_tags.py`
+- `ecn/tests.py` (+`test_close_fails_if_executed_version_still_draft`,
+  +`test_close_fails_if_executed_version_in_approval`,
+  +`test_close_fails_if_executed_version_rejected`,
+  +`test_ecn_close_manager_sees_warning_when_exec_version_not_approved`;
+  corretto `_make_executed_version` — default ora
+  `status=APPROVED` (prima creava sempre una revisione DRAFT, il che
+  rendeva "vero" per accidente il vecchio comportamento non corretto
+  in quasi tutti i test esistenti di chiusura riuscita; aggiornato un
+  test che si aspettava ancora il vecchio testo "Attenzione").
+
+#### Test
+
+- Chiusura bloccata se la revisione collegata è: bozza, in
+  approvazione, rifiutata (l'ECN resta `APPROVED` in tutti e tre i
+  casi, nessuna riapertura automatica).
+- Chiusura riuscita quando la revisione è approvata (percorso
+  esistente, verificato ancora valido).
+- UI: avviso e bottone disabilitato nel form di chiusura quando non
+  ancora possibile; messaggio corretto in `ecn_detail.html`.
+- App `ecn`+`documents`+`approvals`: **783/783 PASS** (nessuna
+  regressione oltre al test aggiornato).
+
+#### Backlog (fuori scope, vedi analisi esterna allegata)
+
+- Rinominare/separare concettualmente `executed_version` in
+  "revisione attuativa" (valorizzata alla creazione) vs "revisione
+  eseguita" (valorizzata solo ad approvazione) — refactor più ampio
+  di modello/migrazione, non necessario per risolvere il problema
+  concreto segnalato.
+- Automatizzare la chiusura alla sola approvazione della revisione
+  (opzione B) o eliminare lo stato `CLOSED` (opzione C): entrambe
+  valutate e scartate per ora — vedi analisi esterna allegata a
+  questo task per il confronto con le prassi reali di change
+  management.
 
 ---
 

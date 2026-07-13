@@ -1644,3 +1644,69 @@ manage.py test approvals: Ran 52 tests — OK
 2. Commit locale diretto (repo standalone, vedi `AGENTS.md` — nessuno
    script di gated-commit dedicato qui). Nessun push, nessun merge su
    `main` senza conferma esplicita.
+
+---
+
+### Run — 2026-07-13 — TASK-025 Chiusura ECN solo con revisione approvata
+
+**Agente:** Claude Code
+**Task:** TASK-025 — Chiusura ECN solo con revisione collegata approvata
+**Branch:** task/documentale-my-revisions-documents (continuazione)
+
+**Operazioni eseguite:**
+
+1. Segnalazione operatore: un ECN può essere chiuso mentre la
+   revisione collegata è ancora in bozza. Preparato un prompt di
+   confronto con prassi esterne (ISO 9001, AS9100, PTC Windchill,
+   NASA CR/PR); risposta esterna confermata coerente con l'analisi
+   fatta sul codice: raccomandata l'opzione "A+" (bloccare la
+   chiusura finché la revisione collegata non è approvata).
+2. `ecn/services.py:close_change_notice`: aggiunto controllo
+   `executed_version.status == APPROVED`.
+3. `ecn/views.py:ecn_close` + `templates/ecn/ecn_close_form.html`:
+   nuovo avviso `warn_revision_not_approved`, bottone di conferma
+   disabilitato quando la chiusura fallirebbe comunque; corretto il
+   testo del vecchio avviso `warn_no_version` (era fuorviante: diceva
+   "puoi procedere" quando in realtà il service bloccava sempre).
+4. `templates/ecn/ecn_detail.html`: messaggio "Prossima azione" e
+   bottone "Chiudi ECN" ora dipendono dallo stato reale della
+   revisione collegata, non solo dalla sua esistenza.
+5. `documents/templatetags/nav_tags.py:nav_ecn_to_close`: contatore
+   corretto per contare solo ECN realmente pronti per la chiusura.
+6. `ecn/tests.py`: corretto l'helper `_make_executed_version` (di
+   default creava una revisione DRAFT, il che nascondeva il problema
+   in quasi tutti i test di chiusura riuscita esistenti — ora default
+   APPROVED); aggiunti 4 nuovi test (bozza/in approvazione/rifiutata
+   bloccano la chiusura, avviso UI corretto); corretto 1 test
+   esistente che si aspettava il vecchio testo "Attenzione".
+7. Rieseguite le app `ecn`+`documents`+`approvals` insieme
+   (783/783 PASS).
+
+**Esito test:**
+
+```
+manage.py test ecn.tests.ECNServiceWorkflowTests: 42/42 PASS
+manage.py test ecn documents approvals: Ran 783 tests — OK
+```
+
+**Problemi riscontrati:**
+
+- Il fix ha inizialmente rotto quasi tutti i test esistenti di
+  chiusura riuscita, perché l'helper di test creava la revisione
+  collegata sempre in stato DRAFT (mascherando esattamente il
+  comportamento errato che si stava correggendo). Corretto l'helper
+  invece di aggirare il problema nei singoli test.
+- Un test esistente (`test_ecn_close_manager_sees_warning_without_exec_version`)
+  si aspettava ancora il vecchio testo "Attenzione", rimosso insieme
+  alla correzione del messaggio fuorviante — aggiornata l'assertion.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Eseguire la suite completa (`scripts/test.sh`) e le regressioni
+   Station.
+2. Commit locale diretto. Nessun push, nessun merge su `main` senza
+   conferma esplicita.
+3. Valutare il backlog (fuori scope per ora): eventuale
+   rinominazione/separazione di `executed_version`, automazione della
+   chiusura, o eliminazione dello stato `CLOSED` — vedi TASKS.md §
+   TASK-025 per il confronto con le prassi esterne.

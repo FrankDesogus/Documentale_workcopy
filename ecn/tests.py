@@ -498,13 +498,19 @@ def _make_approved_document(owner, folder=None, code='DOC-SVC'):
     return doc, version
 
 
-def _make_executed_version(ecn, created_by):
-    """Crea una DocumentVersion draft e la collega come executed_version dell'ECN."""
+def _make_executed_version(ecn, created_by, status=DocumentVersion.Status.APPROVED):
+    """
+    Crea una DocumentVersion e la collega come executed_version dell'ECN.
+
+    Default APPROVED (TASK-025: close_change_notice richiede che la
+    revisione collegata sia stata approvata, non solo creata). Passare
+    status=DRAFT/IN_APPROVAL/REJECTED per testare i casi bloccati.
+    """
     new_ver = DocumentVersion.objects.create(
         document=ecn.document,
         revision_label='01',
         revision_number=1,
-        status=DocumentVersion.Status.DRAFT,
+        status=status,
         is_current=False,
         created_by=created_by,
     )
@@ -1409,6 +1415,33 @@ class ECNServiceWorkflowTests(TestCase):
         with self.assertRaises(ValidationError):
             close_change_notice(ecn, self.manager)
 
+    def test_close_fails_if_executed_version_still_draft(self):
+        """TASK-025: la sola creazione della bozza di revisione non basta
+        più — deve essere stata approvata prima di poter chiudere l'ECN."""
+        ecn = self._to_approved('ECN-WF-CLOSE-REV-DRAFT')
+        _make_executed_version(ecn, self.proposer, status=DocumentVersion.Status.DRAFT)
+        with self.assertRaises(ValidationError) as ctx:
+            close_change_notice(ecn, self.manager)
+        self.assertIn('non è ancora', str(ctx.exception).lower())
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.APPROVED)
+
+    def test_close_fails_if_executed_version_in_approval(self):
+        ecn = self._to_approved('ECN-WF-CLOSE-REV-INAPPR')
+        _make_executed_version(ecn, self.proposer, status=DocumentVersion.Status.IN_APPROVAL)
+        with self.assertRaises(ValidationError):
+            close_change_notice(ecn, self.manager)
+
+    def test_close_fails_if_executed_version_rejected(self):
+        """Se la revisione collegata viene rifiutata, l'ECN resta APPROVED
+        (non chiudibile) — nulla lo riapre né lo richiude automaticamente."""
+        ecn = self._to_approved('ECN-WF-CLOSE-REV-REJ')
+        _make_executed_version(ecn, self.proposer, status=DocumentVersion.Status.REJECTED)
+        with self.assertRaises(ValidationError):
+            close_change_notice(ecn, self.manager)
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.APPROVED)
+
     def test_close_fails_for_non_manager(self):
         ecn = self._to_approved_with_exec_version('ECN-WF-CLOSE-PERM')
         with self.assertRaises(PermissionDenied):
@@ -1826,7 +1859,20 @@ class ECNViewTests(TestCase):
         self.client.force_login(self.manager)
         r = self.client.get(f'/ecn/{self.ecn.pk}/close/')
         self.assertEqual(r.status_code, 200)
-        self.assertContains(r, 'Attenzione')
+        self.assertContains(r, 'Chiusura non possibile')
+
+    def test_ecn_close_manager_sees_warning_when_exec_version_not_approved(self):
+        """TASK-025: avviso specifico se la revisione collegata esiste ma
+        non è ancora approvata (es. ancora in bozza)."""
+        self.ecn.status = ChangeNotice.Status.APPROVED
+        self.ecn.ccb_class = ChangeNotice.CCBClass.CLASS1
+        self.ecn.save(update_fields=['status', 'ccb_class'])
+        _make_executed_version(self.ecn, self.proposer, status=DocumentVersion.Status.DRAFT)
+        self.client.force_login(self.manager)
+        r = self.client.get(f'/ecn/{self.ecn.pk}/close/')
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'Chiusura non possibile')
+        self.assertContains(r, 'non è ancora approvata')
 
     def test_ecn_close_post_closes_ecn(self):
         self._put_ecn_approved_with_exec_version()

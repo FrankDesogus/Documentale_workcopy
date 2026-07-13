@@ -714,8 +714,12 @@ def ecn_close(request, ecn_id):
         )
         return redirect('ecn:ecn_detail', ecn_id=ecn_id)
 
-    # Avvisa se non c'è ancora una revisione eseguita (il service blocca la chiusura)
+    # Avvisi se il service bloccherebbe la chiusura (TASK-025)
     warn_no_version = ecn.executed_version is None
+    warn_revision_not_approved = False
+    if ecn.executed_version is not None:
+        from documents.models import DocumentVersion
+        warn_revision_not_approved = ecn.executed_version.status != DocumentVersion.Status.APPROVED
 
     if request.method == 'POST':
         form = ChangeNoticeCloseForm(request.POST, current_user=request.user)
@@ -748,6 +752,7 @@ def ecn_close(request, ecn_id):
         'form': form,
         'ecn': ecn,
         'warn_no_version': warn_no_version,
+        'warn_revision_not_approved': warn_revision_not_approved,
         'sanatoria_available': can_use_sanatoria(request.user),
     })
 
