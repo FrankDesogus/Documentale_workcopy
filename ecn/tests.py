@@ -3015,6 +3015,77 @@ class CCBDossierTests(TestCase):
         log = AuditLog.objects.filter(action='CCB_DOSSIER_UPDATED').first()
         self.assertIsNotNone(log)
 
+    # 9. Impatto sul costruito e applicabilità (TASK-028) persistiti dal service
+    def test_service_persists_constructed_impact_and_applicability(self):
+        self._update_dossier(
+            ccb_constructed_impact='Nessun impatto su unità già installate.',
+            ccb_applicability='Applicabile a tutti i lotti dal 2026 in poi.',
+        )
+        self.ecn.refresh_from_db()
+        self.assertEqual(
+            self.ecn.ccb_constructed_impact,
+            'Nessun impatto su unità già installate.',
+        )
+        self.assertEqual(
+            self.ecn.ccb_applicability,
+            'Applicabile a tutti i lotti dal 2026 in poi.',
+        )
+
+    # 10. Impatto sul costruito e applicabilità restano opzionali per l'invio
+    def test_submit_without_constructed_impact_and_applicability_succeeds(self):
+        from ecn.services import submit_change_notice
+        self._update_dossier()  # non passa i due nuovi campi
+        submit_change_notice(self.ecn, self.qm)
+        self.ecn.refresh_from_db()
+        self.assertEqual(self.ecn.status, ChangeNotice.Status.UNDER_REVIEW)
+
+    # 11. La view /ccb-dossier/ salva i due nuovi campi e li mostra nel dettaglio
+    def test_view_saves_and_displays_constructed_impact_and_applicability(self):
+        self.client.force_login(self.qm)
+        r = self.client.post(f'/ecn/{self.ecn.pk}/ccb-dossier/', {
+            'dossier_action': 'save',
+            'ccb_class': 'class1',
+            'ccb_requirements': 'Conforme.',
+            'ccb_technical_impact': 'Minore.',
+            'ccb_constructed_impact': 'Impatto nullo sul costruito esistente.',
+            'ccb_applicability': 'Solo unità prodotte dopo rev. 02.',
+        })
+        self.assertRedirects(r, f'/ecn/{self.ecn.pk}/', fetch_redirect_response=False)
+        self.ecn.refresh_from_db()
+        self.assertEqual(
+            self.ecn.ccb_constructed_impact, 'Impatto nullo sul costruito esistente.',
+        )
+        self.assertEqual(
+            self.ecn.ccb_applicability, 'Solo unità prodotte dopo rev. 02.',
+        )
+
+        # Il dossier è ancora in CCB_PREPARATION (editabile): il form si
+        # ripresenta con i valori salvati pre-popolati.
+        dossier = self.client.get(f'/ecn/{self.ecn.pk}/ccb-dossier/')
+        self.assertContains(dossier, 'Impatto sul costruito')
+        self.assertContains(dossier, 'Impatto nullo sul costruito esistente.')
+        self.assertContains(dossier, 'Applicabilità')
+        self.assertContains(dossier, 'Solo unità prodotte dopo rev. 02.')
+
+    # 12. Dopo l'approvazione CCB, il dettaglio ECN mostra i due campi in sola lettura
+    def test_ecn_detail_shows_constructed_impact_and_applicability_after_approval(self):
+        from ecn.services import submit_change_notice, approve_change_notice
+        self._update_dossier(
+            ccb_constructed_impact='Impatto nullo sul costruito esistente.',
+            ccb_applicability='Solo unità prodotte dopo rev. 02.',
+        )
+        submit_change_notice(self.ecn, self.qm)
+        approve_change_notice(self.ecn, self.ccb1, comment='OK', send_notifications=False)
+        self.ecn.refresh_from_db()
+        self.assertEqual(self.ecn.status, ChangeNotice.Status.APPROVED)
+
+        self.client.force_login(self.qm)
+        detail = self.client.get(f'/ecn/{self.ecn.pk}/')
+        self.assertContains(detail, 'Impatto sul costruito')
+        self.assertContains(detail, 'Impatto nullo sul costruito esistente.')
+        self.assertContains(detail, 'Applicabilità')
+        self.assertContains(detail, 'Solo unità prodotte dopo rev. 02.')
+
 
 # ---------------------------------------------------------------------------
 # Voto membro CCB

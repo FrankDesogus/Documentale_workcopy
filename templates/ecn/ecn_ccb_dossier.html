@@ -147,6 +147,18 @@
         {{ form.ccb_other_impact }}
         {% if form.ccb_other_impact.errors %}<p class="form-error">{{ form.ccb_other_impact.errors.as_text }}</p>{% endif %}
       </div>
+      <div class="form-group mb-0">
+        <label class="form-label">{{ form.ccb_constructed_impact.label }}</label>
+        {{ form.ccb_constructed_impact }}
+        {% if form.ccb_constructed_impact.help_text %}<p class="form-help">{{ form.ccb_constructed_impact.help_text }}</p>{% endif %}
+        {% if form.ccb_constructed_impact.errors %}<p class="form-error">{{ form.ccb_constructed_impact.errors.as_text }}</p>{% endif %}
+      </div>
+      <div class="form-group mb-0">
+        <label class="form-label">{{ form.ccb_applicability.label }}</label>
+        {{ form.ccb_applicability }}
+        {% if form.ccb_applicability.help_text %}<p class="form-help">{{ form.ccb_applicability.help_text }}</p>{% endif %}
+        {% if form.ccb_applicability.errors %}<p class="form-error">{{ form.ccb_applicability.errors.as_text }}</p>{% endif %}
+      </div>
     </div>
 
     <div class="form-group mb-0 mt-4">
@@ -199,6 +211,12 @@
     {% endif %}
     {% if ecn.ccb_other_impact %}
     <dt>Impatto altri doc.</dt><dd class="whitespace-pre-wrap">{{ ecn.ccb_other_impact }}</dd>
+    {% endif %}
+    {% if ecn.ccb_constructed_impact %}
+    <dt>Impatto sul costruito</dt><dd class="whitespace-pre-wrap">{{ ecn.ccb_constructed_impact }}</dd>
+    {% endif %}
+    {% if ecn.ccb_applicability %}
+    <dt>Applicabilità</dt>    <dd class="whitespace-pre-wrap">{{ ecn.ccb_applicability }}</dd>
     {% endif %}
     {% if ecn.ccb_notes %}
     <dt>Note CCB</dt>          <dd class="whitespace-pre-wrap">{{ ecn.ccb_notes }}</dd>

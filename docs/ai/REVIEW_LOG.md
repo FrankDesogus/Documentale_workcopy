@@ -60,3 +60,35 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 - Nessuna.
 
 ---
+
+### Review — 2026-07-22 — TASK-028 Istruttoria CCB: impatto sul costruito e applicabilità
+
+**Reviewer:** Claude Code
+**Diff / branch:** task/documentale-ccb-dossier-impact-fields
+**Esito:** Approvato
+
+**Osservazioni:**
+
+- Scope rispettato: diff confinato a `ecn/` (model, form, service, view,
+  test) e ai tre template `ecn_ccb_dossier.html`, `ecn_detail.html`,
+  `ecn_review_form.html` dove il dossier è già mostrato in sola lettura;
+  più l'aggiornamento di `docs/ai/TASKS.md` per questo task. Nessun altro
+  file toccato.
+- I due nuovi campi (`ccb_constructed_impact`, `ccb_applicability`) sono
+  `TextField(blank=True)`, stesso pattern e stesso livello di
+  obbligatorietà (opzionali) dei campi di impatto secondari già esistenti
+  — `validate_for_submit()` non modificato, `ccb_class`/`ccb_requirements`/
+  `ccb_technical_impact` restano gli unici obbligatori prima dell'invio.
+- Migrazione (`0005_changenotice_ccb_applicability_and_more`) puramente
+  additiva, nessun default distruttivo, nessun impatto sui dati esistenti.
+- Nessun secret, credenziale, comando Git distruttivo o installazione di
+  pacchetti nel diff.
+- Test: suite `ecn` **340/340 PASS** (comprese le 5 nuove aggiunte per
+  questo task).
+- `TASKS.md` e questo log aggiornati con l'esito.
+
+**Azioni richieste prima del commit:**
+
+- Nessuna.
+
+---

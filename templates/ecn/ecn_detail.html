@@ -269,6 +269,12 @@
     {% if ecn.ccb_other_impact %}
     <dt>Impatto altri doc.</dt><dd class="whitespace-pre-wrap">{{ ecn.ccb_other_impact }}</dd>
     {% endif %}
+    {% if ecn.ccb_constructed_impact %}
+    <dt>Impatto sul costruito</dt><dd class="whitespace-pre-wrap">{{ ecn.ccb_constructed_impact }}</dd>
+    {% endif %}
+    {% if ecn.ccb_applicability %}
+    <dt>Applicabilità</dt> <dd class="whitespace-pre-wrap">{{ ecn.ccb_applicability }}</dd>
+    {% endif %}
     {% if ecn.ccb_notes %}
     <dt>Note CCB</dt>       <dd class="whitespace-pre-wrap">{{ ecn.ccb_notes }}</dd>
     {% endif %}

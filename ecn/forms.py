@@ -286,6 +286,18 @@ class ChangeNoticeDossierForm(SanatoriaFieldsMixin, forms.Form):
         required=False,
         label='Impatto su altri documenti / parti',
     )
+    ccb_constructed_impact = forms.CharField(
+        widget=forms.Textarea(attrs={'rows': 2}),
+        required=False,
+        label='Impatto sul costruito',
+        help_text='Effetti della modifica su quanto già realizzato/installato.',
+    )
+    ccb_applicability = forms.CharField(
+        widget=forms.Textarea(attrs={'rows': 2}),
+        required=False,
+        label='Applicabilità',
+        help_text='A quali unità, lotti o configurazioni si applica la modifica.',
+    )
     ccb_notes = forms.CharField(
         widget=forms.Textarea(attrs={'rows': 3}),
         required=False,

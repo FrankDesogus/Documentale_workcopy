@@ -30,6 +30,7 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
+| TASK-029 | Documento: flag che blocca la richiesta di ECN semplice | Alta | Sposta in "In corso" dopo TASK-028 (un solo task in corso per agente) |
 
 ## Completati
 
@@ -61,6 +62,9 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | TASK-023 | Chiarezza bozza-revisione + sezioni personali "Mie revisioni"/"Miei documenti" | — | 2026-07-13 |
 | TASK-024 | Mostrare l'ECN di origine nella pagina di approvazione revisione | — | 2026-07-13 |
 | TASK-025 | Chiusura ECN solo con revisione collegata approvata | — | 2026-07-13 |
+| TASK-026 | Archivio progetti: storico completo progetti (permesso view_history) + dettaglio compatto altrove | 7a2ff6f | 2026-07-22 |
+| TASK-027 | Verifica: obbligo commento sui rifiuti (documenti ed ECN) — già implementato, nessuna modifica | — | 2026-07-22 |
+| TASK-028 | Istruttoria CCB: aggiunti impatto sul costruito e applicabilità | — | 2026-07-22 |
 
 ---
 
@@ -2842,6 +2846,201 @@ verificata*.
   valutate e scartate per ora — vedi analisi esterna allegata a
   questo task per il confronto con le prassi reali di change
   management.
+
+---
+
+### TASK-026 — Archivio progetti: storico completo progetti + dettaglio compatto altrove — Claude Code
+
+#### Obiettivo
+
+Stesso pattern di TASK-021 (Archivio documenti), applicato ai progetti su
+richiesta dell'operatore: confinare lo storico completo del progetto
+(snapshot versione/revisione salvati, confronto con la baseline corrente,
+storico eventi) in una sezione Archivio progetti permission-gated,
+lasciando nel dettaglio progetto normale solo le informazioni correnti
+(documenti, ECN collegati, struttura cartelle) più un riepilogo compatto
+dell'ultima revisione salvata.
+
+#### Soluzione
+
+- `projects/permissions.py`: nuova `can_view_archived_project(user, project)`,
+  wrapper su `documents.permissions.can_view_audit(user, folder=project.root_folder)`
+  (riusa lo stesso permesso `view_history` / ruoli globali già usato per
+  l'Archivio documenti — nessun nuovo concetto di permesso introdotto).
+- `projects/views.py`: `project_detail` alleggerito (rimossi `show_audit`,
+  `audit_logs`, `comparison_rows`, sostituiti da un `current_baseline`
+  leggero per il riepilogo compatto); nuove viste `archive_project_list` e
+  `archive_project_detail`; `project_revision_detail` ora richiede
+  `can_view_archived_project` invece del precedente controllo più debole
+  (`view_projects`).
+- `config/urls.py`: nuove route `/archivio-progetti/` e
+  `/archivio-progetti/<id>/`.
+- `templates/base.html`: nuova voce sidebar "Archivio progetti" nella
+  sezione "Storico", stesso gate `sb_can_archive` già usato per "Archivio
+  documenti".
+- `templates/projects/project_detail.html`: rimosse le sezioni "Storico
+  progetto" (versioni/revisioni salvate + pulsanti "Salva versione/
+  revisione"), "Confronto con revisione corrente", "Storico eventi";
+  aggiunta card compatta "Ultima revisione salvata" + link "Vedi storico
+  completo".
+- Nuovi template `templates/projects/archive_project_list.html` e
+  `archive_project_detail.html` (le sezioni rimosse, spostate qui).
+- `templates/projects/project_snapshot_form.html`,
+  `project_revision_detail.html`: breadcrumb e link "Annulla" aggiornati
+  per puntare all'Archivio progetti (uniche pagine da cui sono ora
+  raggiungibili).
+
+#### File coinvolti
+
+- `projects/permissions.py`, `projects/views.py`, `config/urls.py`
+- `templates/base.html`
+- `templates/projects/project_detail.html`, `project_revision_detail.html`,
+  `project_snapshot_form.html`
+- Nuovi: `templates/projects/archive_project_list.html`,
+  `archive_project_detail.html`
+- `projects/tests.py` (test spostati/aggiornati per verificare che le
+  sezioni compaiano solo in Archivio e non più nel dettaglio compatto)
+
+#### Test
+
+- Suite `projects`: **416/416 PASS**.
+- Verifica a video (browser, utente `supervisor_demo`): dettaglio
+  progetto pulito con link "Vedi storico completo"; Archivio progetti con
+  tutte le sezioni spostate; voce sidebar attiva correttamente.
+
+---
+
+### TASK-027 — Verifica: obbligo commento sui rifiuti (documenti ed ECN) — Claude Code
+
+#### Obiettivo
+
+Richiesta operatore: "tutti i rifiuti, anche quelli dell'ECN, devono
+avere l'obbligo del commento". Prima di modificare codice, verificare lo
+stato attuale (principio Station: il repository è la fonte della
+verità — non procedere per assunzione).
+
+#### Analisi (confermata leggendo il codice e i test esistenti)
+
+- Rifiuto `DocumentVersion` (`approvals/views.py:163-165` +
+  `approvals/services.py:reject_version`): `rejection_reason`
+  obbligatorio sia lato vista (messaggio d'errore se vuoto) sia lato
+  service (`ValidationError`).
+- Rifiuto individuale voto CCB (`ecn/forms.py:ChangeNoticeReviewForm.clean`,
+  righe 223-233): `ccb_notes` ("Motivazione rifiuto") reso obbligatorio
+  in `clean()` quando `action == REJECT`.
+- Rifiuto finale ECN (`ecn/services.py:reject_change_notice`, riga ~620):
+  solleva `ValidationError` se `reason` è vuoto o solo spazi.
+- Nessun altro percorso di rifiuto trovato in `ecn/views.py` (unico
+  match per "reject" è la vista `ecn_review`).
+- Test esistenti che confermano il comportamento già corretto:
+  `ecn/tests.py:1358` (`test_reject_fails_without_reason`),
+  `ecn/tests.py:1815` (`test_ecn_review_reject_without_notes_shows_error`),
+  `ecn/tests.py:3087` (`test_reject_without_reason_fails`).
+
+#### Esito
+
+**Nessuna modifica necessaria.** Il commento/motivazione è già
+obbligatorio in ogni percorso di rifiuto del sistema (documenti ed ECN,
+sia voto individuale sia rifiuto finale), sia lato form/vista sia lato
+service, con copertura test verde preesistente. Confermato anche a video
+in demo (login come approvatore/membro CCB, tentativo di rifiuto senza
+commento → errore bloccante in entrambi i flussi).
+
+Task chiuso come verifica, non come implementazione.
+
+---
+
+### TASK-028 — Istruttoria CCB: impatto sul costruito e applicabilità — Claude Code
+
+#### Obiettivo
+
+Richiesta operatore: aggiungere all'istruttoria CCB (dossier compilato
+prima dell'invio ai votanti) due nuovi campi — "impatto sul costruito" e
+"applicabilità" — accanto ai campi di impatto già esistenti
+(`ccb_technical_impact`, `ccb_cost_impact`, `ccb_time_impact`,
+`ccb_quality_impact`, `ccb_other_impact`).
+
+#### Scope
+
+- Due nuovi campi `TextField(blank=True)` su `ChangeNotice`:
+  `ccb_constructed_impact` ("Impatto sul costruito") e
+  `ccb_applicability` ("Applicabilità") — stesso pattern e stesso livello
+  di obbligatorietà dei campi di impatto secondari già esistenti
+  (opzionali, non bloccanti per l'invio alla CCB — solo `ccb_class`,
+  `ccb_requirements`, `ccb_technical_impact` restano obbligatori prima
+  dell'invio, come oggi).
+- Migrazione dedicata.
+- `ecn/forms.py:ChangeNoticeDossierForm`: due nuovi campi form.
+- `ecn/services.py:update_ccb_dossier`: nuovi parametri, persistiti sul
+  `ChangeNotice`.
+- `ecn/views.py:ecn_ccb_dossier`: passa i nuovi campi al service e li
+  pre-popola in GET.
+- `templates/ecn/ecn_ccb_dossier.html`: nuovi campi nel form di
+  compilazione e nella vista di dettaglio in sola lettura.
+- Non tocca: validazione di invio (`validate_for_submit`), permessi
+  (`can_compile_dossier`), flusso di stato ECN.
+
+#### File coinvolti
+
+- `ecn/models.py` (+ migrazione `0005_changenotice_ccb_applicability_and_more`)
+- `ecn/forms.py`
+- `ecn/services.py`
+- `ecn/views.py`
+- `templates/ecn/ecn_ccb_dossier.html`, `ecn_detail.html`, `ecn_review_form.html`
+  (i due nuovi campi compaiono anche nelle viste di sola lettura del
+  dossier già esistenti in questi due template, non solo nella pagina di
+  compilazione)
+- `ecn/tests.py` (+5 test: persistenza service, opzionalità all'invio,
+  salvataggio/visualizzazione via view in bozza istruttoria, visualizzazione
+  in `ecn_detail` dopo approvazione)
+
+#### Test
+
+- Branch: `task/documentale-ccb-dossier-impact-fields`.
+- Suite `ecn`: **340/340 PASS**.
+
+---
+
+### TASK-029 — Documento: flag che blocca la richiesta di ECN semplice — Claude Code
+
+#### Obiettivo
+
+Richiesta operatore: poter impedire, per un documento specifico, la
+richiesta di un ECN semplice (flusso autoapprovato senza CCB, TASK-022).
+La spunta è impostabile alla creazione del documento; un admin/superuser
+o il supervisore demo (`supervisor_demo`) devono poter modificare questa
+caratteristica anche dopo la creazione, entrando nel documento.
+
+#### Scope
+
+- Nuovo campo `Document.allows_simple_ecn` (`BooleanField(default=True)`,
+  stesso pattern semantico di `requires_ecn_for_revision`): di default
+  tutti i documenti consentono l'ECN semplice; opt-out esplicito per
+  documento.
+- Creazione documento (`new_document`): nuovo checkbox (semantica
+  invertita, stesso pattern di `ecn_exemption` → `requires_ecn_for_revision`)
+  che traduce in `allows_simple_ecn = not <checkbox>`.
+- Gate nel percorso ECN semplice: `ecn/services.py:create_simple_ecn`
+  (`ValidationError` se `not document.allows_simple_ecn`) e
+  `ecn/views.py:ecn_create_simple` / `document_detail.html` (bottone
+  "+ Crea ECN semplice" nascosto se il documento non lo consente).
+- Editing post-creazione **riservato a superuser o `supervisor_demo`**
+  (decisione operatore: più ristretto del permesso generale
+  `can_edit_document_metadata` già usato da autori/manager per
+  titolo/descrizione/schema revisione) — nuovo controllo dedicato,
+  esposto nella pagina di modifica metadati documento solo per questi
+  ruoli.
+
+#### File coinvolti
+
+- `documents/models.py` (+ migrazione)
+- `documents/forms.py` (form creazione + form modifica metadati)
+- `documents/views.py` (`new_document`, `edit_document_metadata`)
+- `documents/permissions.py` (nuovo controllo per l'editing post-creazione)
+- `ecn/services.py`, `ecn/views.py`
+- `templates/documents/new_document.html`, `edit_document_metadata.html`,
+  `document_detail.html`
+- `documents/tests.py`, `ecn/tests.py`
 
 ---
 

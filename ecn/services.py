@@ -859,6 +859,8 @@ def update_ccb_dossier(
     ccb_time_impact='',
     ccb_quality_impact='',
     ccb_other_impact='',
+    ccb_constructed_impact='',
+    ccb_applicability='',
     ccb_notes='',
 ):
     """
@@ -893,15 +895,18 @@ def update_ccb_dossier(
     with transaction.atomic():
         update_fields_list = [
             'ccb_requirements', 'ccb_technical_impact', 'ccb_cost_impact',
-            'ccb_time_impact', 'ccb_quality_impact', 'ccb_other_impact', 'ccb_notes',
+            'ccb_time_impact', 'ccb_quality_impact', 'ccb_other_impact',
+            'ccb_constructed_impact', 'ccb_applicability', 'ccb_notes',
         ]
-        change_notice.ccb_requirements     = ccb_requirements
-        change_notice.ccb_technical_impact = ccb_technical_impact
-        change_notice.ccb_cost_impact      = ccb_cost_impact
-        change_notice.ccb_time_impact      = ccb_time_impact
-        change_notice.ccb_quality_impact   = ccb_quality_impact
-        change_notice.ccb_other_impact     = ccb_other_impact
-        change_notice.ccb_notes            = ccb_notes
+        change_notice.ccb_requirements       = ccb_requirements
+        change_notice.ccb_technical_impact   = ccb_technical_impact
+        change_notice.ccb_cost_impact        = ccb_cost_impact
+        change_notice.ccb_time_impact        = ccb_time_impact
+        change_notice.ccb_quality_impact     = ccb_quality_impact
+        change_notice.ccb_other_impact       = ccb_other_impact
+        change_notice.ccb_constructed_impact = ccb_constructed_impact
+        change_notice.ccb_applicability      = ccb_applicability
+        change_notice.ccb_notes              = ccb_notes
         if ccb_class:
             change_notice.ccb_class = ccb_class
             update_fields_list.append('ccb_class')

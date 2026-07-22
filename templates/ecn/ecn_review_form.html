@@ -98,6 +98,18 @@
       <span class="detail-value whitespace-pre-wrap">{{ ecn.ccb_other_impact }}</span>
     </div>
     {% endif %}
+    {% if ecn.ccb_constructed_impact %}
+    <div class="detail-item">
+      <span class="detail-label">Impatto sul costruito</span>
+      <span class="detail-value whitespace-pre-wrap">{{ ecn.ccb_constructed_impact }}</span>
+    </div>
+    {% endif %}
+    {% if ecn.ccb_applicability %}
+    <div class="detail-item">
+      <span class="detail-label">Applicabilità</span>
+      <span class="detail-value whitespace-pre-wrap">{{ ecn.ccb_applicability }}</span>
+    </div>
+    {% endif %}
     {% if ecn.ccb_notes %}
     <div class="detail-item md:col-span-2">
       <span class="detail-label">Note CCB</span>

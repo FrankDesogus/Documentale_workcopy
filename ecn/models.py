@@ -188,6 +188,16 @@ class ChangeNotice(models.Model):
         blank=True,
         verbose_name='Impatto su altri documenti / parti',
     )
+    ccb_constructed_impact = models.TextField(
+        blank=True,
+        verbose_name='Impatto sul costruito',
+        help_text='Effetti della modifica su quanto già realizzato/installato.',
+    )
+    ccb_applicability = models.TextField(
+        blank=True,
+        verbose_name='Applicabilità',
+        help_text='A quali unità, lotti o configurazioni si applica la modifica.',
+    )
     ccb_notes = models.TextField(
         blank=True,
         verbose_name='Note CCB',

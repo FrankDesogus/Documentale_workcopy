@@ -515,6 +515,8 @@ def ecn_ccb_dossier(request, ecn_id):
                         ccb_time_impact=d.get('ccb_time_impact', ''),
                         ccb_quality_impact=d.get('ccb_quality_impact', ''),
                         ccb_other_impact=d.get('ccb_other_impact', ''),
+                        ccb_constructed_impact=d.get('ccb_constructed_impact', ''),
+                        ccb_applicability=d.get('ccb_applicability', ''),
                         ccb_notes=d.get('ccb_notes', ''),
                     )
                     form.maybe_create_historical_record(
@@ -553,6 +555,8 @@ def ecn_ccb_dossier(request, ecn_id):
                 'ccb_time_impact':     ecn.ccb_time_impact,
                 'ccb_quality_impact':  ecn.ccb_quality_impact,
                 'ccb_other_impact':    ecn.ccb_other_impact,
+                'ccb_constructed_impact': ecn.ccb_constructed_impact,
+                'ccb_applicability':      ecn.ccb_applicability,
                 'ccb_notes':           ecn.ccb_notes,
             },
             current_user=request.user,
