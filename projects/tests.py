@@ -767,13 +767,14 @@ class ProjectRevisionViewTests(TestCase):
         self.assertEqual(rev.status, ProjectRevision.Status.ISSUED)
         self.assertTrue(rev.is_current)
 
-    def test_project_detail_shows_revisions(self):
+    def test_archive_project_detail_shows_revisions(self):
+        # TASK-026: l'elenco snapshot è confinato in Archivio progetti.
         from projects.services import create_project_revision
         create_project_revision(self.project, self.manager, 'A', 0, 'Baseline A')
         self.client.login(username='rv_mgr', password='pw')
-        response = self.client.get(reverse('project_detail', args=[self.project.pk]))
+        response = self.client.get(reverse('archive_project_detail', args=[self.project.pk]))
         self.assertEqual(response.status_code, 200)
-        revisions = list(response.context['revisions'])
+        revisions = list(response.context['revision_snapshots'])
         self.assertEqual(len(revisions), 1)
 
 
@@ -1150,18 +1151,27 @@ class BaselineComparisonTests(TestCase):
         self.assertIsNone(baseline)
         self.assertEqual(rows, [])
 
-    # 6. Project detail mostra la sezione confronto
-    def test_project_detail_shows_comparison_section(self):
+    # 6. Archivio progetti mostra la sezione confronto (TASK-026: confinata lì)
+    def test_archive_project_detail_shows_comparison_section(self):
         self._make_approved_version('BC-DOC-005')
         self._make_baseline('00', 0)
         self.client.login(username='bc_mgr', password='pw')
-        response = self.client.get(reverse('project_detail', args=[self.project.pk]))
+        response = self.client.get(reverse('archive_project_detail', args=[self.project.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Confronto con revisione corrente')
         self.assertIn('comparison_rows', response.context)
         rows = list(response.context['comparison_rows'])
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]['status'], 'aligned')
+
+    # 7. project_detail compatto non mostra più la sezione confronto
+    def test_project_detail_no_longer_shows_comparison_section(self):
+        self._make_approved_version('BC-DOC-006')
+        self._make_baseline('00', 0)
+        self.client.login(username='bc_mgr', password='pw')
+        response = self.client.get(reverse('project_detail', args=[self.project.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Confronto con revisione corrente')
 
 
 # ---------------------------------------------------------------------------
@@ -1274,12 +1284,12 @@ class NewDocumentFromProjectTests(TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Step Audit UI — project_detail
+# Step Audit UI — Archivio progetti (TASK-026: confinata da project_detail)
 # ---------------------------------------------------------------------------
 
 @override_settings(EMAIL_BACKEND=EMAIL_LOCMEM)
 class AuditUIProjectDetailTests(TestCase):
-    """Sezione 'Storico eventi' nel dettaglio progetto."""
+    """Sezione 'Storico eventi' — spostata in Archivio progetti da project_detail (TASK-026)."""
 
     def setUp(self):
         from django.contrib.auth.models import Group
@@ -1296,53 +1306,54 @@ class AuditUIProjectDetailTests(TestCase):
         self.project, self.folder = make_project_with_folder(code='APD-PRJ-001', owner=self.manager_staff)
         ProjectFolderMembership.objects.create(folder=self.folder, user=self.reader, role='reader')
 
-    # 1. Manager (staff) vede "Storico eventi"
-    def test_manager_sees_storico_eventi_progetto(self):
+    # 1. Manager (staff) vede "Storico eventi" in Archivio progetti
+    def test_manager_sees_storico_eventi_in_archive(self):
         self.client.login(username='apd_mgr', password='pw')
-        response = self.client.get(reverse('project_detail', args=[self.project.pk]))
+        response = self.client.get(reverse('archive_project_detail', args=[self.project.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.context['show_audit'])
         self.assertContains(response, 'Storico eventi')
 
-    # 2. Auditor globale vede "Storico eventi"
-    def test_global_auditor_sees_storico_eventi_progetto(self):
+    # 2. Auditor globale vede "Storico eventi" in Archivio progetti
+    def test_global_auditor_sees_storico_eventi_in_archive(self):
         self.client.login(username='apd_auditor', password='pw')
-        response = self.client.get(reverse('project_detail', args=[self.project.pk]))
+        response = self.client.get(reverse('archive_project_detail', args=[self.project.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.context['show_audit'])
         self.assertContains(response, 'Storico eventi')
 
-    # 3. Reader normale NON vede "Storico eventi"
-    def test_reader_does_not_see_storico_eventi_progetto(self):
+    # 3. Reader normale non può nemmeno aprire l'Archivio per quel progetto (404)
+    def test_reader_cannot_open_archive_detail(self):
         self.client.login(username='apd_reader', password='pw')
-        response = self.client.get(reverse('project_detail', args=[self.project.pk]))
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(response.context['show_audit'])
-        self.assertNotContains(response, 'Storico eventi')
-        self.assertIsNone(response.context['audit_logs'])
+        response = self.client.get(reverse('archive_project_detail', args=[self.project.pk]))
+        self.assertEqual(response.status_code, 404)
 
-    # 4. Pagina funziona anche senza AuditLog
-    def test_detail_works_without_audit_logs(self):
+    # 4. Pagina Archivio funziona anche senza AuditLog
+    def test_archive_detail_works_without_audit_logs(self):
         from auditlog.models import AuditLog
         AuditLog.objects.all().delete()
 
         self.client.login(username='apd_mgr', password='pw')
-        response = self.client.get(reverse('project_detail', args=[self.project.pk]))
+        response = self.client.get(reverse('archive_project_detail', args=[self.project.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(list(response.context['audit_logs'])), 0)
         self.assertContains(response, 'Nessun evento registrato per questo progetto.')
 
-    # 5. Folder-auditor (membership cartella) vede "Storico eventi"
-    def test_folder_auditor_sees_storico_eventi_progetto(self):
+    # 5. Folder-auditor (membership cartella) vede "Storico eventi" in Archivio
+    def test_folder_auditor_sees_storico_eventi_in_archive(self):
         folder_auditor = User.objects.create_user('apd_foldaud', password='pw')
         ProjectFolderMembership.objects.create(
             folder=self.folder, user=folder_auditor, role='auditor'
         )
         self.client.login(username='apd_foldaud', password='pw')
+        response = self.client.get(reverse('archive_project_detail', args=[self.project.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Storico eventi')
+
+    # 6. Lo stesso reader NON vede più "Storico eventi" nel project_detail compatto
+    def test_storico_eventi_absent_from_compact_project_detail(self):
+        self.client.login(username='apd_reader', password='pw')
         response = self.client.get(reverse('project_detail', args=[self.project.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.context['show_audit'])
-        self.assertContains(response, 'Storico eventi')
+        self.assertNotContains(response, 'Storico eventi')
 
 
 # ---------------------------------------------------------------------------
@@ -4917,20 +4928,28 @@ class ProjectSnapshotViewTests(TestCase):
         self.assertIsNotNone(snap)
         self.assertEqual(snap.snapshot_type, 'revision')
 
-    # 6. project_detail mostra due sezioni separate
-    def test_project_detail_shows_two_sections(self):
+    # 6. Archivio progetti mostra due sezioni separate (TASK-026: confinate lì)
+    def test_archive_project_detail_shows_two_sections(self):
         self.client.login(username='vh3_manager', password='pw')
-        resp = self.client.get(reverse('project_detail', kwargs={'project_id': self.project.pk}))
+        resp = self.client.get(reverse('archive_project_detail', kwargs={'project_id': self.project.pk}))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'Versioni salvate')
         self.assertContains(resp, 'Revisioni salvate')
 
-    # 7. project_detail ha i pulsanti Salva versione / Salva revisione per manager
-    def test_project_detail_has_snapshot_buttons(self):
+    # 7. Archivio progetti ha i pulsanti Salva versione / Salva revisione per manager
+    def test_archive_project_detail_has_snapshot_buttons(self):
         self.client.login(username='vh3_manager', password='pw')
-        resp = self.client.get(reverse('project_detail', kwargs={'project_id': self.project.pk}))
+        resp = self.client.get(reverse('archive_project_detail', kwargs={'project_id': self.project.pk}))
         self.assertContains(resp, 'Salva versione')
         self.assertContains(resp, 'Salva revisione')
+
+    # 7b. project_detail compatto non mostra più queste sezioni/pulsanti
+    def test_project_detail_no_longer_shows_snapshot_sections(self):
+        self.client.login(username='vh3_manager', password='pw')
+        resp = self.client.get(reverse('project_detail', kwargs={'project_id': self.project.pk}))
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, 'Versioni salvate')
+        self.assertNotContains(resp, 'Revisioni salvate')
 
     # 8. project_revision_detail mostra tipo snapshot e metadati congelati
     def test_revision_detail_shows_snapshot_type_and_metadata(self):

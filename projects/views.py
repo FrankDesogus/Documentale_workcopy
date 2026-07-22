@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 
 from auditlog.models import HistoricalRecord
@@ -499,7 +500,95 @@ def project_detail(request, project_id):
         ).exclude(document_type='').values_list('document_type', flat=True).distinct().order_by('document_type')
     ) if project.root_folder else []
 
-    revisions = project.revisions.order_by('-revision_number')
+    # Riepilogo compatto ultima revisione salvata (TASK-026): lo storico
+    # completo (tutti gli snapshot, confronto baseline, storico eventi) è
+    # confinato in Archivio progetti — qui resta solo il riferimento corrente.
+    current_baseline = project.revisions.filter(
+        is_current=True, snapshot_type='revision',
+    ).select_related('issued_by').first()
+
+    from projects.permissions import can_create_document_in_folder, can_view_archived_project
+    can_create_doc = (
+        project.root_folder is not None
+        and can_create_document_in_folder(request.user, project.root_folder)
+    )
+    can_view_project_archive = can_view_archived_project(request.user, project)
+
+    # ECN collegati ai documenti nelle cartelle del progetto
+    project_ecns = []
+    if project.root_folder:
+        from ecn.models import ChangeNotice
+        project_ecns = list(
+            ChangeNotice.objects
+            .filter(document__project_folder=project.root_folder)
+            .select_related('document', 'proposed_by')
+            .order_by('-proposed_at')[:20]
+        )
+
+    return render(request, 'projects/project_detail.html', {
+        'project': project,
+        'documents': documents,
+        'subfolders': subfolders,
+        'can_manage': _can_manage_project(request.user),
+        'can_create_doc': can_create_doc,
+        'current_baseline': current_baseline,
+        'can_view_project_archive': can_view_project_archive,
+        'project_ecns': project_ecns,
+        # ricerca documenti
+        'doc_q': doc_q,
+        'doc_type_filter': doc_type_filter,
+        'doc_folder_filter': doc_folder_filter,
+        'doc_type_choices': doc_type_choices,
+        'project_folder_choices': project_folder_choices,
+        'doc_page_obj': documents if project.root_folder else None,
+    })
+
+
+@login_required
+def archive_project_list(request):
+    """Lista completa progetti per la sezione Archivio progetti (TASK-026).
+    Accesso gated da can_view_archive — stesso permesso di Archivio documenti
+    (Manager/Auditor/Quality Manager globali, o view_history per cartella)."""
+    from django.core.paginator import Paginator
+    from documents.permissions import can_view_archive
+
+    if not can_view_archive(request.user):
+        raise Http404
+
+    qs = Project.objects.select_related('root_folder', 'root_folder__parent', 'manager').order_by('code')
+
+    q = request.GET.get('q', '').strip()
+    if q:
+        qs = qs.filter(
+            Q(code__icontains=q) | Q(name__icontains=q) | Q(description__icontains=q)
+        )
+
+    paginator = Paginator(qs, 20)
+    page_obj = paginator.get_page(request.GET.get('page', 1))
+
+    return render(request, 'projects/archive_project_list.html', {
+        'projects': page_obj,
+        'page_obj': page_obj,
+        'q': q,
+        'total_count': paginator.count,
+    })
+
+
+@login_required
+def archive_project_detail(request, project_id):
+    """Storico completo di un progetto (TASK-026): tutti gli snapshot versione/
+    revisione, confronto con la baseline corrente, storico eventi. Accesso
+    gated da can_view_archived_project — non raggiungibile da project_detail
+    se non autorizzati."""
+    from projects.permissions import can_view_archived_project
+
+    project = get_object_or_404(
+        Project.objects.select_related('root_folder', 'root_folder__parent', 'manager'),
+        pk=project_id,
+    )
+
+    if not can_view_archived_project(request.user, project):
+        raise Http404
 
     version_snapshots = project.revisions.filter(
         snapshot_type='version'
@@ -513,71 +602,34 @@ def project_detail(request, project_id):
         project, snapshot_type='revision'
     )
 
-    from projects.permissions import can_create_document_in_folder
-    can_create_doc = (
-        project.root_folder is not None
-        and can_create_document_in_folder(request.user, project.root_folder)
-    )
-
-    from documents.permissions import can_view_audit
-    show_audit = can_view_audit(request.user, folder=project.root_folder)
-
-    audit_logs = None
-    if show_audit:
-        from auditlog.models import AuditLog
-        from documents.models import Document as _Doc
-        from projects.services import get_project_document_folders
-        _folders = get_project_document_folders(project)
-        _doc_ids = []
-        if _folders:
-            _doc_ids = list(_Doc.objects.filter(
-                project_folder__in=_folders
-            ).values_list('pk', flat=True))
-        audit_logs = AuditLog.objects.filter(
-            Q(changes__project_id=project.pk)
-            | Q(changes__document_id__in=_doc_ids)
-        ).select_related('user').order_by('-timestamp')[:20]
-
-    # ECN collegati ai documenti nelle cartelle del progetto
-    project_ecns = []
-    if project.root_folder:
-        from ecn.models import ChangeNotice
-        project_ecns = list(
-            ChangeNotice.objects
-            .filter(document__project_folder=project.root_folder)
-            .select_related('document', 'proposed_by')
-            .order_by('-proposed_at')[:20]
-        )
+    from auditlog.models import AuditLog
+    from documents.models import Document as _Doc
+    from projects.services import get_project_document_folders
+    _folders = get_project_document_folders(project)
+    _doc_ids = []
+    if _folders:
+        _doc_ids = list(_Doc.objects.filter(
+            project_folder__in=_folders
+        ).values_list('pk', flat=True))
+    audit_logs = AuditLog.objects.filter(
+        Q(changes__project_id=project.pk)
+        | Q(changes__document_id__in=_doc_ids)
+    ).select_related('user').order_by('-timestamp')[:20]
 
     from django.urls import reverse as _reverse
-    _save_version_url = _reverse('project_snapshot_create', kwargs={'project_id': project.pk}) + '?snapshot_type=version'
-    _save_revision_url = _reverse('project_snapshot_create', kwargs={'project_id': project.pk}) + '?snapshot_type=revision'
+    save_version_url = _reverse('project_snapshot_create', kwargs={'project_id': project.pk}) + '?snapshot_type=version'
+    save_revision_url = _reverse('project_snapshot_create', kwargs={'project_id': project.pk}) + '?snapshot_type=revision'
 
-    return render(request, 'projects/project_detail.html', {
+    return render(request, 'projects/archive_project_detail.html', {
         'project': project,
-        'documents': documents,
-        'subfolders': subfolders,
-        'revisions': revisions,
         'version_snapshots': version_snapshots,
         'revision_snapshots': revision_snapshots,
-        'can_manage': _can_manage_project(request.user),
-        'can_create_doc': can_create_doc,
         'current_baseline': current_baseline,
         'comparison_rows': comparison_rows,
-        'show_audit': show_audit,
         'audit_logs': audit_logs,
-        'project_ecns': project_ecns,
-        # ricerca documenti
-        'doc_q': doc_q,
-        'doc_type_filter': doc_type_filter,
-        'doc_folder_filter': doc_folder_filter,
-        'doc_type_choices': doc_type_choices,
-        'project_folder_choices': project_folder_choices,
-        'doc_page_obj': documents if project.root_folder else None,
-        # snapshot URLs
-        'snapshot_urls_available': True,
-        'save_version_url': _save_version_url,
-        'save_revision_url': _save_revision_url,
+        'can_manage': _can_manage_project(request.user),
+        'save_version_url': save_version_url,
+        'save_revision_url': save_revision_url,
     })
 
 
@@ -799,18 +851,11 @@ def project_revision_detail(request, revision_id):
     )
     project = revision.project
 
-    if not _can_manage_project(request.user):
-        if project and project.root_folder:
-            from projects.permissions import _is_privileged
-            if not _is_privileged(request.user):
-                from projects.resolver import has_folder_permission as _has_fperm
-                if not _has_fperm(
-                    request.user, project.root_folder, 'view_projects',
-                    include_legacy_fallback=True,
-                ):
-                    raise PermissionDenied
-        else:
-            raise PermissionDenied
+    # TASK-026: gli snapshot progetto sono raggiungibili solo da Archivio
+    # progetti — stesso permesso can_view_archived_project.
+    from projects.permissions import can_view_archived_project
+    if not can_view_archived_project(request.user, project):
+        raise PermissionDenied
 
     items = revision.items.select_related(
         'document_version', 'document_version__document'

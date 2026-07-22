@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Archivio progetti — Documentale{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+  <h1 class="text-2xl font-bold text-brand-900">Archivio progetti</h1>
+  {% if total_count is not None %}
+  <span class="meta">{{ total_count }} progett{% if total_count == 1 %}o{% else %}i{% endif %}</span>
+  {% endif %}
+</div>
+<p class="text-sm text-gray-500 mb-4">
+  Storico completo dei progetti: snapshot versione/revisione, confronto con la baseline corrente, storico eventi.
+  Apri un progetto per vederne il dettaglio completo.
+</p>
+
+<!-- Ricerca -->
+<form method="get" class="filter-bar">
+  <div class="filter-group">
+    <label class="form-label">Ricerca</label>
+    <input type="text" name="q" value="{{ q }}" placeholder="Codice o nome…" class="min-w-[200px]">
+  </div>
+  <div class="filter-actions">
+    <button type="submit" class="btn-primary btn-sm">🔍 Cerca</button>
+    {% if q %}
+    <a href="{% url 'archive_project_list' %}" class="btn-secondary btn-sm">✕ Reset</a>
+    {% endif %}
+  </div>
+</form>
+
+{% if projects %}
+<div class="table-container">
+  <table class="data-table">
+    <thead><tr>
+      <th>Codice</th>
+      <th>Nome</th>
+      <th>Versione</th>
+      <th>Revisione</th>
+      <th>Cartella</th>
+      <th>Responsabile</th>
+      <th class="w-20"></th>
+    </tr></thead>
+    <tbody>
+      {% for project in projects %}
+      <tr class="cursor-pointer hover:bg-gray-50" onclick="window.location='{% url 'archive_project_detail' project.pk %}'">
+        <td class="font-mono font-semibold text-brand-800"><a href="{% url 'archive_project_detail' project.pk %}" class="hover:underline" onclick="event.stopPropagation()">{{ project.code }}</a></td>
+        <td>{{ project.name }}</td>
+        <td class="meta font-mono">{{ project.version }} <span class="text-xs text-slate-400">({{ project.get_version_scheme_display }})</span></td>
+        <td class="meta font-mono">{{ project.revision }} <span class="text-xs text-slate-400">({{ project.get_revision_scheme_display }})</span></td>
+        <td class="meta">
+          {% if project.root_folder %}<span>{{ project.root_folder.code }}</span>{% else %}—{% endif %}
+        </td>
+        <td class="meta">{% if project.manager %}{{ project.manager.get_full_name|default:project.manager.username }}{% else %}—{% endif %}</td>
+        <td onclick="event.stopPropagation()"><a href="{% url 'archive_project_detail' project.pk %}" class="btn-secondary btn-sm">Apri</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% include "_pagination.html" with page_obj=page_obj total_count=total_count %}
+
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <div class="empty-state-icon">🔍</div>
+    <div class="empty-state-title">Nessun progetto trovato</div>
+    <div class="empty-state-desc">
+      {% if q %}
+      Nessun risultato per i filtri selezionati. <a href="{% url 'archive_project_list' %}" class="text-brand-600 hover:underline">Mostra tutti</a>
+      {% else %}
+      Non ci sono ancora progetti nell'archivio.
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

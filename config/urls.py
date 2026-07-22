@@ -16,12 +16,15 @@ from documents.views import (
     workspace_my_work,
     workspace_quality,
 )
+from projects.views import archive_project_detail, archive_project_list
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', dashboard, name='dashboard'),
     path('archivio/', archive_document_list, name='archive_document_list'),
     path('archivio/<int:document_id>/', archive_document_detail, name='archive_document_detail'),
+    path('archivio-progetti/', archive_project_list, name='archive_project_list'),
+    path('archivio-progetti/<int:project_id>/', archive_project_detail, name='archive_project_detail'),
     path('workspace/my-work/', workspace_my_work, name='workspace_my_work'),
     path('workspace/quality/', workspace_quality, name='workspace_quality'),
     path('documents/', include('documents.urls')),
