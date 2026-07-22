@@ -60,3 +60,44 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 - Nessuna.
 
 ---
+
+### Review — 2026-07-22 — TASK-030 ECN: form voto CCB in due riquadri separati
+
+**Reviewer:** Claude Code
+**Diff / branch:** task/documentale-ecn-review-form-ui
+**Esito:** Approvato
+
+**Osservazioni:**
+
+- Scope rispettato: unico file applicativo toccato è
+  `templates/ecn/ecn_review_form.html`, più l'aggiornamento di
+  `docs/ai/TASKS.md` per questo task. Nessuna modifica a form/service/
+  view Python — la richiesta era di sola presentazione.
+- Verificato che `ecn/forms.py:ChangeNoticeReviewForm` e
+  `ecn/views.py:ecn_review` non necessitano modifiche: i due `<form>`
+  separati inviano gli stessi nomi di campo (`action`, `comment`,
+  `ccb_notes`) del form unico precedente — la validazione server
+  (motivo obbligatorio se `action == reject`) resta quella già
+  verificata in TASK-027, invariata.
+- Pattern replicato 1:1 da `templates/approvals/approval_detail.html`
+  (già in produzione in questo progetto per lo stesso tipo di
+  decisione sulle revisioni documento): due riquadri colorati, due
+  form indipendenti, asterisco + `required` HTML sul campo
+  obbligatorio.
+- Verificato a video: submit vuoto bloccato dal browser (nessuna
+  richiesta di rete), submit con motivazione porta l'ECN a
+  `REJECTED` con motivo visibile nel dettaglio.
+- Nessun secret, credenziale, comando Git distruttivo nel diff.
+- Test: suite `ecn` **336/336 PASS**, nessun test esistente modificato
+  (comportamento server invariato).
+
+**Azioni richieste prima del commit:**
+
+- Nessuna. Nota per l'operatore: questo branch e
+  `task/documentale-ccb-dossier-impact-fields` toccano entrambi
+  `docs/ai/TASKS.md`/`REVIEW_LOG.md` in coda file — merge sequenziale
+  su `main` richiederà una banale risoluzione di conflitto testuale su
+  questi due file di documentazione (nessun conflitto sul codice
+  applicativo, i due branch non toccano gli stessi file Python/template).
+
+---
