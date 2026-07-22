@@ -117,6 +117,12 @@ def create_simple_ecn(document, proposed_by, title, description='', created_by=N
     """
     from ecn.models import ChangeNotice
 
+    if not document.allows_simple_ecn:
+        raise ValidationError(
+            "Questo documento non consente ECN semplici: è disponibile solo "
+            "l'ECN standard con istruttoria CCB."
+        )
+
     if document.current_version is None:
         raise ValidationError(
             "Il documento non ha una versione corrente. "

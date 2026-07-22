@@ -78,7 +78,9 @@
       {% endif %}
     {% endif %}
     {% if show_create_ecn %}
+    {% if document.allows_simple_ecn %}
     <a href="{% url 'ecn:ecn_create_simple' %}?document={{ document.pk }}" class="btn-secondary">+ Crea ECN semplice</a>
+    {% endif %}
     <a href="{% url 'ecn:ecn_create' %}?document={{ document.pk }}" class="btn-secondary">+ Richiedi ECN standard</a>
     {% endif %}
     {% if show_edit_metadata %}

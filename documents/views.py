@@ -674,6 +674,7 @@ def new_document(request):
                         project_folder=d['project_folder'],
                         revision_scheme=d.get('revision_scheme', 'numeric'),
                         requires_ecn_for_revision=not d.get('ecn_exemption', False),
+                        allows_simple_ecn=not d.get('block_simple_ecn', False),
                         owner=request.user,
                         created_by=request.user,
                     )
@@ -686,6 +687,7 @@ def new_document(request):
                             'code': doc.code,
                             'category': doc.category,
                             'requires_ecn_for_revision': doc.requires_ecn_for_revision,
+                            'allows_simple_ecn': doc.allows_simple_ecn,
                         },
                         document=doc,
                     )
@@ -1009,10 +1011,12 @@ def edit_document_metadata(request, document_id):
         raise PermissionDenied
 
     if request.method == 'POST':
-        form = DocumentMetadataEditForm(request.POST, instance=doc)
+        form = DocumentMetadataEditForm(request.POST, instance=doc, current_user=request.user)
         if form.is_valid():
             try:
                 instance = form.save(commit=False)
+                if 'allows_simple_ecn' in form.fields:
+                    instance.allows_simple_ecn = form.cleaned_data['allows_simple_ecn']
                 instance.full_clean()
                 instance.save()
                 messages.success(
@@ -1028,7 +1032,7 @@ def edit_document_metadata(request, document_id):
                         else:
                             form.add_error(None, msg)
     else:
-        form = DocumentMetadataEditForm(instance=doc)
+        form = DocumentMetadataEditForm(instance=doc, current_user=request.user)
 
     return render(request, 'documents/edit_document_metadata.html', {
         'form': form,
