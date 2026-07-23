@@ -65,6 +65,7 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | TASK-026 | Archivio progetti: storico completo progetti (permesso view_history) + dettaglio compatto altrove | 7a2ff6f | 2026-07-22 |
 | TASK-027 | Verifica: obbligo commento sui rifiuti (documenti ed ECN) — già implementato, nessuna modifica | — | 2026-07-22 |
 | TASK-028 | Istruttoria CCB: aggiunti impatto sul costruito e applicabilità | — | 2026-07-22 |
+| TASK-030 | ECN: form voto CCB in due riquadri separati (Approva/Rifiuta), motivazione rifiuto con asterisco e HTML required | — | 2026-07-22 |
 
 ---
 
@@ -3041,6 +3042,50 @@ caratteristica anche dopo la creazione, entrando nel documento.
 - `templates/documents/new_document.html`, `edit_document_metadata.html`,
   `document_detail.html`
 - `documents/tests.py`, `ecn/tests.py`
+
+---
+
+### TASK-030 — ECN: form voto CCB in due riquadri separati — Claude Code
+
+#### Obiettivo
+
+Segnalato dall'operatore durante la verifica di TASK-027: il rifiuto di
+un ECN richiede già obbligatoriamente una motivazione lato server (form
++ service), ma la UI del voto CCB (`ecn_review_form.html`) non lo
+comunicava — nessun asterisco, nessun attributo HTML `required`, un
+unico form con selettore radio Approva/Rifiuta invece dei due riquadri
+separati già usati per l'approvazione/rifiuto di una revisione documento
+(`approval_detail.html`). Allineare la UI a quel pattern.
+
+#### Soluzione
+
+- `templates/ecn/ecn_review_form.html`: sostituito il form unico con
+  selettore radio con due `<form>` indipendenti affiancati (verde
+  "✔ Approva ECN" / rosso "✖ Rifiuta ECN"), ciascuno con un campo
+  nascosto `action`, stesso schema esatto di `approval_detail.html`.
+  Il campo "Motivazione rifiuto" ha ora l'asterisco rosso e l'attributo
+  HTML `required` (blocco lato client, oltre alla validazione server
+  già esistente e non modificata).
+- Nessuna modifica a `ecn/forms.py`, `ecn/services.py`, `ecn/views.py`:
+  `ChangeNoticeReviewForm` continua a ricevere gli stessi nomi di campo
+  (`action`, `comment`, `ccb_notes`) indipendentemente da come il
+  markup li produce; la validazione (motivazione obbligatoria solo se
+  `action == reject`) è invariata.
+- Verificato a video: invio rifiuto a campo vuoto bloccato dal browser
+  (nessuna richiesta POST inviata); rifiuto con motivazione compilata
+  funziona correttamente end-to-end (ECN passa a `REJECTED`, motivo
+  visibile in `ecn_detail.html`).
+
+#### File coinvolti
+
+- `templates/ecn/ecn_review_form.html`
+
+#### Test
+
+- Branch: `task/documentale-ecn-review-form-ui`.
+- Suite `ecn`: **336/336 PASS** (nessuna modifica ai test: la
+  validazione server non è cambiata, solo la presentazione).
+- Verifica manuale a video (vedi Soluzione).
 
 ---
 
