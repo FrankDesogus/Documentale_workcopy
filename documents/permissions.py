@@ -383,6 +383,22 @@ def can_edit_document_metadata(user, document):
     return _in_group(user, GROUP_AUTHORS)
 
 
+def can_edit_simple_ecn_flag(user):
+    """
+    TASK-029: chi può modificare il flag "consenti ECN semplice" DOPO la
+    creazione del documento. Deliberatamente più ristretto di
+    can_edit_document_metadata: solo superuser o supervisor_demo (in demo
+    mode) — non autori/manager, che pure possono modificare titolo,
+    descrizione e schema revisione.
+    """
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    from config.demo_utils import is_demo_supervisor
+    return is_demo_supervisor(user)
+
+
 def can_download_version_file(user, version):
     """
     is_staff NON concede questo permesso.

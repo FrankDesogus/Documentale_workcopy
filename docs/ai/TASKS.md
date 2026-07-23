@@ -65,6 +65,7 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | TASK-026 | Archivio progetti: storico completo progetti (permesso view_history) + dettaglio compatto altrove | 7a2ff6f | 2026-07-22 |
 | TASK-027 | Verifica: obbligo commento sui rifiuti (documenti ed ECN) — già implementato, nessuna modifica | — | 2026-07-22 |
 | TASK-028 | Istruttoria CCB: aggiunti impatto sul costruito e applicabilità | — | 2026-07-22 |
+| TASK-029 | Documento: flag che blocca la richiesta di ECN semplice | — | 2026-07-22 |
 | TASK-030 | ECN: form voto CCB in due riquadri separati (Approva/Rifiuta), motivazione rifiuto con asterisco e HTML required | — | 2026-07-22 |
 
 ---
@@ -3010,38 +3011,71 @@ Richiesta operatore: poter impedire, per un documento specifico, la
 richiesta di un ECN semplice (flusso autoapprovato senza CCB, TASK-022).
 La spunta è impostabile alla creazione del documento; un admin/superuser
 o il supervisore demo (`supervisor_demo`) devono poter modificare questa
-caratteristica anche dopo la creazione, entrando nel documento.
+caratteristica anche dopo la creazione.
 
-#### Scope
+#### Soluzione
 
-- Nuovo campo `Document.allows_simple_ecn` (`BooleanField(default=True)`,
-  stesso pattern semantico di `requires_ecn_for_revision`): di default
-  tutti i documenti consentono l'ECN semplice; opt-out esplicito per
-  documento.
-- Creazione documento (`new_document`): nuovo checkbox (semantica
-  invertita, stesso pattern di `ecn_exemption` → `requires_ecn_for_revision`)
-  che traduce in `allows_simple_ecn = not <checkbox>`.
-- Gate nel percorso ECN semplice: `ecn/services.py:create_simple_ecn`
-  (`ValidationError` se `not document.allows_simple_ecn`) e
-  `ecn/views.py:ecn_create_simple` / `document_detail.html` (bottone
-  "+ Crea ECN semplice" nascosto se il documento non lo consente).
-- Editing post-creazione **riservato a superuser o `supervisor_demo`**
-  (decisione operatore: più ristretto del permesso generale
-  `can_edit_document_metadata` già usato da autori/manager per
-  titolo/descrizione/schema revisione) — nuovo controllo dedicato,
-  esposto nella pagina di modifica metadati documento solo per questi
-  ruoli.
+- `documents/models.py`: nuovo campo `Document.allows_simple_ecn`
+  (`BooleanField(default=True)`, stesso pattern semantico di
+  `requires_ecn_for_revision`) + migrazione
+  `0007_document_allows_simple_ecn`.
+- `documents/forms.py`:
+  - `DocumentCreateForm`: nuovo checkbox `block_simple_ecn` (semantica
+    invertita, stesso pattern di `ecn_exemption` → `requires_ecn_for_revision`).
+  - `DocumentMetadataEditForm`: campo `allows_simple_ecn` aggiunto
+    dinamicamente in `__init__` **solo** se `current_user` soddisfa il
+    nuovo `can_edit_simple_ecn_flag` — non è nei `Meta.fields` della
+    ModelForm, quindi un utente senza permesso non può forzarlo nemmeno
+    con un POST raw (il campo semplicemente non esiste nel form).
+- `documents/permissions.py`: nuova `can_edit_simple_ecn_flag(user)` —
+  solo superuser o `supervisor_demo` (via `config.demo_utils.is_demo_supervisor`),
+  deliberatamente più ristretta di `can_edit_document_metadata` (che
+  autori/manager hanno già per titolo/descrizione/schema revisione).
+- `documents/views.py`:
+  - `new_document`: traduce `block_simple_ecn` → `allows_simple_ecn`
+    alla creazione, registrato anche in AuditLog.
+  - `edit_document_metadata`: passa `current_user` al form; se il campo
+    è presente lo assegna esplicitamente all'istanza prima di
+    `full_clean()`/`save()`.
+- `ecn/services.py:create_simple_ecn`: nuovo gate — `ValidationError` se
+  `not document.allows_simple_ecn`, prima ancora del controllo
+  "versione corrente presente".
+- `ecn/views.py:ecn_create_simple`: stesso gate lato vista (redirect con
+  messaggio d'errore invece di mostrare il form, sia GET che POST) —
+  difesa in profondità oltre al gate del service.
+- Template:
+  - `templates/documents/new_document.html`: nuova sezione "Governance ECN"
+    con il checkbox. **Corretto anche un bug preesistente** (non
+    introdotto da questo task, scoperto durante la verifica a video):
+    un commento Django multi-riga `{# ... #}` in questo stesso file
+    veniva reso come testo visibile invece di essere nascosto — il tag
+    breve `{# #}` non supporta il multi-riga nel motore template di
+    Django. Convertito in `{% comment %}...{% endcomment %}`.
+  - `templates/documents/document_detail.html`: pulsante
+    "+ Crea ECN semplice" mostrato solo se `document.allows_simple_ecn`;
+    "+ Richiedi ECN standard" resta sempre disponibile.
+  - `templates/documents/edit_document_metadata.html`: nessuna modifica
+    necessaria — itera già genericamente su `form` campo per campo, il
+    nuovo campo compare automaticamente quando presente nel form.
 
 #### File coinvolti
 
-- `documents/models.py` (+ migrazione)
-- `documents/forms.py` (form creazione + form modifica metadati)
-- `documents/views.py` (`new_document`, `edit_document_metadata`)
-- `documents/permissions.py` (nuovo controllo per l'editing post-creazione)
+- `documents/models.py` (+ migrazione `0007_document_allows_simple_ecn`)
+- `documents/forms.py`, `documents/permissions.py`, `documents/views.py`
 - `ecn/services.py`, `ecn/views.py`
-- `templates/documents/new_document.html`, `edit_document_metadata.html`,
-  `document_detail.html`
+- `templates/documents/new_document.html`, `document_detail.html`
 - `documents/tests.py`, `ecn/tests.py`
+
+#### Test
+
+- Branch: `task/documentale-block-simple-ecn-flag`.
+- Suite `documents` + `ecn`: **744/744 PASS**.
+- Verifica a video (supervisor_demo): checkbox in creazione documento
+  renderizzata correttamente (bug commento multi-riga risolto); campo
+  "Consenti ECN semplice" visibile in Modifica metadati; disattivazione
+  del flag nasconde immediatamente "+ Crea ECN semplice" nel dettaglio
+  documento lasciando "+ Richiedi ECN standard"; dato demo ripristinato
+  al termine della verifica.
 
 ---
 

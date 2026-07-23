@@ -3781,6 +3781,65 @@ class DocumentMetadataEditTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertNotContains(resp, 'Modifica metadati')
 
+    # TASK-029: campo "allows_simple_ecn" riservato a superuser/supervisor_demo
+    def test_allows_simple_ecn_field_hidden_for_manager(self):
+        self.client.login(username='dme_manager', password='pw')
+        resp = self.client.get(self._url())
+        self.assertNotIn('allows_simple_ecn', resp.context['form'].fields)
+        self.assertNotContains(resp, 'Consenti ECN semplice')
+
+    def test_allows_simple_ecn_field_visible_for_superuser(self):
+        self.client.login(username='dme_super', password='pw')
+        resp = self.client.get(self._url())
+        self.assertIn('allows_simple_ecn', resp.context['form'].fields)
+        self.assertContains(resp, 'Consenti ECN semplice')
+
+    def test_superuser_can_disable_simple_ecn(self):
+        self.client.login(username='dme_super', password='pw')
+        resp = self.client.post(self._url(), {
+            'title': self.doc.title,
+            'description': '',
+            'revision_scheme': 'numeric',
+            # allows_simple_ecn assente = checkbox deselezionata
+        })
+        self.assertRedirects(resp, reverse('document_detail', args=[self.doc.pk]))
+        self.doc.refresh_from_db()
+        self.assertFalse(self.doc.allows_simple_ecn)
+
+    def test_manager_cannot_disable_simple_ecn_even_via_raw_post(self):
+        """Il manager non ha il campo nel form: anche forzandolo nel POST
+        raw, il valore del documento non cambia (il campo non è in
+        form.fields quindi non entra in cleaned_data)."""
+        self.client.login(username='dme_manager', password='pw')
+        resp = self.client.post(self._url(), {
+            'title': self.doc.title,
+            'description': '',
+            'revision_scheme': 'numeric',
+            'allows_simple_ecn': '',  # tentativo di disattivarlo
+        })
+        # fetch_redirect_response=False: il manager non ha visibilità sul
+        # documento in draft (Caso A di can_view_document, non è l'autore),
+        # non rilevante qui — verifichiamo solo target del redirect e stato salvato.
+        self.assertRedirects(
+            resp, reverse('document_detail', args=[self.doc.pk]),
+            fetch_redirect_response=False,
+        )
+        self.doc.refresh_from_db()
+        self.assertTrue(self.doc.allows_simple_ecn)
+
+    @override_settings(DOCUMENTALE_DEMO_MODE=True, DOCUMENTALE_DEMO_SUPERVISOR_USERNAME='supervisor_demo')
+    def test_supervisor_demo_can_disable_simple_ecn(self):
+        # Non superuser: solo Document Manager (per superare il gate generale
+        # can_edit_document_metadata) + supervisor_demo, per isolare che
+        # l'accesso al campo viene da is_demo_supervisor e non da un bypass
+        # superuser o dal solo ruolo Manager (già escluso da dme_manager).
+        from django.contrib.auth.models import Group
+        supervisor = User.objects.create_user('supervisor_demo', password='pw')
+        supervisor.groups.add(Group.objects.get_or_create(name='Document Managers')[0])
+        self.client.login(username='supervisor_demo', password='pw')
+        resp = self.client.get(self._url())
+        self.assertIn('allows_simple_ecn', resp.context['form'].fields)
+
 
 # ===========================================================================
 # First revision after scheme change — test next_label
@@ -4114,6 +4173,37 @@ class ECNPolicyViewTests(TestCase):
         new_values = log.changes.get('new_values', {})
         self.assertIn('requires_ecn_for_revision', new_values)
         self.assertFalse(new_values['requires_ecn_for_revision'])
+
+    # TASK-029: block_simple_ecn (creazione) si traduce in allows_simple_ecn=False
+    def test_new_document_block_simple_ecn_translates(self):
+        self.client.force_login(self.author)
+        self.client.post(reverse('document_new'), {
+            'code': 'PV-BLOCKSIMPLE',
+            'title': 'Doc blocco ECN semplice',
+            'category': 'QUALITY',
+            'project_folder': self.folder.pk,
+            'revision_scheme': 'numeric',
+            'revision_label': '00',
+            'revision_number': '0',
+            'block_simple_ecn': 'on',
+        })
+        doc = Document.objects.get(code='PV-BLOCKSIMPLE')
+        self.assertFalse(doc.allows_simple_ecn)
+
+    def test_new_document_allows_simple_ecn_true_by_default(self):
+        self.client.force_login(self.author)
+        self.client.post(reverse('document_new'), {
+            'code': 'PV-ALLOWSIMPLE',
+            'title': 'Doc default ECN semplice',
+            'category': 'QUALITY',
+            'project_folder': self.folder.pk,
+            'revision_scheme': 'numeric',
+            'revision_label': '00',
+            'revision_number': '0',
+            # block_simple_ecn assente (checkbox non spuntata) → allows_simple_ecn=True
+        })
+        doc = Document.objects.get(code='PV-ALLOWSIMPLE')
+        self.assertTrue(doc.allows_simple_ecn)
 
     # Caso extra — view new_revision: doc esente mostra form direttamente (no ECN select)
     def test_ecn_exempt_doc_new_revision_shows_form_without_ecn_step(self):

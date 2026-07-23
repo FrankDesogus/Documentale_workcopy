@@ -139,6 +139,14 @@ class Document(models.Model):
             'prima di creare una nuova revisione.'
         ),
     )
+    allows_simple_ecn = models.BooleanField(
+        default=True,
+        verbose_name='Consenti ECN semplice',
+        help_text=(
+            'Se disattivato, per questo documento non è possibile richiedere un ECN '
+            'semplice (autoapprovato, senza CCB): resta disponibile solo l\'ECN standard.'
+        ),
+    )
     code = models.CharField(max_length=50, unique=True, verbose_name='Codice')
     title = models.CharField(max_length=255, verbose_name='Titolo')
     description = models.TextField(blank=True, verbose_name='Descrizione')

@@ -3655,6 +3655,26 @@ class SimpleEcnServiceTests(TestCase):
         self.assertIn('ECN_CREATED', actions)
         self.assertIn('ECN_APPROVED', actions)
 
+    # TASK-029: blocco ECN semplice per documento
+    def test_blocked_when_document_disallows_simple_ecn(self):
+        from ecn.services import create_simple_ecn
+        self.document.allows_simple_ecn = False
+        self.document.save(update_fields=['allows_simple_ecn'])
+        with self.assertRaises(ValidationError):
+            create_simple_ecn(
+                document=self.document, proposed_by=self.author,
+                title='Revisione rapida', send_notifications=False,
+            )
+
+    def test_allowed_by_default(self):
+        from ecn.services import create_simple_ecn
+        self.assertTrue(self.document.allows_simple_ecn)
+        ecn = create_simple_ecn(
+            document=self.document, proposed_by=self.author,
+            title='Revisione rapida', send_notifications=False,
+        )
+        self.assertEqual(ecn.status, ChangeNotice.Status.APPROVED)
+
     def test_enables_document_revision(self):
         """Un ECN semplice approvato soddisfa il gate create_new_revision
         esattamente come un ECN standard — nessuna modifica al service."""
@@ -3736,6 +3756,38 @@ class SimpleEcnViewTests(TestCase):
         self.client.login(username='simplev_author', password='pw')
         r = self.client.get('/ecn/new-simple/')
         self.assertEqual(r.status_code, 404)
+
+    # TASK-029: blocco ECN semplice per documento
+    def test_get_blocked_and_redirected_when_document_disallows(self):
+        self.document.allows_simple_ecn = False
+        self.document.save(update_fields=['allows_simple_ecn'])
+        self.client.login(username='simplev_author', password='pw')
+        r = self.client.get(f'/ecn/new-simple/?document={self.document.pk}')
+        self.assertRedirects(r, f'/documents/{self.document.pk}/')
+
+    def test_post_blocked_when_document_disallows(self):
+        self.document.allows_simple_ecn = False
+        self.document.save(update_fields=['allows_simple_ecn'])
+        self.client.login(username='simplev_author', password='pw')
+        r = self.client.post(f'/ecn/new-simple/?document={self.document.pk}', {
+            'document': self.document.pk,
+            'title': 'Tentativo bloccato',
+        })
+        self.assertRedirects(r, f'/documents/{self.document.pk}/')
+        self.assertFalse(ChangeNotice.objects.filter(document=self.document).exists())
+
+    def test_button_hidden_in_document_detail_when_disallowed(self):
+        self.document.allows_simple_ecn = False
+        self.document.save(update_fields=['allows_simple_ecn'])
+        self.client.login(username='simplev_author', password='pw')
+        r = self.client.get(f'/documents/{self.document.pk}/')
+        self.assertNotContains(r, '+ Crea ECN semplice')
+        self.assertContains(r, '+ Richiedi ECN standard')
+
+    def test_button_visible_in_document_detail_by_default(self):
+        self.client.login(username='simplev_author', password='pw')
+        r = self.client.get(f'/documents/{self.document.pk}/')
+        self.assertContains(r, '+ Crea ECN semplice')
 
 
 class SimpleEcnStandardFlowUnaffectedTests(TestCase):

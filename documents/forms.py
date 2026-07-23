@@ -82,6 +82,15 @@ class DocumentCreateForm(SanatoriaFieldsMixin, forms.Form):
             'Il normale ciclo di approvazione rimane obbligatorio.'
         ),
     )
+    block_simple_ecn = forms.BooleanField(
+        required=False,
+        initial=False,
+        label='Blocca ECN semplice per questo documento',
+        help_text=(
+            'Se spuntato, per questo documento non sarà possibile richiedere un ECN semplice '
+            '(autoapprovato, senza CCB): resterà disponibile solo l\'ECN standard.'
+        ),
+    )
     file = forms.FileField(required=False, label='File operativo')
 
     def __init__(self, *args, user=None, fixed_project_folder=None, current_user=None, **kwargs):
@@ -205,6 +214,23 @@ class DocumentMetadataEditForm(forms.ModelForm):
         widgets = {
             'description': forms.Textarea(attrs={'rows': 3}),
         }
+
+    def __init__(self, *args, current_user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        # TASK-029: il flag "consenti ECN semplice" è modificabile solo da
+        # superuser o supervisor_demo (in demo mode) — non da autori/manager
+        # che già possono modificare titolo/descrizione/schema revisione.
+        from documents.permissions import can_edit_simple_ecn_flag
+        if current_user is not None and can_edit_simple_ecn_flag(current_user):
+            self.fields['allows_simple_ecn'] = forms.BooleanField(
+                required=False,
+                initial=self.instance.allows_simple_ecn if self.instance else True,
+                label='Consenti ECN semplice',
+                help_text=(
+                    'Se deselezionato, per questo documento non sarà possibile richiedere '
+                    'un ECN semplice (autoapprovato, senza CCB).'
+                ),
+            )
 
 
 class ApproverRowForm(forms.Form):

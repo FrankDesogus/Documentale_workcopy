@@ -93,6 +93,49 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 
 ---
 
+### Review — 2026-07-22 — TASK-029 Documento: flag che blocca la richiesta di ECN semplice
+
+**Reviewer:** Claude Code
+**Diff / branch:** task/documentale-block-simple-ecn-flag
+**Esito:** Approvato
+
+**Osservazioni:**
+
+- Scope rispettato: diff confinato a `documents/` (model, form,
+  permissions, view, test), `ecn/services.py` + `ecn/views.py` (gate
+  ECN semplice), `templates/documents/new_document.html` e
+  `document_detail.html`, più `docs/ai/TASKS.md` per questo task.
+- Permesso `can_edit_simple_ecn_flag` deliberatamente più ristretto di
+  `can_edit_document_metadata`, come richiesto dall'operatore — verificato
+  che un Document Manager (che pure può modificare titolo/descrizione/
+  schema) non ha il campo nel form, nemmeno forzandolo via POST raw
+  (il campo non è dichiarato in `Meta.fields`, quindi Django lo ignora
+  in `cleaned_data`; l'assegnazione esplicita in view è dietro
+  `if 'allows_simple_ecn' in form.fields`).
+- Doppio gate sul percorso ECN semplice (service **e** vista, non solo
+  nascondere il bottone) — coerente con lo stile difensivo già presente
+  nel resto del progetto (es. `can_view_archived_document`).
+- Migrazione (`0007_document_allows_simple_ecn`) additiva con
+  `default=True`: nessun impatto sui documenti esistenti, nessuna
+  regressione sul flusso ECN semplice già disponibile.
+- Corretto un bug preesistente scoperto durante la verifica a video
+  (commento Django multi-riga `{# #}` reso come testo visibile in
+  `new_document.html`, introdotto in TASK-022) — fix di una riga,
+  strettamente nella stessa sezione già in modifica per questo task,
+  non fuori scope.
+- Nessun secret, credenziale, comando Git distruttivo nel diff.
+- Test: suite `documents`+`ecn` **744/744 PASS**.
+- Verifica a video completa (vedi TASKS.md); dato demo mutato durante
+  la verifica ripristinato al valore di default.
+
+**Azioni richieste prima del commit:**
+
+- Nessuna. Stessa nota di merge sequenziale su `docs/ai/TASKS.md`/
+  `REVIEW_LOG.md` già segnalata per gli altri branch task di questa sessione
+  (TASK-028, TASK-030): nessun conflitto sul codice applicativo.
+
+---
+
 ### Review — 2026-07-22 — TASK-030 ECN: form voto CCB in due riquadri separati
 
 **Reviewer:** Claude Code
