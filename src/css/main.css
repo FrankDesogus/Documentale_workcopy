@@ -245,7 +245,7 @@
       radial-gradient(circle at 20% 0%, rgba(103, 227, 238, 0.18), transparent 22rem),
       linear-gradient(160deg, rgba(5, 11, 36, 0.82), rgba(8, 19, 49, 0.90) 48%, rgba(11, 94, 168, 0.34));
   }
-  .sidebar-brand { @apply relative block overflow-hidden border-b border-white/10 px-5 py-5 text-white; }
+  .sidebar-brand { @apply relative block overflow-hidden border-b border-white/10 px-5 py-5 text-white; flex-shrink: 0; }
   .sidebar-brand::before {
     content: "";
     @apply absolute inset-0;
