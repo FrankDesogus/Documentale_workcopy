@@ -207,3 +207,50 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 - Nessuna.
 
 ---
+
+### Review — 2026-07-27 — TASK-032 Modelli/migrazioni PDF e firma visiva
+
+**Reviewer:** Claude Code
+**Diff / branch:** task/documentale-pdf-approval-foundation
+**Esito:** Approvato
+
+**Osservazioni:**
+
+- Riuso deliberato di `DocumentFile` (nuovo campo `kind`, default
+  `source`) invece di modelli file paralleli per rappresentazione/PDF
+  approvato: stesso schema hash/mime/size già validato in produzione,
+  nessuna duplicazione di concetti.
+- Nuovi campi su `DocumentVersion` tutti nullable/con default: la
+  migrazione (`0008_documentfile_kind_...`) è puramente additiva,
+  `makemigrations --check --dry-run` pulito, nessuna revisione esistente
+  toccata.
+- Nuovo modello `accounts.UserSignature`: righe immutabili (stesso
+  pattern di `DocumentFile` — sostituzione = nuova riga + `is_active`,
+  mai edit in place), vincolo `UniqueConstraint` su `is_active=True` per
+  utente. `accounts` era un'app scaffolding vuota (3 righe in
+  `models.py`): questa è la sua prima estensione reale.
+- `ApprovalDecision.signature_display_name`/`signature_used`: snapshot
+  esplicito perché `approver` resta un FK live a `User` — se nome o
+  firma cambiano in futuro, un PDF approvato già generato non deve
+  cambiare. Popolazione automatica rimandata a TASK-036 (qui solo i
+  campi dati, con test che verificano che restano vuoti finché nessuno
+  li imposta).
+- Reintrodotta `pillow==12.2.0` (stessa versione già presente prima
+  della rimozione in TASK-009), necessaria per `ImageField` +
+  validazione reale del PNG di firma. `DEPENDENCIES_AUDIT.md` aveva
+  segnalato esplicitamente questo rischio al momento della rimozione
+  ("rischio se in futuro si aggiungono ... campi ImageField"): non è
+  una dipendenza nuova mai vista, è quel rischio che si materializza con
+  un requisito reale.
+- Admin aggiornato per i nuovi campi (readonly dove sono gestiti dal
+  sistema, non dall'utente in admin).
+- Nessun secret, nessun comando Git distruttivo nel diff.
+- Test: `accounts` (nuovi) + `documents.tests_pdf_models` (nuovi) +
+  `documents.tests_pdf_policy` + `approvals` (con 2 nuovi test per lo
+  snapshot) eseguiti insieme: **77/77 PASS**.
+
+**Azioni richieste prima del commit:**
+
+- Nessuna.
+
+---

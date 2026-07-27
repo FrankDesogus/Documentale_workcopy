@@ -156,6 +156,29 @@ class ApprovalDecision(models.Model):
     decided_at = models.DateTimeField(auto_now_add=True)
     notes = models.TextField(blank=True, verbose_name='Note')
 
+    # ------------------------------------------------------------------
+    # Snapshot storico per il registro del PDF approvato (TASK-032/036).
+    # `approver` resta un FK live a User: se nome o firma cambiano in
+    # futuro, il PDF approvato già generato non deve cambiare. Per questo
+    # congeliamo qui il nome mostrato e la firma effettivamente usata.
+    # `signature_used` punta a una riga UserSignature immutabile: anche se
+    # l'utente sostituisce la propria firma, questa riga storica non cambia.
+    # ------------------------------------------------------------------
+    signature_display_name = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name='Nome mostrato al momento della decisione',
+        help_text='Congelato al momento della decisione (approver.get_full_name() o username).',
+    )
+    signature_used = models.ForeignKey(
+        'accounts.UserSignature',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='decisions',
+        verbose_name='Firma visiva usata',
+    )
+
     class Meta:
         verbose_name = 'Decisione di approvazione'
         verbose_name_plural = 'Decisioni di approvazione'

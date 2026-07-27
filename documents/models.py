@@ -8,6 +8,22 @@ from documents.versioning import SequenceScheme
 
 
 class DocumentFile(models.Model):
+    class Kind(models.TextChoices):
+        SOURCE = 'source', 'Sorgente'
+        REPRESENTATION_PDF = 'representation_pdf', 'PDF di rappresentazione'
+        APPROVED_PDF = 'approved_pdf', 'PDF approvato'
+
+    kind = models.CharField(
+        max_length=30,
+        choices=Kind.choices,
+        default=Kind.SOURCE,
+        verbose_name='Tipo file',
+        help_text=(
+            'Sorgente = file operativo caricato dall\'autore. PDF di rappresentazione = '
+            'copia PDF congelata sottoposta agli approvatori. PDF approvato = artefatto '
+            'generato dal sistema con il registro delle approvazioni.'
+        ),
+    )
     file = models.FileField(upload_to='documents/files/%Y/%m/', verbose_name='File')
     original_filename = models.CharField(max_length=255, verbose_name='Nome file originale')
     mime_type = models.CharField(max_length=100, blank=True, verbose_name='Tipo MIME')
@@ -39,6 +55,16 @@ class DocumentVersion(models.Model):
         REJECTED = 'rejected', 'Rifiutato'
         SUPERSEDED = 'superseded', 'Sostituito'
         ARCHIVED = 'archived', 'Archiviato'
+
+    class RepresentationOrigin(models.TextChoices):
+        NATIVE = 'native', 'Sorgente già PDF'
+        AUTO_CONVERTED = 'auto_converted', 'Convertito automaticamente'
+        MANUAL_UPLOAD = 'manual_upload', 'Caricato manualmente'
+
+    class ApprovedPdfStatus(models.TextChoices):
+        NOT_STARTED = 'not_started', 'Non avviata'
+        SUCCESS = 'success', 'Generato'
+        FAILED = 'failed', 'Fallita'
 
     # FK a stringa per evitare dipendenza circolare con Document
     document = models.ForeignKey(
@@ -92,6 +118,101 @@ class DocumentVersion(models.Model):
         related_name='replaced_by',
         verbose_name='Sostituisce la revisione',
     )
+
+    # ------------------------------------------------------------------
+    # PDF di rappresentazione — congelato e sottoposto agli approvatori.
+    # Vedi docs/ai/PDF_APPROVAL_DECISION.md.
+    # ------------------------------------------------------------------
+    representation_pdf = models.ForeignKey(
+        DocumentFile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='representation_for_versions',
+        verbose_name='PDF di rappresentazione',
+    )
+    representation_pdf_source_file = models.ForeignKey(
+        DocumentFile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        verbose_name='Sorgente usato per generare il PDF di rappresentazione',
+        help_text=(
+            'Snapshot del file sorgente da cui deriva representation_pdf. Se non '
+            'coincide più con il file operativo corrente, la rappresentazione è obsoleta.'
+        ),
+    )
+    representation_pdf_origin = models.CharField(
+        max_length=20,
+        choices=RepresentationOrigin.choices,
+        blank=True,
+        verbose_name='Origine PDF di rappresentazione',
+    )
+    representation_pdf_requires_confirmation = models.BooleanField(
+        default=False,
+        verbose_name='Richiede conferma autore',
+        help_text='Vero per le conversioni automatiche a fedeltà non garantita (AUTO_UNCERTAIN).',
+    )
+    representation_pdf_generated_at = models.DateTimeField(
+        null=True, blank=True, verbose_name='PDF di rappresentazione generato/caricato il',
+    )
+    representation_pdf_confirmed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        verbose_name='PDF di rappresentazione confermato da',
+    )
+    representation_pdf_confirmed_at = models.DateTimeField(
+        null=True, blank=True, verbose_name='PDF di rappresentazione confermato il',
+    )
+
+    # ------------------------------------------------------------------
+    # PDF approvato — generato dal sistema dopo l'esito APPROVED.
+    # ------------------------------------------------------------------
+    approved_pdf = models.ForeignKey(
+        DocumentFile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_for_versions',
+        verbose_name='PDF approvato',
+    )
+    approved_pdf_generated_at = models.DateTimeField(
+        null=True, blank=True, verbose_name='PDF approvato generato il',
+    )
+    approved_pdf_generation_status = models.CharField(
+        max_length=20,
+        choices=ApprovedPdfStatus.choices,
+        default=ApprovedPdfStatus.NOT_STARTED,
+        verbose_name='Stato generazione PDF approvato',
+    )
+    approved_pdf_generation_error = models.TextField(
+        blank=True, verbose_name='Errore generazione PDF approvato',
+    )
+
+    @property
+    def representation_pdf_is_stale(self):
+        """True se il file operativo è cambiato dopo la generazione della rappresentazione."""
+        if self.representation_pdf_id is None:
+            return False
+        return self.representation_pdf_source_file_id != self.file_id
+
+    @property
+    def representation_pdf_is_confirmed(self):
+        if not self.representation_pdf_requires_confirmation:
+            return True
+        return self.representation_pdf_confirmed_at is not None
+
+    @property
+    def representation_pdf_is_ready_for_submission(self):
+        return (
+            self.representation_pdf_id is not None
+            and not self.representation_pdf_is_stale
+            and self.representation_pdf_is_confirmed
+        )
 
     class Meta:
         verbose_name = 'Revisione documento'

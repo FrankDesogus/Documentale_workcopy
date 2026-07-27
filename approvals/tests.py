@@ -730,3 +730,50 @@ class ApprovalAttachmentTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse('approval_attachment_download', args=[att.pk]))
         self.assertContains(response, 'modello.pdf')
+
+
+class ApprovalDecisionSignatureSnapshotFieldsTests(TestCase):
+    """TASK-032: solo i campi dati; la popolazione automatica arriva in TASK-036."""
+
+    def setUp(self):
+        self.author = User.objects.create_user('snap_author', password='pw')
+        self.approver = User.objects.create_user('snap_approver', password='pw')
+        self.doc = make_document(code='SNAP-DOC', owner=self.author)
+
+    def test_decision_defaults_have_no_signature_snapshot(self):
+        version = create_new_revision(self.doc, self.author, '01', 1)
+        submit_version_for_approval(
+            version=version, requested_by=self.author,
+            approvers=[self.approver], approval_policy='any',
+        )
+        approve_version(ApprovalRequest.objects.get(document_version=version), self.approver)
+        decision = ApprovalRequest.objects.get(document_version=version).decisions.get()
+        self.assertEqual(decision.signature_display_name, '')
+        self.assertIsNone(decision.signature_used_id)
+
+    def test_decision_can_store_signature_snapshot(self):
+        from accounts.models import UserSignature
+        import io
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new('RGBA', (5, 5)).save(buf, format='PNG')
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        signature = UserSignature.objects.create(
+            user=self.approver,
+            image=SimpleUploadedFile('f.png', buf.getvalue(), content_type='image/png'),
+            original_filename='f.png',
+        )
+        version = create_new_revision(self.doc, self.author, '01', 1)
+        submit_version_for_approval(
+            version=version, requested_by=self.author,
+            approvers=[self.approver], approval_policy='any',
+        )
+        decision = ApprovalRequest.objects.get(document_version=version).decisions
+        approve_version(ApprovalRequest.objects.get(document_version=version), self.approver)
+        d = ApprovalRequest.objects.get(document_version=version).decisions.get()
+        d.signature_display_name = self.approver.get_full_name() or self.approver.username
+        d.signature_used = signature
+        d.save(update_fields=['signature_display_name', 'signature_used'])
+        d.refresh_from_db()
+        self.assertEqual(d.signature_display_name, 'snap_approver')
+        self.assertEqual(d.signature_used_id, signature.pk)

@@ -18,7 +18,7 @@
 
 | ID | Titolo | Agente |
 | -- | ------ | ------ |
-| TASK-032 | Modelli/migrazioni: `DocumentFile.kind`, campi PDF su `DocumentVersion`, `UserSignature`, snapshot su `ApprovalDecision` | Claude Code |
+| TASK-033 | Firma visiva utente: upload/sostituzione/rimozione PNG, storage privato | Claude Code |
 
 ## Backlog
 
@@ -32,7 +32,6 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
 | TASK-029 | Documento: flag che blocca la richiesta di ECN semplice | Alta | Sposta in "In corso" dopo TASK-028 (un solo task in corso per agente) |
-| TASK-033 | Firma visiva utente: upload/sostituzione/rimozione PNG, storage privato | Alta | Dipende da TASK-032 |
 | TASK-034 | Bozza: analisi sorgente, tentativo conversione, upload manuale, conferma, invalidazione | Alta | Dipende da TASK-031+032 |
 | TASK-035 | Gate invio in approvazione: blocco PDF mancante/obsoleto/non confermato + congelamento | Alta | Dipende da TASK-034; sostituisce `signature_template_file` esistente |
 | TASK-036 | Generazione PDF approvato (registro firme) al finalize dell'approvazione | Alta | Dipende da TASK-032+033+035 |
@@ -76,7 +75,8 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | TASK-028 | Istruttoria CCB: aggiunti impatto sul costruito e applicabilità | — | 2026-07-22 |
 | TASK-029 | Documento: flag che blocca la richiesta di ECN semplice | — | 2026-07-22 |
 | TASK-030 | ECN: form voto CCB in due riquadri separati (Approva/Rifiuta), motivazione rifiuto con asterisco e HTML required | — | 2026-07-22 |
-| TASK-031 | Servizio centrale di policy PDF (sorgente → strategia), nessuna dipendenza da binari reali nei test | — | 2026-07-27 |
+| TASK-031 | Servizio centrale di policy PDF (sorgente → strategia), nessuna dipendenza da binari reali nei test | 81a13aa | 2026-07-27 |
+| TASK-032 | Modelli/migrazioni: `DocumentFile.kind`, campi PDF su `DocumentVersion`, `UserSignature` (nuovo modello, app `accounts`), snapshot firma su `ApprovalDecision` | — | 2026-07-27 |
 
 ---
 

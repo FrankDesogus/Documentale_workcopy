@@ -64,4 +64,4 @@ class ApprovalDecisionAdmin(admin.ModelAdmin):
     list_display = ('approval_request', 'approver', 'decision', 'decided_at')
     list_filter = ('decision', 'decided_at')
     search_fields = ('approver__username',)
-    readonly_fields = ('decided_at',)
+    readonly_fields = ('decided_at', 'signature_display_name', 'signature_used')

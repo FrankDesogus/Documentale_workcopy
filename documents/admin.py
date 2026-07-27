@@ -43,14 +43,21 @@ class DocumentVersionAdmin(admin.ModelAdmin):
     readonly_fields = (
         'submitted_at', 'approved_at', 'approved_by',
         'rejected_at', 'is_current', 'replaces_version', 'created_at',
+        'representation_pdf', 'representation_pdf_source_file',
+        'representation_pdf_origin', 'representation_pdf_requires_confirmation',
+        'representation_pdf_generated_at', 'representation_pdf_confirmed_by',
+        'representation_pdf_confirmed_at', 'approved_pdf',
+        'approved_pdf_generated_at', 'approved_pdf_generation_status',
+        'approved_pdf_generation_error',
     )
 
 
 @admin.register(DocumentFile)
 class DocumentFileAdmin(admin.ModelAdmin):
     list_display = (
-        'original_filename', 'extension', 'size',
+        'original_filename', 'kind', 'extension', 'size',
         'sha256_hash', 'uploaded_by', 'uploaded_at',
     )
+    list_filter = ('kind',)
     search_fields = ('original_filename', 'sha256_hash')
     readonly_fields = ('uploaded_at',)
