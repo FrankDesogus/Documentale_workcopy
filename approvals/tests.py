@@ -686,14 +686,18 @@ class ApprovalAttachmentTests(TestCase):
 
 
 class ApprovalDecisionSignatureSnapshotFieldsTests(TestCase):
-    """TASK-032: solo i campi dati; la popolazione automatica arriva in TASK-036."""
+    """
+    TASK-032 introduce i campi; TASK-036 li popola automaticamente dentro
+    approve_version (vedi anche documents.tests_approved_pdf per la
+    copertura end-to-end del PDF approvato che li usa).
+    """
 
     def setUp(self):
         self.author = User.objects.create_user('snap_author', password='pw')
         self.approver = User.objects.create_user('snap_approver', password='pw')
         self.doc = make_document(code='SNAP-DOC', owner=self.author)
 
-    def test_decision_defaults_have_no_signature_snapshot(self):
+    def test_decision_gets_display_name_snapshot_without_signature_image(self):
         version = create_new_revision(self.doc, self.author, '01', 1)
         submit_version_for_approval(
             version=version, requested_by=self.author,
@@ -701,10 +705,12 @@ class ApprovalDecisionSignatureSnapshotFieldsTests(TestCase):
         )
         approve_version(ApprovalRequest.objects.get(document_version=version), self.approver)
         decision = ApprovalRequest.objects.get(document_version=version).decisions.get()
-        self.assertEqual(decision.signature_display_name, '')
+        # Nessuna UserSignature attiva per l'approvatore: nome congelato,
+        # nessuna immagine (firma solo testuale).
+        self.assertEqual(decision.signature_display_name, 'snap_approver')
         self.assertIsNone(decision.signature_used_id)
 
-    def test_decision_can_store_signature_snapshot(self):
+    def test_decision_snapshots_active_signature_at_decision_time(self):
         from accounts.models import UserSignature
         import io
         from PIL import Image
@@ -721,12 +727,7 @@ class ApprovalDecisionSignatureSnapshotFieldsTests(TestCase):
             version=version, requested_by=self.author,
             approvers=[self.approver], approval_policy='any',
         )
-        decision = ApprovalRequest.objects.get(document_version=version).decisions
         approve_version(ApprovalRequest.objects.get(document_version=version), self.approver)
         d = ApprovalRequest.objects.get(document_version=version).decisions.get()
-        d.signature_display_name = self.approver.get_full_name() or self.approver.username
-        d.signature_used = signature
-        d.save(update_fields=['signature_display_name', 'signature_used'])
-        d.refresh_from_db()
         self.assertEqual(d.signature_display_name, 'snap_approver')
         self.assertEqual(d.signature_used_id, signature.pk)

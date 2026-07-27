@@ -97,10 +97,17 @@
 <div class="card mb-4">
   <div class="card-header flex items-center justify-between">
     <h2 class="section-title mb-0">Versione corrente — Rev. {{ document.current_version.revision_label }}</h2>
-    {% if document.current_version.file %}
+    {% if document.current_version.approved_pdf %}
+    <a href="{% url 'version_approved_pdf_download' document.current_version.pk %}" class="btn-primary btn-sm">⬇ Scarica PDF approvato</a>
+    {% elif document.current_version.file %}
     <a href="{% url 'version_download' document.current_version.pk %}" class="btn-secondary btn-sm">⬇ Scarica</a>
     {% endif %}
   </div>
+  {% if document.current_version.status == 'approved' and document.current_version.approved_pdf_generation_status == 'failed' %}
+  <div class="px-4 pt-3 text-sm text-red-700 font-medium">
+    ⚠ Generazione del PDF approvato non riuscita: {{ document.current_version.approved_pdf_generation_error }}
+  </div>
+  {% endif %}
   <div class="detail-grid">
     <div class="detail-item">
       <span class="detail-label">Revisione</span>
@@ -137,13 +144,18 @@
       <span class="detail-value">{{ document.current_version.change_summary }}</span>
     </div>
     {% endif %}
+  </div>
+  {% if document.current_version.file or document.current_version.approved_pdf %}
+  <div class="px-4 pb-4 pt-2 border-t border-gray-100 mt-2">
+    <div class="text-xs uppercase text-gray-400 font-semibold mb-1">File sorgente (secondario)</div>
     {% if document.current_version.file %}
-    <div class="detail-item">
-      <span class="detail-label">File</span>
-      <span class="detail-value font-mono text-xs">{{ document.current_version.file.original_filename }}</span>
+    <div class="flex items-center gap-2 text-sm">
+      <span class="font-mono text-xs">{{ document.current_version.file.original_filename }}</span>
+      <a href="{% url 'version_download' document.current_version.pk %}" class="btn-secondary btn-sm">Scarica sorgente</a>
     </div>
     {% endif %}
   </div>
+  {% endif %}
 </div>
 {% endif %}
 

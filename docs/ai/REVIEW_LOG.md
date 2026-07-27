@@ -417,3 +417,73 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 - Nessuna.
 
 ---
+
+### Review — 2026-07-27 — TASK-036/037/038 PDF approvato, registro firme, UI
+
+**Reviewer:** Claude Code
+**Diff / branch:** task/documentale-pdf-approval-foundation
+**Esito:** Approvato
+
+**Osservazioni:**
+
+- `documents/approved_pdf.py:generate_approved_pdf`: unisce (mai
+  modifica) il PDF di rappresentazione congelato con una pagina finale
+  generata da `reportlab` (stato APPROVATO, codice, titolo, revisione,
+  policy, data conclusione, approvatori/decisione/timestamp/firma PNG
+  se presente, nota assenza firma digitale), tramite `pypdf.PdfWriter`.
+  Gli approvatori nel registro vengono da
+  `approval_request.decisions.filter(decision='APPROVED')`: funziona
+  identicamente per ANY/ALL/SEQUENTIAL senza `if` per policy, perché
+  riflette esattamente "le decisioni effettivamente registrate", non la
+  policy in sé.
+- Mai chiamata per richieste rifiutate (nessun hook in `reject_version`).
+- Chiamata in `approve_version` **dopo** il `with transaction.atomic():`
+  che chiude l'approvazione (mai dentro): un fallimento di generazione
+  non tocca lo stato già commesso. `generate_approved_pdf` stessa non
+  solleva mai — un fallimento imprevisto viene comunque intercettato
+  un livello sopra con `logger.exception` (stesso pattern già usato per
+  l'analisi PDF in bozza).
+- Idempotente: `approved_pdf_generation_status == SUCCESS` blocca una
+  rigenerazione automatica; `force=True` (azione admin
+  "Rigenera PDF approvato", per le generazioni FAILED) la forza.
+- Snapshot firma spostato da "campi vuoti" (TASK-032) a popolazione
+  **reale** dentro `approve_version`, subito dopo la creazione di ogni
+  `ApprovalDecision` — non al momento della generazione: se
+  nome/firma dell'utente cambiano dopo, la decisione storica non
+  cambia (verificato con test dedicato che sostituisce la firma DOPO
+  l'approvazione).
+- UI: `approval_detail.html` mostra "PDF da approvare" (nuovo, in primo
+  piano) e rinomina l'esistente in "File sorgente" (secondario, stessi
+  permessi di prima). `document_detail.html`: il pulsante principale
+  diventa "Scarica PDF approvato" quando presente, il sorgente passa in
+  una sezione secondaria distinta; errore di generazione mostrato
+  esplicitamente. `version_detail.html`: nuova card "PDF approvato" per
+  `approved`/`superseded`, con nota esplicita "revisione corrente più
+  recente esiste" per le superseded.
+- Permessi: riuso di `can_download_version_file` (rappresentazione) e
+  `can_view_version` (approvato) — nessuna nuova regola di visibilità
+  introdotta, solo applicata al nuovo tipo di file. Un test iniziale
+  assumeva erroneamente che un "outsider" dovesse ricevere 403 su un
+  documento senza `project_folder`: corretto rileggendo
+  `can_view_version` (documenti senza cartella sono visibili a
+  qualunque utente autenticato una volta approvati — comportamento
+  preesistente, non introdotto qui).
+- **Correzione**: `approvals.tests.ApprovalDecisionSignatureSnapshotFieldsTests`
+  (TASK-032) asseriva che lo snapshot restasse vuoto dopo
+  un'approvazione — corretto per il vecchio "solo campi dati, nessuna
+  popolazione automatica"; con TASK-036 la popolazione è reale, quindi
+  il test è stato aggiornato per riflettere il comportamento attuale
+  (nome sempre congelato, firma congelata solo se l'utente ne ha una
+  attiva).
+- Nessun secret, nessun comando Git distruttivo nel diff.
+- Test: `documents.tests_approved_pdf` (nuovo) **15/15 PASS**,
+  `approvals.tests.ApprovalDecisionSignatureSnapshotFieldsTests`
+  (corretta) **2/2 PASS**. Suite estesa
+  `documents+approvals+ecn+projects+notifications+accounts` in verifica
+  (risultato nel commit).
+
+**Azioni richieste prima del commit:**
+
+- Nessuna, in attesa solo della conferma della suite estesa in corso.
+
+---

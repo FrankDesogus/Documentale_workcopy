@@ -1,9 +1,13 @@
+import logging
+
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
 
 from approvals.models import ApprovalDecision, ApprovalRequest, ApprovalRequestApprover
 from auditlog.services import create_audit_log
+
+logger = logging.getLogger(__name__)
 
 
 def create_approval_request_attachment(approval_request, uploaded_file, uploaded_by, attachment_type='signature_template'):
@@ -93,12 +97,21 @@ def approve_version(approval_request, approved_by, comment="", send_notification
     with transaction.atomic():
         now = timezone.now()
 
-        ApprovalDecision.objects.create(
+        from accounts.models import UserSignature
+        decision_record = ApprovalDecision.objects.create(
             approval_request=approval_request,
             approver=approved_by,
             decision=ApprovalDecision.Decision.APPROVED,
             notes=comment,
         )
+        # Snapshot per il registro del PDF approvato (TASK-032/036): congelato
+        # ORA, non al momento della generazione — se nome o firma dell'utente
+        # cambiano dopo, questa decisione storica non deve cambiare.
+        decision_record.signature_display_name = approved_by.get_full_name() or approved_by.username
+        decision_record.signature_used = UserSignature.objects.filter(
+            user=approved_by, is_active=True,
+        ).first()
+        decision_record.save(update_fields=['signature_display_name', 'signature_used'])
 
         # Aggiorna stato per-approvatore (solo se è assegnato)
         if is_assigned:
@@ -121,6 +134,20 @@ def approve_version(approval_request, approved_by, comment="", send_notification
                 new_values={'partial_approval_by': approved_by.pk},
                 document=version.document,
                 document_version=version,
+            )
+
+    # Generazione del PDF approvato (TASK-036): SEMPRE dopo il commit della
+    # transazione sopra, mai dentro — un problema qui non deve mai
+    # invalidare un'approvazione già registrata correttamente. Indipendente
+    # da send_notifications: deve avvenire anche in modalità sanatoria.
+    if is_final:
+        from documents.approved_pdf import generate_approved_pdf
+        try:
+            generate_approved_pdf(version)
+        except Exception:
+            logger.exception(
+                'Generazione PDF approvato fallita in modo imprevisto per la revisione #%s.',
+                version.pk,
             )
 
     if not send_notifications:

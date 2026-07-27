@@ -18,7 +18,7 @@
 
 | ID | Titolo | Agente |
 | -- | ------ | ------ |
-| TASK-036 | Generazione PDF approvato (registro firme) al finalize dell'approvazione | Claude Code |
+| TASK-039 | Audit trail eventi PDF/firma (verifica trasversale finale) | Claude Code |
 
 ## Backlog
 
@@ -32,8 +32,6 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
 | TASK-029 | Documento: flag che blocca la richiesta di ECN semplice | Alta | Sposta in "In corso" dopo TASK-028 (un solo task in corso per agente) |
-| TASK-037 | UI pagina approvazione: PDF da approvare + sorgenti autorizzati | Media | Dipende da TASK-035 |
-| TASK-038 | UI documento: PDF approvato come principale, sorgenti in sezione secondaria, storico superseded | Media | Dipende da TASK-036 |
 | TASK-039 | Audit trail eventi PDF/firma | Media | Trasversale, applicato incrementalmente nei task 032-036 più verifica finale dedicata |
 | TASK-040 | Suite completa, demo, chiusura documentazione (REVIEW_LOG/RUN_LOG) | Alta | Ultimo task della feature, prima dello stop pre-merge |
 
@@ -77,6 +75,7 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | TASK-033 | Firma visiva utente: upload/sostituzione/rimozione PNG, anteprima via data URI (nessun URL pubblico), validazione formato/dimensioni | — | 2026-07-27 |
 | TASK-034 | Bozza: `documents/pdf_rendition.py` (analisi, conversione reportlab/LibreOffice, upload manuale, conferma, invalidazione su cambio sorgente), UI di stato in `version_detail.html` | — | 2026-07-27 |
 | TASK-035 | Gate invio in approvazione (solo per revisioni con sorgente), congelamento contro sostituzioni silenziose, rimosso `signature_template_file` (sostituito dal PDF di rappresentazione tipizzato) | — | 2026-07-27 |
+| TASK-036/037/038 | `documents/approved_pdf.py` (registro firme via reportlab+pypdf, idempotente, non annulla approvazioni già registrate), snapshot firma in `approve_version`, azione admin di rigenerazione, UI approvazione (PDF da approvare) e documento (PDF approvato principale, storico su superseded) | — | 2026-07-27 |
 
 ---
 

@@ -1100,3 +1100,43 @@ def download_version_file(request, version_id):
         as_attachment=True,
         filename=version.file.original_filename,
     )
+
+
+@login_required
+def download_representation_pdf(request, version_id):
+    """PDF sottoposto agli approvatori (TASK-037): stessa visibilità del sorgente."""
+    from documents.permissions import can_download_version_file
+
+    version = get_object_or_404(DocumentVersion, pk=version_id)
+    if not version.representation_pdf:
+        raise Http404
+    if not can_download_version_file(request.user, version):
+        raise PermissionDenied
+
+    file_path = version.representation_pdf.file.path
+    if not os.path.exists(file_path):
+        raise Http404
+
+    return FileResponse(
+        open(file_path, 'rb'), content_type='application/pdf',
+        as_attachment=True, filename=version.representation_pdf.original_filename,
+    )
+
+
+@login_required
+def download_approved_pdf(request, version_id):
+    """PDF approvato (TASK-038): stessa visibilità della pagina di dettaglio versione."""
+    version = get_object_or_404(DocumentVersion, pk=version_id)
+    if not version.approved_pdf:
+        raise Http404
+    if not can_view_version(request.user, version):
+        raise PermissionDenied
+
+    file_path = version.approved_pdf.file.path
+    if not os.path.exists(file_path):
+        raise Http404
+
+    return FileResponse(
+        open(file_path, 'rb'), content_type='application/pdf',
+        as_attachment=True, filename=version.approved_pdf.original_filename,
+    )
