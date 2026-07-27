@@ -135,21 +135,17 @@
     </div>
   </div>
 
-  <!-- Allegati -->
+  <!-- PDF di rappresentazione -->
   <div class="form-section">
-    <div class="form-section-title">Allegati <span class="text-gray-400 font-normal text-xs">(opzionale)</span></div>
-    <div class="form-group mb-0">
-      <label class="form-label" for="{{ form.signature_template_file.id_for_label }}">
-        {{ form.signature_template_file.label }}
-      </label>
-      {% if form.signature_template_file.help_text %}
-      <p class="form-help">{{ form.signature_template_file.help_text }}</p>
-      {% endif %}
-      {{ form.signature_template_file }}
-      {% for error in form.signature_template_file.errors %}
-      <p class="form-error">{{ error }}</p>
-      {% endfor %}
-    </div>
+    <div class="form-section-title">PDF di rappresentazione</div>
+    {% if version.representation_pdf_is_ready_for_submission %}
+    <p class="text-green-700 text-sm">✔ Pronto: verrà congelato e sottoposto agli approvatori con questa richiesta.</p>
+    {% else %}
+    <p class="text-red-700 text-sm">
+      ⚠ Nessun PDF di rappresentazione valido/confermato per questa revisione.
+      <a href="{% url 'version_detail' version.pk %}" class="link">Preparalo prima di inviare</a>.
+    </p>
+    {% endif %}
   </div>
 
   {% include "auditlog/sanatoria_fields.html" %}

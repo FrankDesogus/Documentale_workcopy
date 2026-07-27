@@ -357,3 +357,63 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 - Nessuna, in attesa solo della conferma della suite estesa in corso.
 
 ---
+
+### Review — 2026-07-27 — TASK-035 Gate invio in approvazione + congelamento
+
+**Reviewer:** Claude Code
+**Diff / branch:** task/documentale-pdf-approval-foundation
+**Esito:** Approvato
+
+**Osservazioni:**
+
+- Gate in `submit_version_for_approval`: blocca se manca
+  `representation_pdf`, se è obsoleto (`representation_pdf_is_stale`) o
+  se richiede conferma non ancora data. **Decisione di scope
+  importante**, verificata empiricamente prima di procedere: il gate si
+  applica **solo se `version.file_id is not None`**. `DocumentVersion.file`
+  è nullable da prima di questa feature (una revisione senza alcun
+  sorgente è un caso preesistente legittimo, non introdotto ora) — non
+  c'è nulla da "rappresentare in PDF" se non esiste un sorgente. Prima
+  di questa restrizione un gate incondizionato rompeva **8 failure +
+  148 errori su 838 test** in `documents+approvals+ecn` (quasi tutti
+  fixture di test che creano revisioni senza file per testare la
+  meccanica di approvazione, non il ciclo file/PDF); dopo la
+  restrizione: **1 failure + 5 errori**, tutti nella stessa classe
+  (`ApprovalAttachmentTests`, vedi sotto). Documentato qui invece che
+  lasciato implicito, perché è la decisione con il raggio d'azione più
+  ampio di tutta la feature.
+- Rimosso `signature_template_file` da `SubmitForApprovalForm` e dalla
+  vista `submit_for_approval`: il "modello da firmare" generico e
+  opzionale è sostituito dal PDF di rappresentazione tipizzato, già
+  presente (o bloccante) prima dell'invio. `ApprovalRequestAttachment`/
+  `create_approval_request_attachment` **non sono stati rimossi**: dati
+  storici restano scaricabili con gli stessi permessi (nessuna
+  cancellazione di dati esistenti).
+- `ApprovalAttachmentTests` (approvals/tests.py) adattata: i test che
+  verificavano la CREAZIONE dell'allegato tramite il form di invio sono
+  stati rimossi (quel meccanismo non esiste più); i test di permesso/
+  visualizzazione di un allegato già esistente sono stati riscritti per
+  crearlo direttamente via `create_approval_request_attachment` (dato
+  storico simulato), preservando la copertura sul download/permessi.
+- Congelamento: oltre al blocco implicito già esistente
+  (`can_edit_version`/`update_draft_version` operano solo su
+  DRAFT/REJECTED), aggiunto un guardrail esplicito **a livello di
+  servizio** in `upload_manual_representation_pdf` e
+  `confirm_representation_pdf` (non solo di vista/permesso): rifiutano
+  se lo stato non è bozza/rifiutato, per evitare qualunque sostituzione
+  silenziosa anche da una chiamata diretta futura (management command,
+  script) che bypassi la vista.
+- Nessuna modifica ai comandi demo (`demo_full`/`demo_workflow`/
+  `demo_company`): verificato che nessuno di essi allega un `file=` alle
+  revisioni create, quindi il gate non li riguarda.
+- Nessun secret, nessun comando Git distruttivo nel diff.
+- Test: `documents.tests_pdf_gate` (nuovo) **9/9 PASS**,
+  `approvals.tests.ApprovalAttachmentTests` (riscritta) **5/5 PASS**.
+  Suite `documents+approvals+ecn` completa: **844/844 PASS**.
+  `projects+notifications+accounts`: **458/458 PASS**.
+
+**Azioni richieste prima del commit:**
+
+- Nessuna.
+
+---

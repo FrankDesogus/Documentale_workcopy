@@ -301,8 +301,3 @@ class SubmitForApprovalForm(SanatoriaFieldsMixin, forms.Form):
         label='Scadenza approvazione',
         widget=forms.DateInput(attrs={'type': 'date'}),
     )
-    signature_template_file = forms.FileField(
-        required=False,
-        label='Modello da firmare',
-        help_text='Allegato opzionale consultabile dagli approvatori.',
-    )

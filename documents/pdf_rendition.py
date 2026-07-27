@@ -257,8 +257,20 @@ def upload_manual_representation_pdf(version, uploaded_file, user):
     Carica manualmente un PDF di rappresentazione. Il caricamento è già una
     dichiarazione consapevole dell'autore: considerato confermato subito,
     nessuna conferma separata richiesta anche se non era obbligatoria.
+
+    Guardrail di congelamento: possibile solo in bozza/rifiutato (stessa
+    regola di can_edit_version), verificato anche qui a livello di servizio
+    e non solo di permesso di vista, per evitare qualunque sostituzione
+    silenziosa una volta avviato il workflow di approvazione (TASK-035).
     """
     from django.core.exceptions import ValidationError
+    from documents.models import DocumentVersion
+
+    if version.status not in (DocumentVersion.Status.DRAFT, DocumentVersion.Status.REJECTED):
+        raise ValidationError(
+            f"Non è possibile modificare il PDF di rappresentazione: la revisione non è in "
+            f"bozza. Stato attuale: {version.get_status_display()}."
+        )
 
     head = uploaded_file.read(len(PDF_HEADER))
     uploaded_file.seek(0)
@@ -302,7 +314,13 @@ def upload_manual_representation_pdf(version, uploaded_file, user):
 
 def confirm_representation_pdf(version, user):
     from django.core.exceptions import ValidationError
+    from documents.models import DocumentVersion
 
+    if version.status not in (DocumentVersion.Status.DRAFT, DocumentVersion.Status.REJECTED):
+        raise ValidationError(
+            f"Non è possibile confermare il PDF di rappresentazione: la revisione non è in "
+            f"bozza. Stato attuale: {version.get_status_display()}."
+        )
     if version.representation_pdf_id is None:
         raise ValidationError('Non esiste un PDF di rappresentazione da confermare.')
     if version.representation_pdf_is_stale:

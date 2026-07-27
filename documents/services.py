@@ -169,6 +169,29 @@ def submit_version_for_approval(version, requested_by, approvers, due_date=None,
             "Esiste già una richiesta di approvazione pendente per questa revisione."
         )
 
+    # Gate PDF (TASK-035): un PDF di rappresentazione valido e, se richiesto,
+    # confermato è obbligatorio PRIMA dell'invio — MA solo per le revisioni
+    # che hanno un file sorgente. `DocumentVersion.file` è nullable già da
+    # prima di questa feature (revisioni puramente di metadati sono un caso
+    # legittimo preesistente): non c'è nulla da "rappresentare in PDF" se
+    # non esiste alcun sorgente. Vedi docs/ai/PDF_APPROVAL_DECISION.md.
+    if version.file_id is not None:
+        if version.representation_pdf_id is None:
+            raise ValidationError(
+                "Manca il PDF di rappresentazione: caricarlo o generarlo prima di inviare "
+                "la revisione in approvazione."
+            )
+        if version.representation_pdf_is_stale:
+            raise ValidationError(
+                "Il file sorgente è cambiato dopo la generazione del PDF di rappresentazione: "
+                "rigenerarlo/ricaricarlo prima di inviare la revisione in approvazione."
+            )
+        if not version.representation_pdf_is_confirmed:
+            raise ValidationError(
+                "Il PDF di rappresentazione richiede una conferma esplicita dell'autore "
+                "prima dell'invio (conversione automatica a fedeltà non garantita)."
+            )
+
     with transaction.atomic():
         now = timezone.now()
         version.status = DocumentVersion.Status.IN_APPROVAL

@@ -955,10 +955,6 @@ def submit_for_approval(request, version_id):
                     approval_policy=d['approval_policy'],
                     send_notifications=should_send_notifications(sanatoria=form.is_sanatoria),
                 )
-                sig_file = d.get('signature_template_file')
-                if sig_file:
-                    from approvals.services import create_approval_request_attachment
-                    create_approval_request_attachment(approval_request, sig_file, request.user)
                 # Sanatoria: registra evento storico
                 from auditlog.models import HistoricalRecord
                 form.maybe_create_historical_record(

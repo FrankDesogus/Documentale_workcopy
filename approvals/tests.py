@@ -612,8 +612,7 @@ class ApprovalAttachmentTests(TestCase):
     def _make_draft(self):
         return create_new_revision(self.doc, self.author, '01', 1)
 
-    def _post_submit(self, version, sig_file=None):
-        from django.core.files.uploadedfile import SimpleUploadedFile
+    def _post_submit(self, version):
         data = {
             'approver-TOTAL_FORMS': '1',
             'approver-INITIAL_FORMS': '0',
@@ -622,93 +621,53 @@ class ApprovalAttachmentTests(TestCase):
             'approver-0-approver': str(self.approver.pk),
             'approval_policy': 'all',
         }
-        files = {}
-        if sig_file is not None:
-            files['signature_template_file'] = sig_file
         self.client.login(username='at_author', password='pw')
-        return self.client.post(reverse('version_submit', args=[version.pk]), {**data, **files})
+        return self.client.post(reverse('version_submit', args=[version.pk]), data)
 
     def test_submit_without_attachment_works(self):
         draft = self._make_draft()
         response = self._post_submit(draft)
         self.assertEqual(response.status_code, 302)
-        from approvals.models import ApprovalRequest, ApprovalRequestAttachment
+        from approvals.models import ApprovalRequest
         ar = ApprovalRequest.objects.get(document_version=draft)
         self.assertEqual(ar.attachments.count(), 0)
 
-    def test_submit_with_signature_template_creates_attachment(self):
+    def _make_request_with_attachment(self):
+        """
+        TASK-035: l'upload di un "modello da firmare" al momento dell'invio è
+        stato sostituito dal PDF di rappresentazione tipizzato (TASK-031..034).
+        `ApprovalRequestAttachment`/`create_approval_request_attachment`
+        restano nel codice per non alterare dati storici già esistenti: qui
+        si verifica che allegati storici (creati per altra via, non più dal
+        form di invio) restino scaricabili/visibili con gli stessi permessi.
+        """
         from django.core.files.uploadedfile import SimpleUploadedFile
-        draft = self._make_draft()
-        sig_file = SimpleUploadedFile('modello.pdf', b'%PDF dummy', content_type='application/pdf')
-        response = self._post_submit(draft, sig_file=sig_file)
-        self.assertEqual(response.status_code, 302)
-        from approvals.models import ApprovalRequest, ApprovalRequestAttachment
-        ar = ApprovalRequest.objects.get(document_version=draft)
-        self.assertEqual(ar.attachments.count(), 1)
-        att = ar.attachments.first()
-        self.assertEqual(att.attachment_type, ApprovalRequestAttachment.AttachmentType.SIGNATURE_TEMPLATE)
-        self.assertEqual(att.original_filename, 'modello.pdf')
 
-    def test_attachment_does_not_replace_version_file(self):
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        from documents.services import create_document_file
-        op_file = SimpleUploadedFile('operativo.pdf', b'%PDF op', content_type='application/pdf')
-        doc_file = create_document_file(op_file, self.author)
-        draft = create_new_revision(self.doc, self.author, '01', 1, file=doc_file)
-        sig_file = SimpleUploadedFile('modello.pdf', b'%PDF sig', content_type='application/pdf')
-        self._post_submit(draft, sig_file=sig_file)
-        draft.refresh_from_db()
-        self.assertIsNotNone(draft.file)
-        self.assertEqual(draft.file.pk, doc_file.pk)
-
-    def test_attachment_metadata_set(self):
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        import hashlib
-        content = b'%PDF-1.4 test content'
-        expected_hash = hashlib.sha256(content).hexdigest()
-        draft = self._make_draft()
-        sig_file = SimpleUploadedFile('firma.pdf', content, content_type='application/pdf')
-        self._post_submit(draft, sig_file=sig_file)
         from approvals.models import ApprovalRequest
+        from approvals.services import create_approval_request_attachment
+
+        draft = self._make_draft()
+        response = self._post_submit(draft)
+        self.assertEqual(response.status_code, 302)
         ar = ApprovalRequest.objects.get(document_version=draft)
-        att = ar.attachments.first()
-        self.assertEqual(att.original_filename, 'firma.pdf')
-        self.assertEqual(att.sha256_hash, expected_hash)
-        self.assertEqual(att.size, len(content))
-        self.assertEqual(att.extension, 'pdf')
+        sig_file = SimpleUploadedFile('modello.pdf', b'%PDF dummy', content_type='application/pdf')
+        attachment = create_approval_request_attachment(ar, sig_file, self.author)
+        return ar, attachment
 
     def test_assigned_approver_can_download_attachment(self):
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        draft = self._make_draft()
-        sig_file = SimpleUploadedFile('modello.pdf', b'%PDF dummy', content_type='application/pdf')
-        self._post_submit(draft, sig_file=sig_file)
-        from approvals.models import ApprovalRequest
-        ar = ApprovalRequest.objects.get(document_version=draft)
-        att = ar.attachments.first()
+        ar, att = self._make_request_with_attachment()
         self.client.login(username='at_approver', password='pw')
         response = self.client.get(reverse('approval_attachment_download', args=[att.pk]))
         self.assertEqual(response.status_code, 200)
 
     def test_unassigned_user_cannot_download_attachment(self):
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        draft = self._make_draft()
-        sig_file = SimpleUploadedFile('modello.pdf', b'%PDF dummy', content_type='application/pdf')
-        self._post_submit(draft, sig_file=sig_file)
-        from approvals.models import ApprovalRequest
-        ar = ApprovalRequest.objects.get(document_version=draft)
-        att = ar.attachments.first()
+        ar, att = self._make_request_with_attachment()
         self.client.login(username='at_outsider', password='pw')
         response = self.client.get(reverse('approval_attachment_download', args=[att.pk]))
         self.assertEqual(response.status_code, 403)
 
     def test_approval_detail_shows_attachment_link(self):
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        draft = self._make_draft()
-        sig_file = SimpleUploadedFile('modello.pdf', b'%PDF dummy', content_type='application/pdf')
-        self._post_submit(draft, sig_file=sig_file)
-        from approvals.models import ApprovalRequest
-        ar = ApprovalRequest.objects.get(document_version=draft)
-        att = ar.attachments.first()
+        ar, att = self._make_request_with_attachment()
         self.client.login(username='at_approver', password='pw')
         response = self.client.get(reverse('approval_detail', args=[ar.pk]))
         self.assertEqual(response.status_code, 200)
@@ -716,14 +675,8 @@ class ApprovalAttachmentTests(TestCase):
         self.assertContains(response, 'modello.pdf')
 
     def test_document_detail_shows_attachment_link_in_approval_section(self):
-        from django.core.files.uploadedfile import SimpleUploadedFile
         from approvals.services import approve_version as do_approve
-        draft = self._make_draft()
-        sig_file = SimpleUploadedFile('modello.pdf', b'%PDF dummy', content_type='application/pdf')
-        self._post_submit(draft, sig_file=sig_file)
-        from approvals.models import ApprovalRequest
-        ar = ApprovalRequest.objects.get(document_version=draft)
-        att = ar.attachments.first()
+        ar, att = self._make_request_with_attachment()
         do_approve(ar, self.approver)
         self.client.login(username='at_approver', password='pw')
         response = self.client.get(reverse('document_detail', args=[self.doc.pk]))
