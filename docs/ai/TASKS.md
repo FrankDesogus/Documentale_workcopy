@@ -18,7 +18,6 @@
 
 | ID | Titolo | Agente |
 | -- | ------ | ------ |
-| TASK-040 | Suite completa, demo, chiusura documentazione (REVIEW_LOG/RUN_LOG) | Claude Code |
 
 ## Backlog
 
@@ -75,6 +74,7 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | TASK-035 | Gate invio in approvazione (solo per revisioni con sorgente), congelamento contro sostituzioni silenziose, rimosso `signature_template_file` (sostituito dal PDF di rappresentazione tipizzato) | — | 2026-07-27 |
 | TASK-036/037/038 | `documents/approved_pdf.py` (registro firme via reportlab+pypdf, idempotente, non annulla approvazioni già registrate), snapshot firma in `approve_version`, azione admin di rigenerazione, UI approvazione (PDF da approvare) e documento (PDF approvato principale, storico su superseded) | — | 2026-07-27 |
 | TASK-039 | Audit trail: verifica trasversale del ciclo PDF/firma completo (`documents/tests_pdf_audit.py`), evento distinto `APPROVED_PDF_REGENERATED` per la rigenerazione admin, corretto un evento mancante su `generate_approved_pdf` (fallimento per assenza rappresentazione/richiesta) | — | 2026-07-27 |
+| TASK-040 | Suite completa (1323/1323 PASS), verifica end-to-end manuale contro il DB demo reale (non solo test), dati demo rigenerati con le nuove migrazioni, chiusura documentazione | — | 2026-07-27 |
 
 ---
 

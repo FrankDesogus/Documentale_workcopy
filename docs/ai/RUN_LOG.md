@@ -1710,3 +1710,103 @@ manage.py test ecn documents approvals: Ran 783 tests — OK
    rinominazione/separazione di `executed_version`, automazione della
    chiusura, o eliminazione dello stato `CLOSED` — vedi TASKS.md §
    TASK-025 per il confronto con le prassi esterne.
+
+---
+
+### Run — 2026-07-27 — TASK-031→040 Sorgente / PDF di rappresentazione / PDF approvato
+
+**Agente:** Claude Code
+**Task:** TASK-031→TASK-040 (feature completa, vedi `docs/ai/PDF_APPROVAL_DECISION.md`)
+**Branch:** task/documentale-pdf-approval-foundation (nuovo, da `main` a `122a6b0`)
+
+**Operazioni eseguite:**
+
+1. Ispezione reale della Station (root, workflow, script) e del progetto
+   (modelli, servizi, permessi, dipendenze, formati sorgente ammessi:
+   nessuna whitelist esistente). Individuato un meccanismo riutilizzabile
+   preesistente (`ApprovalRequestAttachment`/`signature_template_file`)
+   da sostituire, non affiancare.
+2. Scritta la decisione tecnica (`docs/ai/PDF_APPROVAL_DECISION.md`):
+   classificazione strategie (NATIVE_PDF/AUTO_RELIABLE/AUTO_UNCERTAIN/
+   MANUAL_REQUIRED/UNSUPPORTED/CONVERSION_FAILED), librerie scelte
+   (reportlab+pypdf pure-Python, Pillow reintrodotta), criteri di
+   richiesta PDF e di conferma.
+3. TASK-031: `documents/pdf_policy.py`, policy centralizzata, rilevamento
+   convertitore iniettabile (mai reale nei test).
+4. TASK-032: `DocumentFile.kind`, campi PDF su `DocumentVersion`, nuovo
+   modello `accounts.UserSignature` (righe immutabili), snapshot su
+   `ApprovalDecision`. Reintrodotta `pillow==12.2.0` (rimossa in TASK-009,
+   rischio allora annotato ora materializzato).
+5. TASK-033: gestione firma visiva (upload/sostituzione/rimozione),
+   anteprima via data URI (nessun URL pubblico).
+6. TASK-034: `documents/pdf_rendition.py` — analisi, conversione reale
+   (reportlab per testo/immagini, `soffice` headless se rilevato per
+   Office), upload manuale, conferma, invalidazione automatica su
+   cambio sorgente. UI di stato in `version_detail.html`.
+7. TASK-035: gate di invio (`submit_version_for_approval`), **ristretto
+   alle revisioni con un file sorgente** dopo aver misurato l'impatto
+   (8 failure + 148 errori su 838 test con gate incondizionato → 1
+   failure + 5 errori con lo scope corretto, tutti nella stessa classe,
+   sistemata). Rimosso `signature_template_file` dal form/vista di
+   invio (dati storici non toccati).
+8. TASK-036/037/038: `documents/approved_pdf.py` (reportlab+pypdf,
+   idempotente, mai dentro la transazione di approvazione), snapshot
+   firma popolato in `approve_version`, azione admin di rigenerazione,
+   UI approvazione/documento/versione.
+9. TASK-039: verifica trasversale audit trail — trovato e corretto un
+   evento di fallimento mancante, aggiunto evento distinto per la
+   rigenerazione.
+10. TASK-040: suite completa rieseguita più volte durante il lavoro
+    (ultima esecuzione: 1323/1323 PASS su
+    documents+approvals+ecn+projects+notifications+accounts). Migrazioni
+    applicate anche al DB demo/dev della Station, dati demo rigenerati
+    (`demo_full --reset --no-email`, nessun errore). Verifica end-to-end
+    manuale contro il DB reale (non il DB di test): documento
+    `DEMO-VERIFY-PDF-001` creato con un PDF nativo reale, inviato,
+    approvato, PDF approvato generato e verificato su disco (2400 byte).
+    Lasciato nel DB demo come esempio dal vivo del nuovo flusso.
+
+**Esito test:**
+
+```
+Ultima esecuzione completa:
+manage.py test documents approvals ecn projects notifications accounts
+Ran 1323 tests — OK
+makemigrations --check --dry-run: No changes detected
+```
+
+**Problemi riscontrati:**
+
+- Il gate di invio, se applicato senza restrizioni, rompeva un numero
+  molto alto di test preesistenti che creano revisioni senza alcun file
+  (fixture per la meccanica di approvazione, non per il ciclo PDF).
+  Risolto restringendo il gate a `version.file_id is not None`
+  (`DocumentVersion.file` era già nullable prima di questa feature),
+  non con un bypass sparso nei test.
+- `generate_approved_pdf` aveva un ramo di fallimento senza il proprio
+  evento di audit (trovato dalla verifica trasversale TASK-039, non da
+  un test scritto ad-hoc) — corretto.
+- Un test iniziale su `documents.tests_pdf_rendition` falliva per un
+  `FieldFile` letto dopo essere stato chiuso da `sniff_is_pdf`; corretto
+  con `open()`/`close()` espliciti.
+- Un test iniziale assumeva che un "outsider" dovesse ricevere 403 su un
+  PDF approvato di un documento senza `project_folder`: comportamento
+  preesistente di `can_view_version` (visibile a chiunque in quel caso),
+  non un bug — test corretto, non il codice.
+
+**Prossimo passo per l'operatore umano:**
+
+1. Rivedere il diff (7 commit) e `docs/ai/PDF_APPROVAL_DECISION.md`.
+2. Provare dal vivo sul server già in esecuzione
+   (`http://127.0.0.1:8000/`, dati demo rigenerati): creare una bozza
+   con un PDF, con un `.txt`/immagine, con un `.docx` (LibreOffice
+   presente su questa macchina) e con un formato non gestito; inviarla;
+   approvarla con più policy; scaricare il PDF approvato.
+3. Decidere se mantenere `DEMO-VERIFY-PDF-001` nel DB demo o rieseguire
+   `demo_full --reset` per uno stato pulito.
+4. Nessun merge, nessun push: restano a cura dell'operatore.
+5. Backlog aperto (fuori scope qui, vedi report finale): retry UI per
+   generazioni fallite oltre all'azione admin, dipendenza reale da
+   LibreOffice da verificare su Windows/produzione, eventuale rimozione
+   definitiva di `ApprovalRequestAttachment`/`SIGNATURE_TEMPLATE` una
+   volta confermato che non serve più nemmeno per compatibilità storica.
