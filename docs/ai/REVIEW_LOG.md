@@ -171,3 +171,39 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 - Nessuna.
 
 ---
+
+### Review — 2026-07-27 — TASK-031 Servizio centrale di policy PDF
+
+**Reviewer:** Claude Code
+**Diff / branch:** task/documentale-pdf-approval-foundation
+**Esito:** Approvato
+
+**Osservazioni:**
+
+- Primo task della feature "sorgente / PDF di rappresentazione / PDF
+  approvato" (vedi `docs/ai/PDF_APPROVAL_DECISION.md` per l'analisi
+  completa che motiva le soglie). Solo logica pura in questo task: nessun
+  modello, nessuna vista, nessuna dipendenza nuova.
+- `documents/pdf_policy.py`: un'unica funzione (`get_pdf_strategy`)
+  centralizza la decisione — nessun `if` sparso sulle estensioni altrove
+  nel codice. Estensioni classificate in insiemi nominati
+  (`RELIABLE_EXTENSIONS`, `OFFICE_EXTENSIONS`, `RISKY_EXTENSIONS`),
+  estendibili senza toccare la logica.
+- La disponibilità del convertitore (`soffice`) è iniettabile
+  (`converter_available`) e mai assunta dall'estensione: nei test è
+  sempre mockata, mai dipendente da `shutil.which` reale — coerente col
+  vincolo "i test non devono dipendere da programmi esterni sulla
+  macchina di CI".
+- Verificato localmente (non rappresentativo dell'ambiente reale, vedi
+  decisione): `soffice`/`libreoffice` presenti su questa macchina Linux,
+  ma non si può assumere lo stesso su Windows (sviluppo, da `CLAUDE.md`)
+  né sul server di produzione.
+- Nessun secret, nessun comando Git distruttivo nel diff.
+- Test: `documents.tests_pdf_policy` **12/12 PASS**; suite `documents`
+  completa **414/414 PASS** (nessuna regressione).
+
+**Azioni richieste prima del commit:**
+
+- Nessuna.
+
+---

@@ -18,6 +18,7 @@
 
 | ID | Titolo | Agente |
 | -- | ------ | ------ |
+| TASK-032 | Modelli/migrazioni: `DocumentFile.kind`, campi PDF su `DocumentVersion`, `UserSignature`, snapshot su `ApprovalDecision` | Claude Code |
 
 ## Backlog
 
@@ -31,6 +32,14 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
 | TASK-029 | Documento: flag che blocca la richiesta di ECN semplice | Alta | Sposta in "In corso" dopo TASK-028 (un solo task in corso per agente) |
+| TASK-033 | Firma visiva utente: upload/sostituzione/rimozione PNG, storage privato | Alta | Dipende da TASK-032 |
+| TASK-034 | Bozza: analisi sorgente, tentativo conversione, upload manuale, conferma, invalidazione | Alta | Dipende da TASK-031+032 |
+| TASK-035 | Gate invio in approvazione: blocco PDF mancante/obsoleto/non confermato + congelamento | Alta | Dipende da TASK-034; sostituisce `signature_template_file` esistente |
+| TASK-036 | Generazione PDF approvato (registro firme) al finalize dell'approvazione | Alta | Dipende da TASK-032+033+035 |
+| TASK-037 | UI pagina approvazione: PDF da approvare + sorgenti autorizzati | Media | Dipende da TASK-035 |
+| TASK-038 | UI documento: PDF approvato come principale, sorgenti in sezione secondaria, storico superseded | Media | Dipende da TASK-036 |
+| TASK-039 | Audit trail eventi PDF/firma | Media | Trasversale, applicato incrementalmente nei task 032-036 più verifica finale dedicata |
+| TASK-040 | Suite completa, demo, chiusura documentazione (REVIEW_LOG/RUN_LOG) | Alta | Ultimo task della feature, prima dello stop pre-merge |
 
 ## Completati
 
@@ -67,6 +76,7 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | TASK-028 | Istruttoria CCB: aggiunti impatto sul costruito e applicabilità | — | 2026-07-22 |
 | TASK-029 | Documento: flag che blocca la richiesta di ECN semplice | — | 2026-07-22 |
 | TASK-030 | ECN: form voto CCB in due riquadri separati (Approva/Rifiuta), motivazione rifiuto con asterisco e HTML required | — | 2026-07-22 |
+| TASK-031 | Servizio centrale di policy PDF (sorgente → strategia), nessuna dipendenza da binari reali nei test | — | 2026-07-27 |
 
 ---
 
@@ -3120,6 +3130,425 @@ separati già usati per l'approvazione/rifiuto di una revisione documento
 - Suite `ecn`: **336/336 PASS** (nessuna modifica ai test: la
   validazione server non è cambiata, solo la presentazione).
 - Verifica manuale a video (vedi Soluzione).
+
+---
+
+### TASK-031 — Servizio centrale di policy PDF (sorgente → strategia) — Claude Code
+
+#### Obiettivo
+
+Un servizio unico e testabile che risponda "qual è la strategia PDF per
+questo file, in questo ambiente?" — vedi `docs/ai/PDF_APPROVAL_DECISION.md`
+per l'analisi completa. Nessun modello, nessuna UI in questo task: solo la
+logica di decisione.
+
+#### Scope
+
+- Nuovo modulo `documents/pdf_policy.py`: strategie
+  `NATIVE_PDF` / `AUTO_RELIABLE` / `AUTO_UNCERTAIN` / `MANUAL_REQUIRED` /
+  `UNSUPPORTED`, rilevamento runtime del convertitore (es.
+  `shutil.which('soffice')`), motivo sempre restituito.
+- Non implementare ancora la conversione reale né toccare modelli/form/view.
+
+#### File coinvolti
+
+- `documents/pdf_policy.py` (nuovo)
+- `documents/tests_pdf_policy.py` o sezione dedicata in `documents/tests.py`
+
+#### Acceptance criteria
+
+- [ ] `get_pdf_strategy(...)` centralizza la decisione (niente `if` sparsi
+      sulle estensioni altrove).
+- [ ] Il rilevamento del convertitore è iniettabile/mockabile nei test
+      (nessuna dipendenza da binari reali in CI).
+- [ ] Ogni esito include un motivo leggibile.
+
+#### Test richiesti
+
+- Un caso per ciascuna strategia della tabella in
+  `PDF_APPROVAL_DECISION.md` §3, inclusi i due sotto-casi di
+  `MANUAL_REQUIRED` (formato rischioso vs. convertitore assente).
+
+#### Guardrail
+
+- No push, no merge.
+- Nessuna nuova dipendenza in questo task (reportlab/Pillow arrivano in
+  TASK-032/033/036, quando servono davvero).
+
+---
+
+### TASK-032 — Modelli/migrazioni PDF e firma visiva — Claude Code
+
+#### Obiettivo
+
+Base dati per l'intera feature, senza generare nulla retroattivamente sulle
+revisioni esistenti.
+
+#### Scope
+
+- `DocumentFile.kind` (`source`/`representation_pdf`/`approved_pdf`,
+  default `source` per compatibilità con le righe esistenti).
+- Campi su `DocumentVersion`: `representation_pdf`, `representation_pdf_source_file`,
+  `representation_pdf_origin`, `representation_pdf_generated_at`,
+  `representation_pdf_confirmed_by/_at`, `approved_pdf`,
+  `approved_pdf_generated_at`, `approved_pdf_generation_status`,
+  `approved_pdf_generation_error` — tutti nullable/default, nessun impatto
+  sulle revisioni storiche.
+- Nuovo modello `accounts.UserSignature` (righe immutabili, `is_active`).
+- `ApprovalDecision.signature_used` (FK `UserSignature`, nullable) +
+  `signature_display_name` (stringa congelata).
+
+#### File coinvolti
+
+- `documents/models.py`, `documents/migrations/000X_*.py`
+- `accounts/models.py`, `accounts/migrations/000X_*.py`
+- `approvals/models.py`, `approvals/migrations/000X_*.py`
+
+#### Acceptance criteria
+
+- [ ] `makemigrations --check --dry-run` pulito dopo le modifiche.
+- [ ] Nessuna revisione/documento/decisione esistente modificata dalla
+      migrazione (solo default/null).
+- [ ] Admin registrato per `UserSignature` (coerenza con lo stile esistente).
+
+#### Test richiesti
+
+- Test di modello minimi (creazione, default, unique/constraint su
+  `UserSignature.is_active` se applicabile).
+
+#### Guardrail
+
+- No push, no merge, nessuna migrazione distruttiva.
+
+---
+
+### TASK-033 — Firma visiva utente: upload/gestione — Claude Code
+
+#### Obiettivo
+
+Permettere a ogni utente di caricare/sostituire/rimuovere una firma PNG
+opzionale, mantenendo sempre disponibile la firma testuale (nome utente).
+
+#### Scope
+
+- Form + vista di gestione firma (probabilmente in `accounts` o come
+  sezione del profilo esistente — verificare se esiste già una pagina
+  "profilo").
+- Validazione PNG con Pillow: formato reale (non solo estensione),
+  dimensione massima ragionevole, gestione trasparenza.
+- Storage privato (stesso pattern `upload_to` privato già in uso, nessun
+  URL pubblico diretto: download sempre mediato da una vista con
+  permesso).
+
+#### File coinvolti
+
+- `accounts/forms.py` (nuovo), `accounts/views.py`, `accounts/urls.py`,
+  `templates/accounts/*`
+- `requirements.txt` (Pillow)
+
+#### Acceptance criteria
+
+- [ ] Upload, sostituzione e rimozione funzionano; rimozione disattiva
+      (non elimina) per non rompere `ApprovalDecision.signature_used`
+      storici.
+- [ ] PNG non valido rifiutato con messaggio chiaro.
+- [ ] Nessun URL pubblico della firma.
+
+#### Test richiesti
+
+- PNG valido con/senza trasparenza, file non-PNG rinominato `.png`, file
+  oltre il limite dimensionale, rimozione, sostituzione.
+
+#### Guardrail
+
+- No push, no merge.
+
+---
+
+### TASK-034 — Bozza: analisi sorgente, conversione, upload manuale, conferma — Claude Code
+
+#### Obiettivo
+
+Implementare il ciclo di vita del PDF di rappresentazione durante la bozza,
+senza mai bloccare la creazione iniziale.
+
+#### Scope
+
+- Alla creazione/modifica di una bozza: calcolo strategia (TASK-031),
+  tentativo di conversione automatica quando la strategia lo consente,
+  upload manuale sempre disponibile, conferma esplicita dell'autore quando
+  richiesta.
+- Invalidazione automatica di `representation_pdf`/conferma quando il
+  sorgente (`version.file`) cambia.
+- Stati UI distinti in bozza (non preparato / conversione riuscita /
+  caricato manualmente / da confermare / confermato / fallita / non
+  aggiornato).
+
+#### File coinvolti
+
+- `documents/services.py`, `documents/pdf_rendition.py` (nuovo, wrapper
+  reportlab per `AUTO_RELIABLE` + `soffice` per `AUTO_UNCERTAIN`),
+  `documents/views.py`, `documents/forms.py`,
+  `templates/documents/new_document.html`, `new_revision.html`,
+  `edit_version` template.
+- `requirements.txt` (reportlab).
+
+#### Acceptance criteria
+
+- [ ] Bozza creabile/salvabile senza alcun PDF.
+- [ ] Cambio sorgente invalida rappresentazione e conferma esistenti.
+- [ ] Autore può sempre sostituire una conversione automatica con un PDF
+      caricato a mano.
+
+#### Test richiesti
+
+- Fake converter iniettato nei test (nessuna dipendenza da `soffice` reale
+  in CI) per coprire successo/fallimento conversione.
+- Invalidazione dopo sostituzione sorgente.
+
+#### Guardrail
+
+- No push, no merge. Nessun tentativo di conversione reale nei test di CI.
+
+---
+
+### TASK-035 — Gate invio in approvazione + congelamento — Claude Code
+
+#### Obiettivo
+
+Rendere obbligatorio un PDF di rappresentazione valido e confermato (quando
+richiesto) prima dell'invio, e congelare sorgente+PDF+checksum all'invio.
+Sostituisce il campo `signature_template_file`/`ApprovalRequestAttachment
+(SIGNATURE_TEMPLATE)` esistente in `submit_for_approval`, che diventa
+ridondante rispetto al nuovo `representation_pdf` tipizzato.
+
+#### Scope
+
+- `submit_version_for_approval` (`documents/services.py`): blocco esplicito
+  con messaggio chiaro per PDF mancante/obsoleto/non confermato.
+- Rimozione del campo `signature_template_file` da `SubmitForApprovalForm`
+  e del relativo passaggio in `documents/views.py:submit_for_approval`
+  (il "modello da firmare" generico è sostituito dal PDF di rappresentazione
+  tipizzato e già presente prima dell'invio).
+- Congelamento: nessuna sostituzione silenziosa di sorgente/PDF dopo
+  l'invio (stato `IN_APPROVAL` non più modificabile lato bozza — già vero
+  oggi per `version.file` via `can_edit_version`, va esteso esplicitamente
+  al PDF).
+
+#### File coinvolti
+
+- `documents/services.py`, `documents/views.py`, `documents/forms.py`
+- `templates/documents/submit_for_approval.html`
+- `approvals/models.py` (valutare deprecazione `SIGNATURE_TEMPLATE`, non
+  rimuovere dati storici esistenti)
+
+#### Acceptance criteria
+
+- [ ] Invio bloccato senza PDF valido/confermato, messaggio motivato.
+- [ ] Invio consentito con PDF valido.
+- [ ] Nessuna via per sostituire sorgente/PDF durante `IN_APPROVAL`.
+
+#### Test richiesti
+
+- Matrice: PDF mancante, obsoleto (sorgente cambiato dopo generazione),
+  non confermato quando richiesto, valido → invio consentito.
+
+#### Guardrail
+
+- No push, no merge. Non toccare dati storici di
+  `ApprovalRequestAttachment` già esistenti (solo il nuovo flusso).
+
+---
+
+### TASK-036 — Generazione PDF approvato + registro firme — Claude Code
+
+#### Obiettivo
+
+Al raggiungimento di `APPROVED`, generare un PDF separato: PDF di
+rappresentazione congelato + pagina finale con registro delle approvazioni
+e firme visive, senza mai modificare il PDF sottoposto agli approvatori.
+
+#### Scope
+
+- `documents/approved_pdf.py` (nuovo): usa `pypdf` per unire il PDF di
+  rappresentazione congelato con una pagina finale generata via
+  `reportlab` (stato APPROVATO, codice, titolo, revisione, policy, data,
+  approvatori/ruolo/decisione/timestamp/firma PNG se presente, nota
+  assenza firma digitale).
+- Hook in `approvals/services.py:_finalize_approval`/`approve_version`:
+  generazione **dopo** il commit della transazione di approvazione,
+  idempotente (stato `approved_pdf_generation_status`), un errore di
+  generazione non deve invalidare l'approvazione già registrata.
+- Snapshot firma per decisione (`ApprovalDecision.signature_used`,
+  `signature_display_name`) popolato al momento di ogni
+  `approve_version`/`reject_version` (solo per decisioni di approvazione
+  compaiono nel registro finale; i rifiuti non generano PDF approvato).
+- Meccanismo di rigenerazione manuale in caso di fallimento (vista/azione
+  admin, non pubblica).
+
+#### File coinvolti
+
+- `documents/approved_pdf.py` (nuovo)
+- `approvals/services.py`
+- `documents/models.py` (nessun campo aggiuntivo oltre TASK-032)
+
+#### Acceptance criteria
+
+- [ ] PDF approvato mai generato per richieste rifiutate.
+- [ ] Rispetta ANY/ALL/SEQUENTIAL (solo decisioni realmente registrate).
+- [ ] Rieseguibile senza duplicare artefatti; fallimento non tocca lo
+      stato di approvazione già commesso.
+
+#### Test richiesti
+
+- Un caso per policy (ANY/ALL/SEQUENTIAL), rifiuto (nessun PDF), fallimento
+  generazione + retry, idempotenza su doppia chiamata.
+
+#### Guardrail
+
+- No push, no merge. `requirements.txt` (pypdf, reportlab se non già
+  aggiunto in TASK-034).
+
+---
+
+### TASK-037 — UI pagina approvazione: PDF + sorgenti — Claude Code
+
+#### Obiettivo
+
+L'approvatore deve vedere/scaricare il PDF sottoposto e i sorgenti
+autorizzati, oltre a codice/revisione/stato/autore già presenti.
+
+#### Scope
+
+- `templates/approvals/approval_detail.html`: link/anteprima
+  `representation_pdf`, download sorgenti secondo permessi esistenti
+  (`can_download_version_file`).
+
+#### File coinvolti
+
+- `approvals/views.py`, `templates/approvals/approval_detail.html`
+
+#### Acceptance criteria
+
+- [ ] PDF da approvare sempre visibile/scaricabile per l'approvatore
+      assegnato.
+- [ ] Sorgenti visibili solo se già autorizzati oggi (nessuna estensione
+      di permesso non richiesta).
+
+#### Test richiesti
+
+- Visualizzazione/permesso per approvatore assegnato vs. utente non
+  autorizzato.
+
+#### Guardrail
+
+- No push, no merge.
+
+---
+
+### TASK-038 — UI documento: PDF approvato come principale — Claude Code
+
+#### Obiettivo
+
+Per una revisione approvata, il PDF approvato diventa il documento
+principale mostrato; i sorgenti restano disponibili in sezione secondaria;
+`SUPERSEDED` conserva il proprio PDF approvato storico.
+
+#### Scope
+
+- `templates/documents/document_detail.html`, `version_detail.html`
+  (o equivalenti): comando "Scarica PDF approvato" evidente, sezione
+  secondaria per sorgenti, errori di generazione visibili chiaramente.
+
+#### File coinvolti
+
+- `documents/views.py`, template documento/versione coinvolti.
+
+#### Acceptance criteria
+
+- [ ] Versione approvata corrente: PDF approvato è il documento
+      principale.
+- [ ] Versione superseded: PDF approvato storico ancora accessibile,
+      con indicazione che esiste una revisione corrente successiva.
+
+#### Test richiesti
+
+- Rendering per versione APPROVED corrente, SUPERSEDED, e caso
+  generazione fallita (messaggio d'errore visibile).
+
+#### Guardrail
+
+- No push, no merge.
+
+---
+
+### TASK-039 — Audit trail eventi PDF/firma — Claude Code
+
+#### Obiettivo
+
+Integrare `create_audit_log` per gli eventi del ciclo PDF, applicato
+incrementalmente nei task 032-036 e verificato qui in modo trasversale.
+
+#### Scope
+
+- Eventi minimi: strategia determinata, conversione iniziata/riuscita/
+  fallita, PDF manuale richiesto/caricato/confermato/invalidato, invio con
+  file congelati, generazione PDF approvato riuscita/fallita/rigenerata.
+
+#### File coinvolti
+
+- `documents/services.py`, `documents/pdf_rendition.py`,
+  `documents/approved_pdf.py`, `approvals/services.py`.
+
+#### Acceptance criteria
+
+- [ ] Ogni transizione di stato del PDF ha una riga di audit coerente
+      con lo stile esistente (`action`, `document`, `document_version`).
+- [ ] Nessun contenuto binario o segreto nei log.
+
+#### Test richiesti
+
+- Verifica presenza/azione corretta di `AuditLog` per ciascun evento
+  della lista.
+
+#### Guardrail
+
+- No push, no merge.
+
+---
+
+### TASK-040 — Suite completa, demo, chiusura documentazione — Claude Code
+
+#### Obiettivo
+
+Chiudere la feature: suite Django completa verde, verifica demo a video,
+`docs/ai/REVIEW_LOG.md`/`RUN_LOG.md` aggiornati, stop prima di merge/push.
+
+#### Scope
+
+- Eseguire l'intera suite (`manage.py test`), non solo le app toccate.
+- Aggiornare `PROJECT_HANDOFF.md` se necessario.
+- Verifica manuale a video del flusso end-to-end (bozza senza PDF →
+  conversione/upload → conferma → invio → approvazione multi-policy →
+  PDF approvato scaricabile).
+
+#### File coinvolti
+
+- `docs/ai/REVIEW_LOG.md`, `docs/ai/RUN_LOG.md`, `docs/ai/TASKS.md`.
+
+#### Acceptance criteria
+
+- [ ] Suite completa verde.
+- [ ] Nessun merge, nessun push eseguito.
+- [ ] Working tree riportato in stato pulito/commesso localmente.
+
+#### Test richiesti
+
+- `manage.py test` (suite completa).
+
+#### Guardrail
+
+- No push, no merge, no reset --hard.
 
 ---
 
