@@ -145,6 +145,9 @@ class ApprovedPdfGenerationTests(TestCase):
         generate_approved_pdf(version, force=True)
         version.refresh_from_db()
         self.assertNotEqual(version.approved_pdf_id, first_id)
+        self.assertTrue(
+            AuditLog.objects.filter(action='APPROVED_PDF_REGENERATED', object_id=str(version.pk)).exists()
+        )
 
     def test_approval_without_any_source_marks_generation_failed_without_blocking_approval(self):
         version = create_new_revision(self.doc, self.author, '01', 1)  # nessun file
@@ -160,6 +163,11 @@ class ApprovedPdfGenerationTests(TestCase):
             version.approved_pdf_generation_status, DocumentVersion.ApprovedPdfStatus.FAILED,
         )
         self.assertIsNone(version.approved_pdf_id)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                action='APPROVED_PDF_GENERATION_FAILED', object_id=str(version.pk),
+            ).exists()
+        )
 
     def test_signature_snapshot_frozen_after_signature_change(self):
         png = _png_bytes()

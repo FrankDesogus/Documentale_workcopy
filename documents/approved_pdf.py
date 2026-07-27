@@ -136,6 +136,8 @@ def generate_approved_pdf(version, force=False):
     if not force and version.approved_pdf_generation_status == DocumentVersion.ApprovedPdfStatus.SUCCESS:
         return
 
+    is_regeneration = force and version.approved_pdf_generation_status != DocumentVersion.ApprovedPdfStatus.NOT_STARTED
+
     approval_request = (
         version.approval_requests
         .filter(status='APPROVED')
@@ -148,6 +150,11 @@ def generate_approved_pdf(version, force=False):
             'Nessuna richiesta di approvazione conclusa o PDF di rappresentazione assente.'
         )
         version.save(update_fields=['approved_pdf_generation_status', 'approved_pdf_generation_error'])
+        create_audit_log(
+            user=version.approved_by, action='APPROVED_PDF_GENERATION_FAILED', instance=version,
+            new_values={'error': version.approved_pdf_generation_error},
+            document=version.document, document_version=version,
+        )
         return
 
     decisions = list(
@@ -199,7 +206,9 @@ def generate_approved_pdf(version, force=False):
     ])
 
     create_audit_log(
-        user=version.approved_by, action='APPROVED_PDF_GENERATED', instance=version,
+        user=version.approved_by,
+        action='APPROVED_PDF_REGENERATED' if is_regeneration else 'APPROVED_PDF_GENERATED',
+        instance=version,
         new_values={'approved_pdf_id': approved_file.pk},
         document=version.document, document_version=version,
     )

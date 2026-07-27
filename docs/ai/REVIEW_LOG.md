@@ -479,11 +479,58 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 - Test: `documents.tests_approved_pdf` (nuovo) **15/15 PASS**,
   `approvals.tests.ApprovalDecisionSignatureSnapshotFieldsTests`
   (corretta) **2/2 PASS**. Suite estesa
-  `documents+approvals+ecn+projects+notifications+accounts` in verifica
-  (risultato nel commit).
+  `documents+approvals+ecn+projects+notifications+accounts`:
+  **1317/1317 PASS**.
 
 **Azioni richieste prima del commit:**
 
-- Nessuna, in attesa solo della conferma della suite estesa in corso.
+- Nessuna.
+
+---
+
+### Review — 2026-07-27 — TASK-039 Audit trail: verifica trasversale
+
+**Reviewer:** Claude Code
+**Diff / branch:** task/documentale-pdf-approval-foundation
+**Esito:** Approvato
+
+**Osservazioni:**
+
+- Nuovo `documents/tests_pdf_audit.py`: un test per ciascun evento
+  richiesto dal requisito (strategia determinata, conversione iniziata/
+  riuscita/fallita, PDF manuale richiesto/caricato, invalidazione,
+  conferma, generazione PDF approvato riuscita/fallita, upload/rimozione
+  firma) — verifica che l'azione di `AuditLog` attesa sia effettivamente
+  presente, non solo che il codice non sollevi eccezioni.
+- **Bug trovato dalla verifica trasversale stessa**: il ramo di
+  `generate_approved_pdf` per il caso "nessuna richiesta conclusa o
+  rappresentazione assente" impostava `approved_pdf_generation_status
+  = FAILED` ma non scriveva alcuna riga di `AuditLog` — unico ramo di
+  fallimento della generazione senza il proprio evento. Corretto
+  aggiungendo `create_audit_log(action='APPROVED_PDF_GENERATION_FAILED', ...)`
+  anche qui, coerente con l'altro ramo di fallimento (eccezione durante
+  merge/conversione).
+- Aggiunto evento distinto `APPROVED_PDF_REGENERATED` (invece di
+  riusare `APPROVED_PDF_GENERATED`) quando `generate_approved_pdf` viene
+  richiamata con `force=True` su una generazione già tentata in
+  precedenza (azione admin "Rigenera PDF approvato") — il requisito
+  elenca "rigenerazione" come evento distinto dalla prima generazione.
+- "Workflow inviato con file congelati" e "snapshot creato" (dalla lista
+  del requisito) non hanno un evento dedicato separato: sono coperti
+  rispettivamente dall'evento preesistente `SUBMITTED_FOR_APPROVAL`
+  (che ora avviene solo a gate PDF superato, quindi con i file già
+  congelati per costruzione) e dagli eventi di conversione/upload già
+  presenti (che SONO la creazione dello snapshot rappresentazione).
+  Non introdotto un evento ridondante per lo stesso fatto già tracciato.
+- Nessun secret, nessun comando Git distruttivo nel diff.
+- Test: `documents.tests_pdf_audit` (nuovo) **6/6 PASS**,
+  `documents.tests_approved_pdf` (aggiornato) **21/21 PASS** insieme.
+  `makemigrations --check --dry-run` pulito (nessuna modifica ai
+  modelli in questo task). Suite estesa
+  `documents+approvals+ecn+accounts`: **876/876 PASS**.
+
+**Azioni richieste prima del commit:**
+
+- Nessuna.
 
 ---
