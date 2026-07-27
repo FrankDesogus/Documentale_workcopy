@@ -295,3 +295,65 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 - Nessuna, in attesa solo della conferma della suite estesa in corso.
 
 ---
+
+### Review — 2026-07-27 — TASK-034 Bozza: analisi sorgente, conversione, upload manuale, conferma
+
+**Reviewer:** Claude Code
+**Diff / branch:** task/documentale-pdf-approval-foundation
+**Esito:** Approvato
+
+**Osservazioni:**
+
+- `documents/pdf_rendition.py` applica realmente le strategie di
+  `pdf_policy`: `reportlab` per `AUTO_RELIABLE` (testo con impaginazione
+  a più pagine, immagini centrate in una pagina A4), `soffice --headless`
+  in sottoprocesso con timeout per `AUTO_UNCERTAIN`. `NATIVE_PDF` riusa
+  lo stesso `DocumentFile` del sorgente senza copiarlo.
+- `prepare_representation_pdf` invalida sempre prima di procedere se
+  `representation_pdf_source_file` non coincide più col sorgente attuale
+  (copre sia "prima analisi" sia "sorgente sostituito"): mai uno stato
+  "quasi aggiornato".
+- Wired in `create_new_revision` (file al momento della creazione) e
+  `update_draft_version` (sostituzione sorgente in bozza), sempre DOPO
+  il salvataggio/commit della revisione — un problema imprevisto in
+  analisi/conversione non deve mai impedire il salvataggio della bozza
+  già creata. I fallimenti di conversione *attesi* sono già gestiti
+  internamente (audit `PDF_CONVERSION_FAILED`, nessuna eccezione);
+  l'unico try/except lato service è per l'imprevisto, con
+  `logger.exception` (stesso pattern di `notifications/services.py`) —
+  niente `except Exception: pass` silenzioso.
+- Upload manuale: verifica reale dell'header `%PDF-` (non
+  dell'estensione dichiarata), confermato implicitamente al momento del
+  caricamento. Conferma esplicita richiesta solo per `AUTO_UNCERTAIN`
+  (`representation_pdf_requires_confirmation`), coerente con la
+  decisione tecnica.
+- **Nota di correzione in corso di sviluppo**: il primo giro di test
+  della conversione `.txt` falliva (`representation_pdf_id` restava
+  `None`) perché `source.file.read()` veniva chiamato su un
+  `FieldFile` già chiuso da `sniff_is_pdf`; corretto con un
+  `open('rb')`/`close()` espliciti attorno alla lettura. Comportamento
+  ora coperto da test.
+- **Attenzione test**: questa macchina di sviluppo ha `soffice`
+  realmente installato; i test per `AUTO_UNCERTAIN` costruiscono la
+  versione bypassando il hook automatico (assegnando `version.file`
+  direttamente, non via `create_new_revision(file=...)`) proprio per
+  evitare un'invocazione reale del sottoprocesso nei test — mai una
+  dipendenza da `soffice` reale in CI, come richiesto.
+- UI: nuova sezione "PDF di rappresentazione" in `version_detail.html`
+  (solo per chi può modificare la bozza), con upload manuale e pulsante
+  di conferma quando richiesta. Permessi: stesse regole di
+  `can_edit_version` (autore/superuser), verificate con un test che un
+  utente esterno riceve 403.
+- Nessun secret, nessun comando Git distruttivo nel diff.
+- Aggiunte `reportlab==5.0.0` e `pypdf==6.14.2` (pypdf non ancora usata,
+  preparata per TASK-036) a `requirements.txt`: entrambe pure-Python,
+  nessuna dipendenza da binari esterni, licenze permissive.
+- Test: `documents.tests_pdf_rendition` **17/17 PASS**. Suite estesa
+  `documents approvals ecn projects notifications accounts` in corso
+  al momento di questa review (risultato riportato nel commit).
+
+**Azioni richieste prima del commit:**
+
+- Nessuna, in attesa solo della conferma della suite estesa in corso.
+
+---

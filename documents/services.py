@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import mimetypes
 import os
 
@@ -8,6 +9,8 @@ from django.utils import timezone
 
 from documents.models import Document, DocumentFile, DocumentVersion
 from auditlog.services import create_audit_log
+
+logger = logging.getLogger(__name__)
 
 
 def create_new_revision(
@@ -131,6 +134,20 @@ def create_new_revision(
             notify_ecn_executed_inapp(ecn)
         except Exception:
             pass
+
+    # Un problema imprevisto nell'analisi/conversione PDF non deve mai
+    # impedire il salvataggio della bozza già creata (TASK-034): i
+    # fallimenti di conversione attesi sono già gestiti internamente da
+    # prepare_representation_pdf (che non solleva eccezioni per quelli).
+    # Qui si intercetta solo l'imprevisto, con log esplicito per l'admin.
+    if file is not None:
+        from documents.pdf_rendition import prepare_representation_pdf
+        try:
+            prepare_representation_pdf(version, created_by)
+        except Exception:
+            logger.exception(
+                'Analisi PDF fallita in modo imprevisto per la revisione #%s.', version.pk,
+            )
 
     return version
 
@@ -318,6 +335,15 @@ def update_draft_version(version, user, revision_label, revision_number, change_
             document_version=version,
             metadata=metadata if metadata else None,
         )
+
+    if new_file is not None:
+        from documents.pdf_rendition import prepare_representation_pdf
+        try:
+            prepare_representation_pdf(version, user)
+        except Exception:
+            logger.exception(
+                'Analisi PDF fallita in modo imprevisto per la revisione #%s.', version.pk,
+            )
 
     return version
 

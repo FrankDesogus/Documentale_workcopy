@@ -18,7 +18,7 @@
 
 | ID | Titolo | Agente |
 | -- | ------ | ------ |
-| TASK-034 | Bozza: analisi sorgente, tentativo conversione, upload manuale, conferma, invalidazione | Claude Code |
+| TASK-035 | Gate invio in approvazione: blocco PDF mancante/obsoleto/non confermato + congelamento | Claude Code |
 
 ## Backlog
 
@@ -32,7 +32,6 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
 | TASK-029 | Documento: flag che blocca la richiesta di ECN semplice | Alta | Sposta in "In corso" dopo TASK-028 (un solo task in corso per agente) |
-| TASK-035 | Gate invio in approvazione: blocco PDF mancante/obsoleto/non confermato + congelamento | Alta | Dipende da TASK-034; sostituisce `signature_template_file` esistente |
 | TASK-036 | Generazione PDF approvato (registro firme) al finalize dell'approvazione | Alta | Dipende da TASK-032+033+035 |
 | TASK-037 | UI pagina approvazione: PDF da approvare + sorgenti autorizzati | Media | Dipende da TASK-035 |
 | TASK-038 | UI documento: PDF approvato come principale, sorgenti in sezione secondaria, storico superseded | Media | Dipende da TASK-036 |
@@ -77,6 +76,7 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | TASK-031 | Servizio centrale di policy PDF (sorgente → strategia), nessuna dipendenza da binari reali nei test | 81a13aa | 2026-07-27 |
 | TASK-032 | Modelli/migrazioni: `DocumentFile.kind`, campi PDF su `DocumentVersion`, `UserSignature` (nuovo modello, app `accounts`), snapshot firma su `ApprovalDecision` | — | 2026-07-27 |
 | TASK-033 | Firma visiva utente: upload/sostituzione/rimozione PNG, anteprima via data URI (nessun URL pubblico), validazione formato/dimensioni | — | 2026-07-27 |
+| TASK-034 | Bozza: `documents/pdf_rendition.py` (analisi, conversione reportlab/LibreOffice, upload manuale, conferma, invalidazione su cambio sorgente), UI di stato in `version_detail.html` | — | 2026-07-27 |
 
 ---
 

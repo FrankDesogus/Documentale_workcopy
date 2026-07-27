@@ -596,6 +596,47 @@ def version_detail(request, version_id):
 
 
 @login_required
+def upload_representation_pdf(request, version_id):
+    from documents.pdf_rendition import upload_manual_representation_pdf
+
+    version = get_object_or_404(DocumentVersion, pk=version_id)
+    if not can_edit_version(request.user, version):
+        raise PermissionDenied
+
+    uploaded = request.FILES.get('representation_pdf_file')
+    if not uploaded:
+        messages.error(request, 'Nessun file selezionato.')
+        return redirect('version_detail', version_id=version.pk)
+
+    try:
+        upload_manual_representation_pdf(version, uploaded, request.user)
+        messages.success(request, 'PDF di rappresentazione caricato correttamente.')
+    except ValidationError as exc:
+        for msg in exc.messages:
+            messages.error(request, msg)
+
+    return redirect('version_detail', version_id=version.pk)
+
+
+@login_required
+def confirm_representation_pdf_view(request, version_id):
+    from documents.pdf_rendition import confirm_representation_pdf
+
+    version = get_object_or_404(DocumentVersion, pk=version_id)
+    if not can_edit_version(request.user, version):
+        raise PermissionDenied
+
+    try:
+        confirm_representation_pdf(version, request.user)
+        messages.success(request, 'PDF di rappresentazione confermato.')
+    except ValidationError as exc:
+        for msg in exc.messages:
+            messages.error(request, msg)
+
+    return redirect('version_detail', version_id=version.pk)
+
+
+@login_required
 def my_drafts(request):
     versions = DocumentVersion.objects.filter(
         created_by=request.user,
