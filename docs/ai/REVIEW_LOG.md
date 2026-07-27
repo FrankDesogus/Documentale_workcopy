@@ -254,3 +254,44 @@ Registro delle review di codice effettuate dagli agenti AI su questo progetto.
 - Nessuna.
 
 ---
+
+### Review — 2026-07-27 — TASK-033 Firma visiva utente
+
+**Reviewer:** Claude Code
+**Diff / branch:** task/documentale-pdf-approval-foundation
+**Esito:** Approvato
+
+**Osservazioni:**
+
+- `accounts/forms.py:UserSignatureUploadForm` usa `forms.ImageField`
+  (verifica reale via Pillow, non solo estensione) e restringe
+  esplicitamente a PNG + limite dimensioni/pixel, coerente con
+  `docs/ai/PDF_APPROVAL_DECISION.md` §"firma visiva".
+- Nessun URL scaricabile per la firma: la pagina di gestione mostra
+  l'anteprima come **data URI** generato server-side dalla firma
+  dell'utente stesso — non esiste alcuna vista `/media/...` né un
+  endpoint di download da proteggere per questo primo task (il consumo
+  da parte del generatore di PDF approvato in TASK-036 avviene
+  internamente, mai via HTTP). Verificato con un test che asserisce
+  l'assenza di `/media/` nella risposta.
+- Rimozione = `is_active=False`, mai `delete()`: le righe storiche
+  restano referenziabili da `ApprovalDecision.signature_used` già
+  congelate (TASK-032). La sostituzione disattiva l'unica riga attiva
+  precedente rispettando il vincolo di unicità del modello.
+- Audit: `SIGNATURE_UPLOADED`/`SIGNATURE_REMOVED` via `create_audit_log`
+  esistente, nessun contenuto binario nel log (solo nome file).
+- Nuova route `firma/` (`accounts.urls`, incluse in `config/urls.py`) e
+  link "La mia firma visiva" nel footer utente di `base.html`.
+- Nessun secret, nessun comando Git distruttivo nel diff.
+- Test: `accounts` **11/11 PASS** (nuovi: view upload valido/non-PNG/
+  sovradimensionato/sostituzione/rimozione/anteprima-non-pubblica).
+  Suite `documents accounts approvals ecn projects notifications`
+  eseguita insieme per verificare che il link aggiunto a `base.html` non
+  rompa altre pagine che estendono `base.html` (risultato riportato nel
+  commit).
+
+**Azioni richieste prima del commit:**
+
+- Nessuna, in attesa solo della conferma della suite estesa in corso.
+
+---

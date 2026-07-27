@@ -21,6 +21,7 @@ from projects.views import archive_project_detail, archive_project_list
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', dashboard, name='dashboard'),
+    path('', include('accounts.urls')),
     path('archivio/', archive_document_list, name='archive_document_list'),
     path('archivio/<int:document_id>/', archive_document_detail, name='archive_document_detail'),
     path('archivio-progetti/', archive_project_list, name='archive_project_list'),

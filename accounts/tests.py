@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.test import TestCase
+from django.urls import reverse
 
 from accounts.models import UserSignature
 
@@ -85,3 +86,79 @@ class UserSignatureModelTests(TestCase):
             original_filename='b.png',
         )
         self.assertEqual(UserSignature.objects.filter(is_active=True).count(), 2)
+
+
+class SignatureManageViewTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user('view_sig_user', password='pw')
+
+    def test_requires_login(self):
+        response = self.client.get(reverse('signature_manage'))
+        self.assertEqual(response.status_code, 302)
+
+    def test_upload_valid_png_creates_active_signature(self):
+        self.client.login(username='view_sig_user', password='pw')
+        png = _make_png_bytes()
+        response = self.client.post(reverse('signature_manage'), {
+            'image': SimpleUploadedFile('firma.png', png, content_type='image/png'),
+        })
+        self.assertEqual(response.status_code, 302)
+        sig = UserSignature.objects.get(user=self.user, is_active=True)
+        self.assertEqual(sig.original_filename, 'firma.png')
+
+    def test_upload_non_png_rejected(self):
+        self.client.login(username='view_sig_user', password='pw')
+        response = self.client.post(reverse('signature_manage'), {
+            'image': SimpleUploadedFile('firma.txt', b'not an image', content_type='text/plain'),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(UserSignature.objects.filter(user=self.user).exists())
+
+    def test_upload_oversized_dimensions_rejected(self):
+        self.client.login(username='view_sig_user', password='pw')
+        oversized = _make_png_bytes(size=(1200, 10))
+        response = self.client.post(reverse('signature_manage'), {
+            'image': SimpleUploadedFile('big.png', oversized, content_type='image/png'),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(UserSignature.objects.filter(user=self.user).exists())
+
+    def test_replace_signature_deactivates_previous(self):
+        self.client.login(username='view_sig_user', password='pw')
+        png = _make_png_bytes()
+        self.client.post(reverse('signature_manage'), {
+            'image': SimpleUploadedFile('a.png', png, content_type='image/png'),
+        })
+        first = UserSignature.objects.get(user=self.user, is_active=True)
+        self.client.post(reverse('signature_manage'), {
+            'image': SimpleUploadedFile('b.png', png, content_type='image/png'),
+        })
+        first.refresh_from_db()
+        self.assertFalse(first.is_active)
+        self.assertEqual(UserSignature.objects.filter(user=self.user).count(), 2)
+
+    def test_remove_signature(self):
+        self.client.login(username='view_sig_user', password='pw')
+        png = _make_png_bytes()
+        UserSignature.objects.create(
+            user=self.user,
+            image=SimpleUploadedFile('a.png', png, content_type='image/png'),
+            original_filename='a.png',
+        )
+        response = self.client.post(reverse('signature_manage'), {'action': 'remove'})
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(UserSignature.objects.filter(user=self.user, is_active=True).exists())
+        self.assertEqual(UserSignature.objects.filter(user=self.user).count(), 1)
+
+    def test_preview_is_not_a_public_media_url(self):
+        self.client.login(username='view_sig_user', password='pw')
+        png = _make_png_bytes()
+        UserSignature.objects.create(
+            user=self.user,
+            image=SimpleUploadedFile('a.png', png, content_type='image/png'),
+            original_filename='a.png',
+        )
+        response = self.client.get(reverse('signature_manage'))
+        self.assertContains(response, 'data:image/png;base64,')
+        self.assertNotContains(response, '/media/')

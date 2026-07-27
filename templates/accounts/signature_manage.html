@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}La mia firma visiva — Documentale{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb">
+  <span>La mia firma visiva</span>
+</nav>
+
+<div class="page-header">
+  <h1>La mia firma visiva</h1>
+  <p class="page-header-sub">
+    Usata (facoltativamente) nel registro delle approvazioni dei PDF approvati.
+    Non è una firma digitale o elettronica qualificata: è una rappresentazione
+    grafica interna. Senza immagine viene usato solo il tuo nome (firma testuale).
+  </p>
+</div>
+
+<div class="form-section">
+  <div class="form-section-title">Firma attuale</div>
+  {% if active_signature %}
+  <div class="flex items-start gap-4">
+    <img src="{{ preview_data_uri }}" alt="Firma visiva attuale"
+         class="border border-slate-200 rounded bg-white p-2 max-w-[240px] max-h-[160px]">
+    <div class="text-sm text-slate-600">
+      <p>File: {{ active_signature.original_filename }}</p>
+      <p>Caricata il: {{ active_signature.created_at }}</p>
+      <form method="post" class="mt-2">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="remove">
+        <button type="submit" class="btn-secondary">Rimuovi firma visiva</button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <p class="text-slate-500">
+    Nessuna firma visiva caricata: nel registro di approvazione comparirà solo il tuo nome.
+  </p>
+  {% endif %}
+</div>
+
+<div class="form-section">
+  <div class="form-section-title">
+    {% if active_signature %}Sostituisci firma visiva{% else %}Carica firma visiva{% endif %}
+  </div>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="form-group">
+      <label class="form-label" for="{{ form.image.id_for_label }}">{{ form.image.label }}</label>
+      {% if form.image.help_text %}
+      <p class="form-help">{{ form.image.help_text }}</p>
+      {% endif %}
+      {{ form.image }}
+      {% for error in form.image.errors %}
+      <p class="form-error mt-1">{{ error }}</p>
+      {% endfor %}
+    </div>
+    <button type="submit" class="btn-primary">Salva firma visiva</button>
+  </form>
+</div>
+{% endblock %}
