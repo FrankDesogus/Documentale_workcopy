@@ -71,6 +71,8 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | TASK-034 | Gate dell'intero flusso PDF dietro il flag opzionale (self-freezing senza campo dedicato) | — | 2026-07-27 |
 | TASK-035 | Matrice di test per la policy PDF opzionale (creazione, modifica, storico, workflow in corso) | — | 2026-07-27 |
 | TASK-036 | Chiusura automatica ECN generalizzata a standard + semplice, notifica CCB | — | 2026-07-28 |
+| TASK-037 | `Document.allow_simple_ecn` — vietare l'ECN semplice per documento, standard sempre permesso (AREA A) | — | 2026-07-28 |
+| TASK-038 | Upload PDF inline nella pagina di invio quando il gate blocca (AREA B) | — | 2026-07-28 |
 
 ---
 
@@ -2790,6 +2792,38 @@ PDF approvato verificata indipendente (non richiama questa funzione).
 Ruolo residuo della chiusura manuale (sanatoria/storico/amministrativo)
 preservato, non rimosso. Commit dedicato (`85599f2`), nessun merge su
 `main`, nessun push.
+
+---
+
+### TASK-037 — Document.allow_simple_ecn (AREA A) — Claude Code
+
+Verifica manuale (2026-07-28) segnalava una configurazione scomparsa
+("Non permettere ECN standard"). Cronologia Git completa + PROJECT_HANDOFF.md
+del progetto originale (sezione ECNPOL-1) non mostrano nulla di simile in
+nessuna forma: l'unico campo ECN-correlato mai esistito è
+`requires_ecn_for_revision`/`ecn_exemption` (bypass totale ECN, non "solo
+standard"), rimosso dalla UI di creazione in TASK-022 per motivi diversi.
+Chiarito con l'operatore: il requisito reale è opposto — vietare il
+flusso **semplice** per documento, lo **standard** resta sempre permesso.
+Nuovo campo `Document.allow_simple_ecn` (default `True`), editabile a
+creazione e via metadati (audit `ECN_SIMPLE_POLICY_CHANGED`), self-freezing
+(letto dal vivo solo in `create_simple_ecn`/`ecn_create_simple`). Migrazione
+`documents/0009_document_allow_simple_ecn.py`. 23 test dedicati.
+Commit: `eeec327`.
+
+### TASK-038 — Upload PDF inline all'invio (AREA B) — Claude Code
+
+Verifica manuale (2026-07-28): il gate PDF bloccava correttamente l'invio
+in approvazione ma la pagina non offriva alcun campo per risolvere il
+problema — vicolo cieco. Estratto `get_pdf_submission_status()` da
+`pdf_gate.py` (stesso pattern di `get_close_readiness` per l'ECN): unica
+fonte di verità per il gate (che solleva l'eccezione) e per la UI. La
+pagina di invio mostra ora una sezione PDF condizionale che riusa gli
+stessi service già esistenti (`upload_manual_representation_pdf`,
+`confirm_representation_pdf`) usati da `version_detail` — nessuna logica
+duplicata. Le view di upload/conferma tornano alla pagina di invio (invece
+che sempre a `version_detail`) tramite un parametro `next` a whitelist
+chiusa. 26 test dedicati. Commit: `1044a54`.
 
 ---
 
