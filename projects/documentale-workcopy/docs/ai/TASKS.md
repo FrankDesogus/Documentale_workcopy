@@ -73,6 +73,9 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | TASK-036 | Chiusura automatica ECN generalizzata a standard + semplice, notifica CCB | — | 2026-07-28 |
 | TASK-037 | `Document.allow_simple_ecn` — vietare l'ECN semplice per documento, standard sempre permesso (AREA A) | — | 2026-07-28 |
 | TASK-038 | Upload PDF inline nella pagina di invio quando il gate blocca (AREA B) | — | 2026-07-28 |
+| TASK-039 | Etichetta stato ECN "In Revisione CCB" → "In Valutazione CCB" (solo label) | — | 2026-07-28 |
+| TASK-040 | Vista operativa vs storica per documenti e progetti (`project_history`, Archivio Progetti) | — | 2026-07-28 |
+| TASK-041 | Design permessi granulari cartelle/progetti (solo analisi, in attesa approvazione) | — | 2026-07-28 |
 
 ---
 
