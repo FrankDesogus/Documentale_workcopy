@@ -70,6 +70,7 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | TASK-033 | `Document.requires_approved_pdf`: l'intero flusso PDF diventa opzionale per documento | — | 2026-07-27 |
 | TASK-034 | Gate dell'intero flusso PDF dietro il flag opzionale (self-freezing senza campo dedicato) | — | 2026-07-27 |
 | TASK-035 | Matrice di test per la policy PDF opzionale (creazione, modifica, storico, workflow in corso) | — | 2026-07-27 |
+| TASK-036 | Chiusura automatica ECN generalizzata a standard + semplice, notifica CCB | — | 2026-07-28 |
 
 ---
 
@@ -2702,6 +2703,93 @@ programmi esterni. Nessuna firma digitale dichiarata. Nessuna generazione
 retroattiva per revisioni storiche. Flusso ECN completo/semplice e
 revisione-senza-ECN non toccati (il gate PDF è ortogonale e disattivato di
 default). Nessun merge, nessun push.
+
+---
+
+### TASK-036 — Chiusura automatica ECN generalizzata (standard + semplice), notifica CCB — Claude Code
+
+#### Obiettivo
+
+Requisito aziendale (2026-07-28): sia l'ECN standard sia l'ECN a flusso
+semplice devono chiudersi automaticamente quando la loro revisione di
+esecuzione raggiunge l'approvazione definitiva e diventa la versione
+corrente del documento — nessuna chiusura manuale nel percorso operativo
+ordinario per nessuno dei due flussi. In precedenza (AREA 3, sessione del
+2026-07-27) la chiusura automatica era limitata al solo `flow_type=SIMPLE`:
+una scelta di design esplicita di quella sessione (un ultimo controllo
+umano del Responsabile Qualità per gli ECN passati da CCB, distinto
+dall'esito CCB stesso), non un placeholder provvisorio — il requisito
+attuale la supera esplicitamente.
+
+#### Decisione tecnica
+
+`ecn.services.auto_close_simple_ecn_if_ready` generalizzata e rinominata
+`auto_close_executed_ecn_if_ready`: rimosso il filtro `flow_type=SIMPLE`
+dalla query (resta il filtro `status=APPROVED`, che garantisce l'idempotenza
+naturale — un ECN già chiuso non viene mai ritoccato). Aggiunta una guardia
+esplicita (`version.status == APPROVED and version.is_current`) prima di
+processare qualunque ECN collegato. La scrittura di stato+note+audit è ora
+incapsulata nel proprio `transaction.atomic()`, cosa che il codice
+precedente non faceva (rischio non da poco: un errore tra `ecn.save()` e
+l'audit avrebbe lasciato un ECN chiuso senza traccia). L'audit
+`ECN_CLOSED_AUTO` registra ora anche `flow_type`, `closing_revision_id` e
+`closing_revision_label`. La notifica (email + in-app) resta fuori dalla
+transazione e non blocca né annulla la chiusura se fallisce — un errore di
+invio è già gestito dal sistema di notifiche esistente
+(`NotificationLog.error_message`), non richiede codice nuovo.
+
+`ecn.notifications.notify_ecn_closed` riceve un flag `automatic=False`
+(default, usato dalla chiusura manuale esistente) che quando `True`
+aggiunge riferimento alla revisione di esecuzione, orario/attore di
+chiusura e la frase esplicita richiesta ("La revisione di esecuzione è
+stata approvata e l'ECN è stato chiuso automaticamente."). I destinatari
+restano quelli già raccolti da `_collect_ecn_outcome_recipients`
+(proponente, owner documento, coordinatore CCB, tutti i membri CCB
+**assegnati a quello specifico ECN** — non un elenco globale — e Quality
+Manager, deduplicati). Per l'ECN semplice, che non ha CCB, i destinatari si
+riducono naturalmente a proponente/owner/QM: comportamento preesistente,
+non modificato.
+
+`ecn_close`/`ecn_detail` aggiornati solo nel testo: il pulsante e la pagina
+di chiusura manuale sono ora presentati esplicitamente come percorso
+eccezionale/amministrativo (storico, sanatoria, correzioni), non più il
+passo ordinario successivo all'approvazione. `ecn_detail` distingue una
+chiusura automatica da una manuale interrogando l'AuditLog esistente
+(azione `ECN_CLOSED_AUTO`) — nessun nuovo campo sul modello.
+
+#### File modificati
+
+`ecn/services.py`, `ecn/notifications.py`, `ecn/views.py`,
+`approvals/services.py`, `templates/ecn/ecn_detail.html`,
+`templates/ecn/ecn_close_form.html`, `ecn/tests.py`, `approvals/tests.py`,
+`documents/tests.py` (due test che chiudevano manualmente un ECN standard
+subito dopo l'approvazione — ora ridondante e respinto, corretti),
+`documents/management/commands/demo_full.py` (due scenari con lo stesso
+problema, più un nuovo scenario `DEMO-ECN-PENDING-CLOSE` che mostra lo
+stato intermedio "in attesa" prima della chiusura). Nessuna migrazione
+(nessun campo nuovo).
+
+#### Test
+
+112 test mirati (`ecn.tests.AutoCloseEcnTests`, `ECNViewTests`,
+`ECNServiceWorkflowTests`, `GetCloseReadinessTests`,
+`approvals.tests.SimpleEcnAutoCloseEndToEndTests`) verdi. Suite combinata
+completa (`documents approvals accounts ecn projects notifications
+auditlog`, 1399 test) verde. `manage.py check` e `makemigrations --check
+--dry-run` puliti. `demo_full --reset --no-email` verificato end-to-end:
+l'ECN semplice demo si chiude automaticamente durante la generazione dati
+(non solo nei test unitari).
+
+#### Guardrail rispettati
+
+Nessuna chiusura per revisione rifiutata, in bozza o in approvazione.
+Nessuna chiusura per una revisione non collegata all'ECN (garantito per
+costruzione da `version.ecns_executed`). Nessuna doppia chiusura/doppia
+email (idempotenza naturale via filtro `status=APPROVED`). Rigenerazione
+PDF approvato verificata indipendente (non richiama questa funzione).
+Ruolo residuo della chiusura manuale (sanatoria/storico/amministrativo)
+preservato, non rimosso. Commit dedicato (`85599f2`), nessun merge su
+`main`, nessun push.
 
 ---
 
