@@ -1,3 +1,4 @@
+import base64
 import os
 
 from django.contrib import messages
@@ -5,7 +6,9 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 
+from auditlog.locking import acquire_lock, lock_holder, release_lock
 from approvals.models import ApprovalRequest, ApprovalRequestApprover, ApprovalRequestAttachment
 from approvals.services import approve_version, reject_version
 
@@ -117,6 +120,17 @@ def approval_detail(request, approval_request_id):
     if not is_assigned and not request.user.is_superuser:
         raise PermissionDenied
 
+    if ar.status == ApprovalRequest.Status.PENDING:
+        holder = lock_holder(ar)
+        if holder is not None and holder.pk != request.user.pk:
+            messages.warning(
+                request,
+                f"Decisione in lavorazione da {holder.get_full_name() or holder.username} "
+                f"dalle {timezone.localtime(ar.locked_at).strftime('%d/%m/%Y %H:%M')}. Riprova più tardi.",
+            )
+            return redirect('approval_queue')
+        acquire_lock(ar, request.user)
+
     # Sanatoria: legge i campi storici opzionali dal POST
     from auditlog.historical_forms import SanatoriaStandaloneForm, should_send_notifications
     from auditlog.permissions import can_use_sanatoria
@@ -132,11 +146,27 @@ def approval_detail(request, approval_request_id):
         comment = request.POST.get('comment', '').strip()
 
         if action == 'approve':
+            signature_page = None
+            signature_x = None
+            signature_y = None
+            raw_page = request.POST.get('signature_page', '').strip()
+            raw_x = request.POST.get('signature_x', '').strip()
+            raw_y = request.POST.get('signature_y', '').strip()
+            if raw_page and raw_x and raw_y:
+                try:
+                    signature_page = int(raw_page)
+                    signature_x = float(raw_x)
+                    signature_y = float(raw_y)
+                except ValueError:
+                    signature_page = signature_x = signature_y = None
             try:
                 approve_version(
                     ar, request.user,
                     comment=comment,
                     send_notifications=should_send_notifications(sanatoria=is_sanatoria),
+                    signature_page=signature_page,
+                    signature_x=signature_x,
+                    signature_y=signature_y,
                 )
                 ar.refresh_from_db()
                 # Sanatoria: crea HistoricalRecord
@@ -154,6 +184,7 @@ def approval_detail(request, approval_request_id):
                         request,
                         'Approvazione registrata. La richiesta è ancora in attesa degli altri approvatori.',
                     )
+                release_lock(ar, request.user)
                 return redirect('approval_queue')
             except (ValidationError, PermissionDenied) as exc:
                 error = ' '.join(exc.messages) if hasattr(exc, 'messages') else str(exc)
@@ -180,6 +211,7 @@ def approval_detail(request, approval_request_id):
                     )
                     san_suffix = ' [sanatoria]' if is_sanatoria else ''
                     messages.success(request, f'Revisione rifiutata.{san_suffix}')
+                    release_lock(ar, request.user)
                     return redirect('approval_queue')
                 except (ValidationError, PermissionDenied) as exc:
                     error = ' '.join(exc.messages) if hasattr(exc, 'messages') else str(exc)
@@ -190,16 +222,6 @@ def approval_detail(request, approval_request_id):
     version = ar.document_version
     decisions = ar.decisions.select_related('approver').order_by('decided_at')
     approvers = ar.approvers.select_related('approver').order_by('order')
-
-    # ECN che ha originato questa revisione (stesso pattern di documents.version_detail)
-    ecn_origin = None
-    try:
-        from ecn.permissions import can_view_ecn
-        ecn_origin = version.ecns_executed.select_related('proposed_by').first()
-        if ecn_origin and not can_view_ecn(request.user, ecn_origin):
-            ecn_origin = None
-    except Exception:
-        pass
 
     # Per SEQUENTIAL: individua il prossimo approvatore atteso
     next_approver = None
@@ -218,6 +240,35 @@ def approval_detail(request, approval_request_id):
             ).select_related('recorded_by').order_by('-historical_date')
         )
 
+    # Posizionamento libero firma: segnaposto delle firme già apposte da
+    # altri approvatori su questa stessa richiesta, per evitare che il
+    # prossimo firmatario le sovrapponga (vedi TASK-040).
+    existing_signature_placements = [
+        {
+            'page': d.signature_page,
+            'x': d.signature_x,
+            'y': d.signature_y,
+            'label': d.approver.get_full_name() or d.approver.username,
+        }
+        for d in decisions
+        if d.signature_page is not None
+    ]
+    # Data URI, non .image.url: nessuna route serve /media/ direttamente in
+    # questo progetto (accesso ai file sempre tramite view autenticate) —
+    # stesso pattern già usato da accounts.views.signature_settings.
+    user_signature_url = None
+    signature_profile = getattr(request.user, 'signature_profile', None)
+    if signature_profile is not None and signature_profile.image:
+        try:
+            with signature_profile.image.open('rb') as fh:
+                encoded = base64.b64encode(fh.read()).decode('ascii')
+            user_signature_url = f'data:image/png;base64,{encoded}'
+        except OSError:
+            # File mancante su disco nonostante il riferimento in DB: la
+            # pagina resta consultabile, solo senza il widget di
+            # posizionamento libero (torna la modalità automatica).
+            pass
+
     return render(request, 'approvals/approval_detail.html', {
         'approval_request': ar,
         'version': version,
@@ -225,8 +276,9 @@ def approval_detail(request, approval_request_id):
         'decisions': decisions,
         'approvers': approvers,
         'next_approver': next_approver,
-        'ecn_origin': ecn_origin,
         'form': sanatoria_form,
         'historical_records': historical_records,
         'sanatoria_available': can_use_sanatoria(request.user),
+        'existing_signature_placements': existing_signature_placements,
+        'user_signature_url': user_signature_url,
     })

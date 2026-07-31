@@ -49,6 +49,12 @@ def create_change_notice(
     Se document_version è None, usa document.current_version come snapshot.
     Se code è None, genera automaticamente un codice ECN-NNNN univoco.
     Se created_by è None, usa proposed_by.
+
+    L'ECN nasce senza applicabilità (applicability_category=None): non è
+    una dichiarazione del proponente, ma una valutazione della CCB fatta
+    nel dossier istruttorio (vedi update_ccb_dossier) — corretto in
+    TASK-037 rispetto all'impostazione iniziale (TASK-036), che la
+    richiedeva per errore già a questo punto.
     """
     from ecn.models import ChangeNotice
 
@@ -114,19 +120,24 @@ def create_simple_ecn(document, proposed_by, title, description='', created_by=N
     Lascia comunque una traccia audit equivalente a un ECN standard
     completato (ECN_CREATED + ECN_APPROVED), visibile in Archivio e nello
     storico documento.
+
+    Non ha applicabilità (applicability_category resta None): nel flusso
+    semplice nessuna CCB si riunisce mai, quindi non esiste un momento in
+    cui l'applicabilità venga decisa — resta non specificata, come per gli
+    ECN storici (decisione esplicita dell'operatore, TASK-037).
     """
     from ecn.models import ChangeNotice
-
-    if not document.allows_simple_ecn:
-        raise ValidationError(
-            "Questo documento non consente ECN semplici: è disponibile solo "
-            "l'ECN standard con istruttoria CCB."
-        )
 
     if document.current_version is None:
         raise ValidationError(
             "Il documento non ha una versione corrente. "
             "L'ECN semplice può essere creato solo su documenti con almeno una revisione."
+        )
+
+    if not document.allow_simple_ecn:
+        raise ValidationError(
+            "Il flusso ECN semplice non è consentito per questo documento. "
+            "Usa l'ECN standard (con istruttoria e votazione CCB)."
         )
 
     if created_by is None:
@@ -172,8 +183,12 @@ def update_change_notice(change_notice, actor, title, motivation,
     """
     Aggiorna i dati base di un ECN in stato DRAFT.
 
-    Modificabili: title, motivation, motivation_detail, description, commessa, project.
-    Lo stato deve essere DRAFT (il service non verifica il permesso: lo fa la view).
+    Modificabili: title, motivation, motivation_detail, description, commessa,
+    project. Lo stato deve essere DRAFT (il service non verifica il
+    permesso: lo fa la view).
+
+    Non tocca l'applicabilità: è compilata dalla CCB nel dossier istruttorio
+    (vedi update_ccb_dossier), non un dato base del proponente (TASK-037).
 
     Raises:
       ValidationError: se l'ECN non è in stato DRAFT.
@@ -253,7 +268,7 @@ def reopen_ccb_configuration(change_notice, actor, reason=''):
     # Verifica stato e condizioni prima del permesso, per dare errori più chiari
     if change_notice.status != ChangeNotice.Status.UNDER_REVIEW:
         raise ValidationError(
-            "La riapertura CCB è possibile solo su ECN in revisione."
+            "La riapertura CCB è possibile solo su ECN in valutazione."
         )
 
     if not change_notice.decisions.exists():
@@ -323,7 +338,7 @@ def set_change_notice_approvers(change_notice, users, policy=None, actor=None):
     if change_notice.status not in allowed:
         raise ValidationError(
             "Gli approvatori possono essere assegnati solo a ECN in bozza, "
-            "istruttoria CCB o in revisione senza decisioni."
+            "istruttoria CCB o in valutazione senza decisioni."
         )
 
     if change_notice.status == ChangeNotice.Status.UNDER_REVIEW and change_notice.decisions.exists():
@@ -398,8 +413,14 @@ def submit_change_notice(change_notice, user, send_notifications=True):
 
     # Verifica campi obbligatori del dossier solo quando si parte da CCB_PREPARATION
     # (il percorso legacy DRAFT→UNDER_REVIEW non impone la validazione dossier
-    #  per retrocompatibilità con i test esistenti)
+    #  per retrocompatibilità con i test esistenti). L'applicabilità è una
+    # valutazione della CCB (dossier), non del proponente — vive qui insieme
+    # a ccb_class/ccb_requirements/ccb_technical_impact, non a monte in
+    # create_change_notice (TASK-037).
     if change_notice.status == ChangeNotice.Status.CCB_PREPARATION:
+        ChangeNotice.validate_applicability(
+            change_notice.applicability_category, change_notice.applicability_detail,
+        )
         if not change_notice.ccb_class:
             raise ValidationError(
                 "La classificazione variante è obbligatoria prima dell'invio alla CCB. "
@@ -491,7 +512,7 @@ def approve_change_notice(
 
     if change_notice.status != ChangeNotice.Status.UNDER_REVIEW:
         raise ValidationError(
-            f"Solo gli ECN in revisione CCB possono essere approvati. "
+            f"Solo gli ECN in valutazione CCB possono essere approvati. "
             f"Stato attuale: {change_notice.get_status_display()}."
         )
 
@@ -561,6 +582,17 @@ def approve_change_notice(
                 raise ValidationError(
                     "La classe variante (Classe 1 / Classe 2) è obbligatoria per approvare l'ECN."
                 )
+            # NOTA (TASK-037): a differenza di ccb_class, l'applicabilità NON
+            # viene ri-verificata qui alla finalizzazione. Stesso trattamento
+            # già riservato a ccb_requirements/ccb_technical_impact: obbligatoria
+            # solo attraverso il percorso moderno del dossier istruttorio
+            # (submit_change_notice, quando si parte da CCB_PREPARATION), non
+            # sul percorso legacy DRAFT→UNDER_REVIEW mantenuto per
+            # retrocompatibilità con la suite di test preesistente. Duplicare
+            # qui lo stesso controllo rigido di ccb_class romperebbe ogni test
+            # di approvazione già esistente nel progetto, che non ha motivo di
+            # conoscere l'applicabilità (concetto introdotto solo con questa
+            # funzionalità, non presente quando quei test sono stati scritti).
             old_status = change_notice.status
             change_notice.status         = ChangeNotice.Status.APPROVED
             change_notice.ccb_reviewed_by = user
@@ -619,7 +651,7 @@ def reject_change_notice(change_notice, user, reason, comment=None, send_notific
 
     if change_notice.status != ChangeNotice.Status.UNDER_REVIEW:
         raise ValidationError(
-            f"Solo gli ECN in revisione CCB possono essere rifiutati. "
+            f"Solo gli ECN in valutazione CCB possono essere rifiutati. "
             f"Stato attuale: {change_notice.get_status_display()}."
         )
 
@@ -695,56 +727,72 @@ def reject_change_notice(change_notice, user, reason, comment=None, send_notific
     return change_notice
 
 
+def get_close_readiness(change_notice):
+    """
+    Unica fonte di verità sul "si può chiudere questo ECN adesso?" (verifica
+    manuale del 2026-07-27: la pagina di chiusura mostrava un avviso "puoi
+    procedere comunque" mentre il servizio bloccava sempre la chiusura nello
+    stesso identico caso — usata sia dalla UI che dal gate di chiusura, così
+    non possono più divergere).
+
+    Restituisce (pronto: bool, motivo: str). `motivo` è vuoto se pronto.
+
+    Una revisione di esecuzione collegata ma non ancora approvata (bozza,
+    in approvazione, rifiutata) blocca la chiusura esattamente come nessuna
+    revisione collegata affatto — l'ECN autorizza la modifica, ma la
+    modifica non è "fatta" finché la revisione non è realmente approvata.
+    """
+    from ecn.models import ChangeNotice
+
+    if change_notice.status != ChangeNotice.Status.APPROVED:
+        return False, (
+            f"L'ECN non è nello stato approvato (stato attuale: "
+            f"{change_notice.get_status_display()})."
+        )
+
+    if change_notice.executed_version_id is None:
+        return False, (
+            "Nessuna revisione di esecuzione collegata a questo ECN. "
+            "Crea prima la nuova revisione del documento a partire da questo ECN."
+        )
+
+    executed = change_notice.executed_version
+    if executed.status != executed.Status.APPROVED:
+        return False, (
+            f"La revisione di esecuzione collegata (Rev. {executed.revision_label}) "
+            f"non è ancora approvata — stato attuale: {executed.get_status_display()}. "
+            f"L'ECN potrà essere chiuso quando quella revisione sarà approvata."
+        )
+
+    return True, ''
+
+
 def close_change_notice(change_notice, user, close_notes='', send_notifications=True):
     """
     Il Responsabile Qualità chiude l'ECN: APPROVED → CLOSED.
 
-    Richiede che executed_version sia già stato impostato E che quella
-    revisione sia stata effettivamente APPROVATA (TASK-025): la sola
-    creazione della bozza di revisione dimostra solo che l'attuazione è
-    iniziata, non che sia stata completata e verificata. Se la revisione
-    è ancora in bozza/in approvazione, o è stata rifiutata, l'ECN resta
-    APPROVED e non è chiudibile finché non esiste una revisione collegata
-    e approvata.
+    Richiede che la revisione di esecuzione collegata sia già stata
+    approvata (vedi get_close_readiness — stessa regola usata dalla UI,
+    mai un messaggio diverso tra le due).
     Invia email al proponente.
 
     Raises:
       PermissionDenied: se l'utente non è Document Manager/staff.
-      ValidationError: se lo stato non è APPROVED, se executed_version è
-        None, o se la revisione collegata non è ancora APPROVATA.
+      ValidationError: se get_close_readiness segnala che non è pronto.
     """
-    from documents.models import DocumentVersion
-    from ecn.models import ChangeNotice
     from ecn.permissions import can_close_ecn
 
     if not can_close_ecn(user, change_notice):
         raise PermissionDenied("Non hai il permesso di chiudere questo ECN.")
 
-    if change_notice.status != ChangeNotice.Status.APPROVED:
-        raise ValidationError(
-            f"Solo gli ECN approvati possono essere chiusi. "
-            f"Stato attuale: {change_notice.get_status_display()}."
-        )
-
-    if change_notice.executed_version_id is None:
-        raise ValidationError(
-            "Impossibile chiudere l'ECN: nessuna revisione di esecuzione collegata. "
-            "Crea prima la nuova revisione del documento a partire da questo ECN."
-        )
-
-    if change_notice.executed_version.status != DocumentVersion.Status.APPROVED:
-        raise ValidationError(
-            f"Impossibile chiudere l'ECN: la revisione collegata "
-            f"(Rev. {change_notice.executed_version.revision_label}) non è ancora "
-            f"approvata (stato attuale: "
-            f"{change_notice.executed_version.get_status_display()}). "
-            f"La modifica deve essere completata e approvata prima della chiusura formale dell'ECN."
-        )
+    ready, reason = get_close_readiness(change_notice)
+    if not ready:
+        raise ValidationError(reason)
 
     old_status = change_notice.status
     now = timezone.now()
 
-    change_notice.status     = ChangeNotice.Status.CLOSED
+    change_notice.status     = change_notice.Status.CLOSED
     change_notice.close_notes = close_notes
     change_notice.closed_by  = user
     change_notice.closed_at  = now
@@ -766,6 +814,112 @@ def close_change_notice(change_notice, user, close_notes='', send_notifications=
             pass
 
     return change_notice
+
+
+def auto_close_executed_ecn_if_ready(version, actor):
+    """
+    Chiusura automatica dell'ECN — standard o semplice — quando la sua
+    revisione di esecuzione viene approvata definitivamente e diventa la
+    versione corrente del documento (requisito aziendale del 2026-07-28,
+    che generalizza la chiusura automatica introdotta in AREA 3 per il
+    solo flusso semplice: la chiusura manuale del flusso standard non era
+    un placeholder provvisorio, ma una scelta di design esplicita — un
+    ultimo controllo umano del Responsabile Qualità distinto dall'esito
+    CCB — che il requisito attuale supera esplicitamente: nessuna delle
+    due famiglie di ECN richiede più una chiusura manuale nel percorso
+    operativo ordinario. La pagina di chiusura manuale (ecn_close) resta
+    per ECN storici, sanatoria e correzioni amministrative eccezionali).
+
+    Condizioni di sicurezza (oltre al filtro sulla query):
+      - `version` deve essere realmente approvata e corrente: chiamata in
+        un contesto anomalo su una versione non ancora promossa non fa
+        nulla, non solleva eccezioni;
+      - solo gli ECN il cui executed_version punta esattamente a
+        `version` vengono considerati (version.ecns_executed) — approvare
+        una revisione diversa non può mai chiudere un ECN che non le è
+        collegato;
+      - solo gli ECN nello stato APPROVED vengono chiusi: un ECN già
+        CLOSED (o mai approvato) non viene toccato una seconda volta —
+        idempotenza naturale, nessuna doppia chiusura e nessuna doppia
+        email anche se questa funzione venisse richiamata più volte
+        (di fatto la generazione/rigenerazione del PDF approvato non la
+        richiama affatto: resta un problema tecnico separato e
+        rieseguibile, indipendente dall'esito di chiusura dell'ECN).
+
+    La chiusura (stato + note + audit) è atomica: un errore nella
+    scrittura dell'audit fa fallire anche il cambio di stato, evitando che
+    un ECN risulti chiuso senza traccia. La notifica email/in-app resta
+    fuori da questa transazione e non blocca né annulla la chiusura se
+    fallisce (stesso principio già adottato per la generazione del PDF
+    approvato): un errore di invio è già gestito e registrato dal sistema
+    di notifiche esistente (NotificationLog.error_message), non deve mai
+    riaprire o invalidare l'ECN appena chiuso.
+
+    Non richiede il permesso can_close_ecn (l'attore è chi ha approvato la
+    revisione, non necessariamente un Quality Manager/membro CCB) — è una
+    transizione di sistema legata all'approvazione stessa, non un'azione
+    utente separata. Va chiamata dopo che l'approvazione è già stata
+    registrata correttamente: non deve mai sollevare eccezioni che possano
+    essere scambiate per un fallimento dell'approvazione (il chiamante la
+    invoca comunque dentro un try/except dedicato).
+    """
+    from documents.models import DocumentVersion
+    from ecn.models import ChangeNotice
+
+    if version.status != DocumentVersion.Status.APPROVED or not version.is_current:
+        return
+
+    candidates = version.ecns_executed.filter(status=ChangeNotice.Status.APPROVED)
+    for ecn in candidates:
+        old_status = ecn.status
+        now = timezone.now()
+
+        if ecn.flow_type == ChangeNotice.FlowType.SIMPLE:
+            close_notes = (
+                'Chiuso automaticamente: ECN a flusso semplice, revisione di '
+                'esecuzione approvata definitivamente.'
+            )
+        else:
+            close_notes = (
+                f'Chiuso automaticamente: revisione di esecuzione Rev. '
+                f'{version.revision_label} approvata definitivamente e divenuta '
+                f'versione corrente del documento.'
+            )
+
+        with transaction.atomic():
+            ecn.status = ChangeNotice.Status.CLOSED
+            ecn.close_notes = close_notes
+            ecn.closed_by = actor
+            ecn.closed_at = now
+            ecn.save(update_fields=['status', 'close_notes', 'closed_by', 'closed_at'])
+
+            from auditlog.services import create_audit_log
+            create_audit_log(
+                user=actor,
+                action='ECN_CLOSED_AUTO',
+                instance=ecn,
+                old_values={'status': old_status},
+                new_values={'status': ecn.status},
+                document=ecn.document,
+                document_version=ecn.document_version,
+                metadata={
+                    'ecn_id': ecn.pk,
+                    'code': ecn.code,
+                    'old_status': old_status,
+                    'new_status': ecn.status,
+                    'flow_type': ecn.flow_type,
+                    'closing_revision_id': version.pk,
+                    'closing_revision_label': version.revision_label,
+                },
+            )
+
+        try:
+            from ecn.notifications import notify_ecn_closed
+            notify_ecn_closed(ecn, automatic=True)
+            from notifications.inbox import notify_ecn_closed_inapp
+            notify_ecn_closed_inapp(ecn)
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -858,6 +1012,8 @@ def configure_ccb(change_notice, actor, users, policy=None, coordinator=None, se
 def update_ccb_dossier(
     change_notice,
     actor,
+    applicability_category=None,
+    applicability_detail='',
     ccb_class=None,
     ccb_requirements='',
     ccb_technical_impact='',
@@ -865,8 +1021,6 @@ def update_ccb_dossier(
     ccb_time_impact='',
     ccb_quality_impact='',
     ccb_other_impact='',
-    ccb_constructed_impact='',
-    ccb_applicability='',
     ccb_notes='',
 ):
     """
@@ -875,6 +1029,13 @@ def update_ccb_dossier(
     Dopo l'invio alla CCB (UNDER_REVIEW+) il dossier è congelato.
 
     - actor: utente che compie la modifica (per permessi e AuditLog).
+
+    applicability_category/applicability_detail seguono lo stesso pattern
+    di ccb_class: se applicability_category non è fornita (None/''), il
+    valore esistente non viene toccato — un salvataggio bozza del dossier
+    senza applicabilità ancora scelta non la azzera. Nessuna validazione
+    di completezza qui (è una bozza): la validazione piena avviene solo
+    all'invio (submit_change_notice, quando si parte da CCB_PREPARATION).
 
     Raises:
       PermissionDenied: se l'utente non ha can_compile_dossier.
@@ -901,21 +1062,23 @@ def update_ccb_dossier(
     with transaction.atomic():
         update_fields_list = [
             'ccb_requirements', 'ccb_technical_impact', 'ccb_cost_impact',
-            'ccb_time_impact', 'ccb_quality_impact', 'ccb_other_impact',
-            'ccb_constructed_impact', 'ccb_applicability', 'ccb_notes',
+            'ccb_time_impact', 'ccb_quality_impact', 'ccb_other_impact', 'ccb_notes',
         ]
-        change_notice.ccb_requirements       = ccb_requirements
-        change_notice.ccb_technical_impact   = ccb_technical_impact
-        change_notice.ccb_cost_impact        = ccb_cost_impact
-        change_notice.ccb_time_impact        = ccb_time_impact
-        change_notice.ccb_quality_impact     = ccb_quality_impact
-        change_notice.ccb_other_impact       = ccb_other_impact
-        change_notice.ccb_constructed_impact = ccb_constructed_impact
-        change_notice.ccb_applicability      = ccb_applicability
-        change_notice.ccb_notes              = ccb_notes
+        change_notice.ccb_requirements     = ccb_requirements
+        change_notice.ccb_technical_impact = ccb_technical_impact
+        change_notice.ccb_cost_impact      = ccb_cost_impact
+        change_notice.ccb_time_impact      = ccb_time_impact
+        change_notice.ccb_quality_impact   = ccb_quality_impact
+        change_notice.ccb_other_impact     = ccb_other_impact
+        change_notice.ccb_notes            = ccb_notes
         if ccb_class:
             change_notice.ccb_class = ccb_class
             update_fields_list.append('ccb_class')
+        if applicability_category:
+            change_notice.applicability_category = applicability_category
+            change_notice.applicability_detail = applicability_detail
+            update_fields_list.append('applicability_category')
+            update_fields_list.append('applicability_detail')
         change_notice.save(update_fields=update_fields_list)
 
     try:
@@ -926,6 +1089,7 @@ def update_ccb_dossier(
             instance=change_notice,
             old_values=None,
             new_values={
+                'applicability_category': change_notice.applicability_category,
                 'ccb_class': change_notice.ccb_class,
                 'ccb_requirements': bool(ccb_requirements),
                 'ccb_technical_impact': bool(ccb_technical_impact),
@@ -1080,6 +1244,17 @@ def _write_audit(actor, action, ecn, old_status, new_status):
             metadata['old_status'] = old_status
         if ecn.project_id:
             metadata['project_id'] = ecn.project_id
+        # ECN_APPROVED: congela nell'audit trail il valore che diventa
+        # immutabile da questo momento in poi (nessun campo extra sul
+        # modello: la transizione di stato stessa è il "sigillo"). La
+        # scelta della categoria è già tracciata separatamente
+        # dall'audit CCB_DOSSIER_UPDATED (update_ccb_dossier) — a
+        # ECN_CREATED l'applicabilità è sempre assente per design
+        # (TASK-037: decisa dalla CCB, non al momento della richiesta).
+        if action == 'ECN_APPROVED' and ecn.applicability_category:
+            metadata['applicability_category'] = ecn.applicability_category
+            if ecn.applicability_detail:
+                metadata['applicability_detail'] = ecn.applicability_detail
 
         create_audit_log(
             user=actor,

@@ -2,6 +2,8 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
+from accounts.views import signature_settings
+from projects.views import archive_project_detail, archive_project_list
 from documents.views import (
     archive_document_detail,
     archive_document_list,
@@ -9,23 +11,21 @@ from documents.views import (
     dashboard,
     download_approved_pdf,
     download_representation_pdf,
+    view_representation_pdf_inline,
     download_version_file,
     edit_version,
-    my_documents,
     my_drafts,
-    my_revisions,
+    regenerate_approved_pdf_view,
     submit_for_approval,
-    upload_representation_pdf,
+    upload_representation_pdf_view,
     version_detail,
     workspace_my_work,
     workspace_quality,
 )
-from projects.views import archive_project_detail, archive_project_list
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', dashboard, name='dashboard'),
-    path('', include('accounts.urls')),
     path('archivio/', archive_document_list, name='archive_document_list'),
     path('archivio/<int:document_id>/', archive_document_detail, name='archive_document_detail'),
     path('archivio-progetti/', archive_project_list, name='archive_project_list'),
@@ -34,16 +34,16 @@ urlpatterns = [
     path('workspace/quality/', workspace_quality, name='workspace_quality'),
     path('documents/', include('documents.urls')),
     path('my-drafts/', my_drafts, name='my_drafts'),
-    path('my-revisions/', my_revisions, name='my_revisions'),
-    path('my-documents/', my_documents, name='my_documents'),
     path('versions/<int:version_id>/', version_detail, name='version_detail'),
     path('versions/<int:version_id>/submit/', submit_for_approval, name='version_submit'),
     path('versions/<int:version_id>/edit/', edit_version, name='version_edit'),
     path('versions/<int:version_id>/download/', download_version_file, name='version_download'),
-    path('versions/<int:version_id>/representation-pdf/upload/', upload_representation_pdf, name='version_representation_pdf_upload'),
-    path('versions/<int:version_id>/representation-pdf/confirm/', confirm_representation_pdf_view, name='version_representation_pdf_confirm'),
-    path('versions/<int:version_id>/representation-pdf/download/', download_representation_pdf, name='version_representation_pdf_download'),
-    path('versions/<int:version_id>/approved-pdf/download/', download_approved_pdf, name='version_approved_pdf_download'),
+    path('versions/<int:version_id>/pdf/upload/', upload_representation_pdf_view, name='version_pdf_upload'),
+    path('versions/<int:version_id>/pdf/confirm/', confirm_representation_pdf_view, name='version_pdf_confirm'),
+    path('versions/<int:version_id>/pdf/representation/download/', download_representation_pdf, name='version_representation_pdf_download'),
+    path('versions/<int:version_id>/pdf/representation/view/', view_representation_pdf_inline, name='version_representation_pdf_view'),
+    path('versions/<int:version_id>/pdf/approved/download/', download_approved_pdf, name='version_approved_pdf_download'),
+    path('versions/<int:version_id>/pdf/approved/regenerate/', regenerate_approved_pdf_view, name='version_approved_pdf_regenerate'),
     path('folders/', include('projects.urls')),
     path('projects/', include('projects.project_urls')),
     path('project-revisions/', include('projects.revision_urls')),
@@ -52,4 +52,5 @@ urlpatterns = [
     path('notifications/', include('notifications.urls', namespace='notifications')),
     path('accounts/login/', auth_views.LoginView.as_view(), name='login'),
     path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),
+    path('accounts/signature/', signature_settings, name='signature_settings'),
 ]

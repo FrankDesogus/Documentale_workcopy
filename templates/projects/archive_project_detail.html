@@ -151,6 +151,35 @@
 {% endif %}
 {% endif %}
 
+<!-- ECN / Varianti collegate (elenco completo) -->
+{% if project_ecns %}
+<h2 class="section-title mt-8">ECN / Varianti collegate</h2>
+<div class="table-container mb-6">
+  <table class="data-table">
+    <thead><tr>
+      <th>Codice</th>
+      <th>Titolo</th>
+      <th>Documento</th>
+      <th>Stato</th>
+      <th>Applicabilità</th>
+      <th>Proposto il</th>
+    </tr></thead>
+    <tbody>
+      {% for ecn in project_ecns %}
+      <tr>
+        <td class="font-mono font-semibold"><a href="{% url 'ecn:ecn_detail' ecn.pk %}" class="hover:underline">{{ ecn.code }}</a></td>
+        <td>{{ ecn.title }}</td>
+        <td><a href="{% url 'document_detail' ecn.document_id %}" class="text-brand-600 hover:underline">{{ ecn.document.code }}</a></td>
+        <td class="meta">{{ ecn.get_status_display }}</td>
+        <td>{% include "ecn/_applicability_badge.html" %}</td>
+        <td class="meta whitespace-nowrap">{{ ecn.proposed_at|date:"d/m/Y" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 <!-- Storico eventi -->
 <h2 class="section-title mt-4">Storico eventi</h2>
 {% if audit_logs %}

@@ -1,5 +1,4 @@
 import hashlib
-import logging
 import mimetypes
 import os
 
@@ -9,8 +8,6 @@ from django.utils import timezone
 
 from documents.models import Document, DocumentFile, DocumentVersion
 from auditlog.services import create_audit_log
-
-logger = logging.getLogger(__name__)
 
 
 def create_new_revision(
@@ -105,6 +102,10 @@ def create_new_revision(
         document_version=version,
     )
 
+    if file is not None and document.requires_approved_pdf:
+        from documents.pdf_pipeline import sync_representation_pdf_for_new_source
+        sync_representation_pdf_for_new_source(version)
+
     # Collega l'ECN alla nuova revisione (esecuzione)
     if ecn is not None:
         from django.utils import timezone as tz
@@ -135,20 +136,6 @@ def create_new_revision(
         except Exception:
             pass
 
-    # Un problema imprevisto nell'analisi/conversione PDF non deve mai
-    # impedire il salvataggio della bozza già creata (TASK-034): i
-    # fallimenti di conversione attesi sono già gestiti internamente da
-    # prepare_representation_pdf (che non solleva eccezioni per quelli).
-    # Qui si intercetta solo l'imprevisto, con log esplicito per l'admin.
-    if file is not None:
-        from documents.pdf_rendition import prepare_representation_pdf
-        try:
-            prepare_representation_pdf(version, created_by)
-        except Exception:
-            logger.exception(
-                'Analisi PDF fallita in modo imprevisto per la revisione #%s.', version.pk,
-            )
-
     return version
 
 
@@ -169,34 +156,28 @@ def submit_version_for_approval(version, requested_by, approvers, due_date=None,
             "Esiste già una richiesta di approvazione pendente per questa revisione."
         )
 
-    # Gate PDF (TASK-035): un PDF di rappresentazione valido e, se richiesto,
-    # confermato è obbligatorio PRIMA dell'invio — MA solo per le revisioni
-    # che hanno un file sorgente. `DocumentVersion.file` è nullable già da
-    # prima di questa feature (revisioni puramente di metadati sono un caso
-    # legittimo preesistente): non c'è nulla da "rappresentare in PDF" se
-    # non esiste alcun sorgente. Vedi docs/ai/PDF_APPROVAL_DECISION.md.
-    if version.file_id is not None:
-        if version.representation_pdf_id is None:
-            raise ValidationError(
-                "Manca il PDF di rappresentazione: caricarlo o generarlo prima di inviare "
-                "la revisione in approvazione."
-            )
-        if version.representation_pdf_is_stale:
-            raise ValidationError(
-                "Il file sorgente è cambiato dopo la generazione del PDF di rappresentazione: "
-                "rigenerarlo/ricaricarlo prima di inviare la revisione in approvazione."
-            )
-        if not version.representation_pdf_is_confirmed:
-            raise ValidationError(
-                "Il PDF di rappresentazione richiede una conferma esplicita dell'autore "
-                "prima dell'invio (conversione automatica a fedeltà non garantita)."
-            )
+    from documents.pdf_gate import assert_ready_for_submission
+    assert_ready_for_submission(version)
 
     with transaction.atomic():
         now = timezone.now()
         version.status = DocumentVersion.Status.IN_APPROVAL
         version.submitted_at = now
-        version.save(update_fields=['status', 'submitted_at'])
+        update_fields = ['status', 'submitted_at']
+
+        # Il flag è disattivato proprio ora, al momento dell'invio: questo è il
+        # punto di congelamento del comportamento (vedi documents/pdf_gate.py).
+        # Un'eventuale representation_pdf residua di quando il flag era ancora
+        # attivo va scollegata qui, altrimenti la generazione del PDF
+        # approvato (che si basa sulla sola presenza di representation_pdf_id,
+        # senza rileggere il flag — vedi approvals/services.py) la
+        # rigenererebbe comunque per una revisione inviata a flusso PDF
+        # disattivato, contraddicendo quanto comunicato in UI.
+        if not version.document.requires_approved_pdf and version.representation_pdf_id is not None:
+            version.representation_pdf = None
+            update_fields.append('representation_pdf')
+
+        version.save(update_fields=update_fields)
 
         approval_request = ApprovalRequest.objects.create(
             document_version=version,
@@ -339,6 +320,10 @@ def update_draft_version(version, user, revision_label, revision_number, change_
 
         version.save(update_fields=update_fields)
 
+        if new_file is not None and version.document.requires_approved_pdf:
+            from documents.pdf_pipeline import sync_representation_pdf_for_new_source
+            sync_representation_pdf_for_new_source(version)
+
         metadata = {}
         if new_file is not None:
             metadata['new_file'] = new_file.original_filename
@@ -358,15 +343,6 @@ def update_draft_version(version, user, revision_label, revision_number, change_
             document_version=version,
             metadata=metadata if metadata else None,
         )
-
-    if new_file is not None:
-        from documents.pdf_rendition import prepare_representation_pdf
-        try:
-            prepare_representation_pdf(version, user)
-        except Exception:
-            logger.exception(
-                'Analisi PDF fallita in modo imprevisto per la revisione #%s.', version.pk,
-            )
 
     return version
 

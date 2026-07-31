@@ -51,49 +51,7 @@
     {% if can_manage and project.root_folder %}
     <a href="{% url 'folder_create' %}?parent={{ project.root_folder.pk }}" class="btn-secondary btn-sm">+ Sottocartella</a>
     {% endif %}
-    {% if can_view_project_archive %}
-    <a href="{% url 'archive_project_detail' project.pk %}" class="btn-secondary btn-sm">Vedi storico completo</a>
-    {% endif %}
   </div>
-</div>
-
-<!-- Ultima revisione salvata (riepilogo compatto — storico completo in Archivio progetti) -->
-<div class="card mb-6">
-  <div class="card-header">
-    <h2 class="section-title mb-0">Ultima revisione salvata</h2>
-  </div>
-  {% if current_baseline %}
-  <div class="detail-grid mb-0">
-    <div class="detail-item">
-      <span class="detail-label">Revisione</span>
-      <span class="detail-value font-mono font-semibold">{{ current_baseline.revision_label }}</span>
-    </div>
-    <div class="detail-item">
-      <span class="detail-label">Stato</span>
-      <span class="detail-value">
-        {% if current_baseline.status == 'draft' %}<span class="badge-status-draft">Bozza</span>
-        {% elif current_baseline.status == 'issued' %}<span class="badge-status-approved">Emessa</span>
-        {% elif current_baseline.status == 'superseded' %}<span class="badge-status-superseded">Superata</span>
-        {% elif current_baseline.status == 'archived' %}<span class="badge-status-archived">Archiviata</span>
-        {% else %}<span>{{ current_baseline.status }}</span>
-        {% endif %}
-      </span>
-    </div>
-    <div class="detail-item">
-      <span class="detail-label">Emessa il</span>
-      <span class="detail-value">{{ current_baseline.issued_at|date:"d/m/Y"|default:"—" }}</span>
-    </div>
-    <div class="detail-item">
-      <span class="detail-label">Emessa da</span>
-      <span class="detail-value">{{ current_baseline.issued_by.get_full_name|default:current_baseline.issued_by.username|default:"—" }}</span>
-    </div>
-  </div>
-  {% else %}
-  <p class="meta mb-0">
-    Nessuna revisione salvata per questo progetto.
-    {% if can_view_project_archive %}<a href="{% url 'archive_project_detail' project.pk %}" class="text-brand-600 hover:underline">Apri Archivio progetti</a> per crearne una.{% endif %}
-  </p>
-  {% endif %}
 </div>
 
 <!-- Struttura cartelle -->
@@ -238,6 +196,7 @@
       <th>Titolo</th>
       <th>Documento</th>
       <th>Stato</th>
+      <th>Applicabilità</th>
       <th>Data</th>
       <th class="w-20"></th>
     </tr></thead>
@@ -250,13 +209,14 @@
         <td>
           {% if ecn.status == 'draft' %}<span class="badge-ecn-draft">Bozza</span>
           {% elif ecn.status == 'ccb_preparation' %}<span class="badge-ecn-ccb_prep">Istruttoria CCB</span>
-          {% elif ecn.status == 'under_review' %}<span class="badge-ecn-under_review">In revisione CCB</span>
+          {% elif ecn.status == 'under_review' %}<span class="badge-ecn-under_review">In Valutazione CCB</span>
           {% elif ecn.status == 'approved' %}<span class="badge-ecn-approved">Approvata</span>
           {% elif ecn.status == 'rejected' %}<span class="badge-ecn-rejected">Rifiutata</span>
           {% elif ecn.status == 'closed' %}<span class="badge-ecn-closed">Chiusa</span>
           {% else %}<span>{{ ecn.get_status_display }}</span>
           {% endif %}
         </td>
+        <td>{% include "ecn/_applicability_badge.html" %}</td>
         <td class="meta whitespace-nowrap">{{ ecn.proposed_at|date:"d/m/Y" }}</td>
         <td><a href="{% url 'ecn:ecn_detail' ecn.pk %}" class="btn-secondary btn-sm">Apri</a></td>
       </tr>
@@ -266,4 +226,45 @@
 </div>
 {% endif %}
 
+<!-- Ultima revisione salvata (riepilogo compatto — storico completo in Archivio progetti) -->
+<div class="card mb-6 mt-8">
+  <div class="card-header flex items-center justify-between flex-wrap gap-2">
+    <h2 class="section-title mb-0">Ultima revisione salvata</h2>
+    {% if can_view_project_archive %}
+    <a href="{% url 'archive_project_detail' project.pk %}" class="btn-secondary btn-sm">Vedi storico completo</a>
+    {% endif %}
+  </div>
+  {% if current_baseline %}
+  <div class="detail-grid mb-0">
+    <div class="detail-item">
+      <span class="detail-label">Revisione</span>
+      <span class="detail-value font-mono font-semibold">{{ current_baseline.revision_label }}</span>
+    </div>
+    <div class="detail-item">
+      <span class="detail-label">Stato</span>
+      <span class="detail-value">
+        {% if current_baseline.status == 'draft' %}<span class="badge-status-draft">Bozza</span>
+        {% elif current_baseline.status == 'issued' %}<span class="badge-status-approved">Emessa</span>
+        {% elif current_baseline.status == 'superseded' %}<span class="badge-status-superseded">Superata</span>
+        {% elif current_baseline.status == 'archived' %}<span class="badge-status-archived">Archiviata</span>
+        {% else %}<span>{{ current_baseline.status }}</span>
+        {% endif %}
+      </span>
+    </div>
+    <div class="detail-item">
+      <span class="detail-label">Emessa il</span>
+      <span class="detail-value">{{ current_baseline.issued_at|date:"d/m/Y"|default:"—" }}</span>
+    </div>
+    <div class="detail-item">
+      <span class="detail-label">Emessa da</span>
+      <span class="detail-value">{{ current_baseline.issued_by.get_full_name|default:current_baseline.issued_by.username|default:"—" }}</span>
+    </div>
+  </div>
+  {% else %}
+  <p class="meta mb-0">
+    Nessuna revisione salvata per questo progetto.
+    {% if can_view_project_archive %}<a href="{% url 'archive_project_detail' project.pk %}" class="text-brand-600 hover:underline">Apri Archivio progetti</a> per crearne una.{% endif %}
+  </p>
+  {% endif %}
+</div>
 {% endblock %}

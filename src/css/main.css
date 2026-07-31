@@ -62,10 +62,30 @@
     @apply rounded-md placeholder:text-slate-400 focus:border-elt-cyan-500 focus:ring-2 focus:ring-elt-cyan-500/40;
   }
 
-  input[type="checkbox"],
-  input[type="radio"] {
+  /* Senza questa regola i campi testo/select/textarea restano alla larghezza
+     intrinseca del browser (es. textarea a ~20 colonne) invece di riempire
+     il contenitore — visibile soprattutto nelle form-section più larghe. */
+  select,
+  textarea,
+  input:not([type="checkbox"]):not([type="radio"]) {
+    display: block;
+    width: 100%;
+  }
+
+  /* :not(:checked) è essenziale: senza, questa regola ha la stessa
+     specificità della regola :checked di @tailwindcss/forms
+     (background-color: currentColor, per rendere visibile la spunta
+     bianca) ma la segue nel CSS compilato — vincendo la cascata e
+     lasciando lo sfondo sempre bianco, spunta invisibile su sfondo
+     bianco anche a checkbox selezionata (bug reale riscontrato in
+     produzione, non solo teorico). */
+  input[type="checkbox"]:not(:checked),
+  input[type="radio"]:not(:checked) {
     background-color: var(--field-bg);
     border-color: var(--field-border);
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
     @apply text-elt-cyan-500 focus:ring-elt-cyan-500/40;
   }
 }
@@ -100,6 +120,55 @@
   .dark .badge-ecn-closed { @apply bg-slate-400/12 text-slate-300 border-white/10; }
   .dark .badge-ecn-ccb_prep { @apply bg-elt-cyan-500/13 text-elt-cyan-300 border-elt-cyan-300/20; }
 
+  /* Badge applicabilità ECN (categoria obbligatoria: generale/futura/limitata).
+     Centralizzati qui, mai duplicati come classi inline nei template — vedi
+     ecn.models.ChangeNotice.applicability_badge_class. "Limitata" usa un
+     arancione non allarmistico (non rosso: non è un errore, è una scelta
+     legittima quando le prime due categorie non si applicano). */
+  .badge-applicability-general { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200; }
+  .badge-applicability-future  { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200; }
+  .badge-applicability-limited { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-orange-100 text-orange-800 border border-orange-200; }
+  .badge-applicability-unset   { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-500 border border-slate-200; }
+
+  .dark .badge-applicability-general { @apply bg-emerald-400/14 text-emerald-200 border-emerald-300/20; }
+  .dark .badge-applicability-future  { @apply bg-blue-400/14 text-blue-200 border-blue-300/20; }
+  .dark .badge-applicability-limited { @apply bg-orange-400/14 text-orange-200 border-orange-300/20; }
+  .dark .badge-applicability-unset   { @apply bg-slate-400/12 text-slate-300 border-white/10; }
+
+  /* Riquadri "radio card" selezionabili per l'applicabilità ECN (3 opzioni
+     mutuamente esclusive sempre visibili insieme). Bordo + sfondo tenue
+     coerenti col badge della stessa categoria; lo stato selezionato è
+     marcato da bordo pieno + spunta, mai dal solo colore. */
+  .applicability-card {
+    @apply relative flex flex-col gap-1 rounded-lg p-3 cursor-pointer transition-colors border-2;
+    background-color: var(--panel-bg);
+    border-color: var(--border-soft);
+  }
+  .applicability-card:hover { background-color: var(--hover-soft); }
+  .applicability-card-title { @apply text-sm font-semibold flex items-center gap-1.5; color: var(--text-primary); }
+  .applicability-card-desc  { @apply text-xs; color: var(--text-secondary); }
+  .applicability-card-check { @apply absolute top-3 right-3 text-base leading-none opacity-0; }
+
+  .applicability-card.is-checked-general { @apply border-emerald-400 bg-emerald-50; }
+  .applicability-card.is-checked-general .applicability-card-check { @apply opacity-100 text-emerald-700; }
+  .applicability-card.is-checked-future  { @apply border-blue-400 bg-blue-50; }
+  .applicability-card.is-checked-future  .applicability-card-check { @apply opacity-100 text-blue-700; }
+  .applicability-card.is-checked-limited { @apply border-orange-400 bg-orange-50; }
+  .applicability-card.is-checked-limited .applicability-card-check { @apply opacity-100 text-orange-700; }
+
+  .dark .applicability-card.is-checked-general { @apply border-emerald-300/70; background-color: rgba(16,185,129,.12); }
+  .dark .applicability-card.is-checked-future  { @apply border-blue-300/70; background-color: rgba(59,130,246,.12); }
+  .dark .applicability-card.is-checked-limited { @apply border-orange-300/70; background-color: rgba(251,146,60,.14); }
+
+  /* Riquadro "Applicabilità" nel dettaglio ECN — bordo sinistro colorato
+     coerente col badge, mai il solo colore come unico indicatore (titolo +
+     badge + etichetta testuale sempre presenti). */
+  .applicability-box { @apply rounded-lg p-4 mb-4 border border-l-4; background-color: var(--panel-bg); border-color: var(--border-soft); }
+  .applicability-box.applicability-box-general { @apply border-l-emerald-400; }
+  .applicability-box.applicability-box-future  { @apply border-l-blue-400; }
+  .applicability-box.applicability-box-limited { @apply border-l-orange-400; }
+  .applicability-box.applicability-box-unset   { @apply border-l-slate-300; }
+
   /* Bottoni */
   .btn-primary   { @apply inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold bg-elt-blue-600 text-white hover:bg-elt-cyan-500 focus:outline-none focus:ring-2 focus:ring-elt-cyan-500/50 shadow-sm transition-colors; }
   .btn-secondary { @apply inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium focus:outline-none focus:ring-2 focus:ring-elt-cyan-500/40 transition-colors; background-color: var(--panel-bg); color: var(--text-primary); border: 1px solid var(--border-soft); }
@@ -115,6 +184,21 @@
   /* Card */
   .card { @apply rounded-lg p-5 mb-4 backdrop-blur-sm; background-color: var(--panel-bg); border: 1px solid var(--border-soft); box-shadow: var(--shadow-soft); }
   .card-header { @apply pb-3 mb-4; border-bottom: 1px solid var(--border-soft); }
+
+  /* Dropdown "Azioni" (TASK-045): un solo bottone che raccoglie le azioni
+     disponibili su un'entità, invece di file di bottoni separati. */
+  .dropdown { @apply relative inline-block flex-shrink-0; }
+  .dropdown-menu {
+    @apply absolute right-0 mt-1 min-w-[230px] rounded-lg py-1.5;
+    background-color: var(--panel-bg);
+    border: 1px solid var(--border-soft);
+    box-shadow: var(--shadow-soft);
+    z-index: 20;
+  }
+  .dropdown-menu[hidden] { display: none; }
+  .dropdown-item { @apply block w-full text-left px-4 py-2 text-sm transition-colors; color: var(--text-primary); }
+  .dropdown-item:hover { background-color: var(--hover-soft); }
+  .dropdown-divider { @apply my-1.5; border-top: 1px solid var(--border-soft); }
 
   /* Form fields */
   .form-label { @apply block text-sm font-medium mb-1; color: var(--text-primary); }
@@ -240,15 +324,12 @@
 
   /* Shell */
   .sidebar-shell {
-    @apply w-64 flex-shrink-0 flex flex-col overflow-hidden border-r border-white/10 shadow-2xl shadow-black/30 backdrop-blur-md;
+    @apply w-64 flex-shrink-0 flex flex-col overflow-y-auto border-r border-white/10 shadow-2xl shadow-black/30 backdrop-blur-md;
     background:
       radial-gradient(circle at 20% 0%, rgba(103, 227, 238, 0.18), transparent 22rem),
       linear-gradient(160deg, rgba(5, 11, 36, 0.82), rgba(8, 19, 49, 0.90) 48%, rgba(11, 94, 168, 0.34));
   }
-  /* Solo la nav centrale scorre: brand (sopra) e footer utente (sotto)
-     restano sempre visibili indipendentemente dall'altezza della finestra. */
-  .sidebar-shell > nav { @apply overflow-y-auto; flex-shrink: 1; min-height: 0; }
-  .sidebar-brand { @apply relative block overflow-hidden border-b border-white/10 px-5 py-5 text-white; flex-shrink: 0; }
+  .sidebar-brand { @apply relative block overflow-hidden border-b border-white/10 px-5 py-5 text-white; }
   .sidebar-brand::before {
     content: "";
     @apply absolute inset-0;
@@ -326,4 +407,42 @@
 .theme-elt main code {
   background-color: var(--code-bg);
   color: var(--text-primary);
+}
+
+@layer components {
+  /* Widget di posizionamento libero della firma (TASK-040, Fase 2):
+     canvas pdf.js + overlay assoluto con i segnaposto delle firme già
+     apposte (sola lettura) e la firma trascinabile dell'approvatore
+     corrente. */
+  .signature-placement-canvas-wrap {
+    @apply relative inline-block border rounded-md overflow-hidden max-w-full;
+    border-color: var(--border-soft);
+    background: #525659;
+  }
+  .signature-placement-canvas-wrap canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+  .signature-overlay {
+    @apply absolute top-0 left-0;
+  }
+  .signature-marker {
+    @apply absolute text-xs font-semibold px-1.5 py-0.5 rounded select-none whitespace-nowrap;
+    transform: translate(-50%, -50%);
+  }
+  .signature-marker-existing {
+    @apply bg-slate-700/80 text-white pointer-events-none;
+  }
+  .signature-marker-own {
+    @apply bg-emerald-500 text-white cursor-move shadow-lg border-2 border-white;
+    max-width: 140px;
+    max-height: 60px;
+  }
+  .signature-marker-own[src] {
+    padding: 0;
+    background: transparent;
+    border: 2px solid #10b981;
+    border-radius: 4px;
+  }
 }

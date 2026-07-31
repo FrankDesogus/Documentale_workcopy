@@ -1,14 +1,21 @@
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
 class ChangeNotice(models.Model):
     """Richiesta di modifica controllata (ECN / Variante) per un documento emesso."""
 
+    # Lunghezza minima del dettaglio quando l'applicabilità è "limitata":
+    # soglia semplice e non arbitraria per scartare risposte palesemente non
+    # informative (es. "-", "n/a") senza introdurre valutazioni linguistiche
+    # o AI, come richiesto dalla specifica della funzionalità.
+    APPLICABILITY_DETAIL_MIN_LENGTH = 10
+
     class Status(models.TextChoices):
         DRAFT           = 'draft',           'Bozza'
         CCB_PREPARATION = 'ccb_preparation', 'Istruttoria CCB'
-        UNDER_REVIEW    = 'under_review',    'In revisione CCB'
+        UNDER_REVIEW    = 'under_review',    'In Valutazione CCB'
         APPROVED        = 'approved',        'Approvata'
         REJECTED        = 'rejected',        'Rifiutata'
         CLOSED          = 'closed',          'Chiusa'
@@ -33,6 +40,43 @@ class ChangeNotice(models.Model):
     class FlowType(models.TextChoices):
         STANDARD = 'standard', 'Standard (CCB)'
         SIMPLE   = 'simple',   'Semplice (automatico)'
+
+    class Applicability(models.TextChoices):
+        """Campo di applicazione della modifica, valutato dalla CCB nel
+        dossier istruttorio (obbligatorio prima dell'invio al voto per ogni
+        ECN standard) — non una dichiarazione del proponente.
+
+        Informazione strutturata e dichiarativa: NON seleziona automaticamente
+        quale DocumentVersion viene mostrata a un progetto (resta
+        Document.current_version, invariato) — vedi applicability_scope_notice.
+        """
+        GENERAL = 'general', 'Applicazione generale'
+        FUTURE  = 'future',  'Applicazione futura'
+        LIMITED = 'limited', 'Applicazione limitata'
+
+    # Descrizioni sintetiche mostrate in UI ed email accanto all'etichetta —
+    # unica fonte per evitare testo duplicato/divergente nei template.
+    APPLICABILITY_DESCRIPTIONS = {
+        Applicability.GENERAL: (
+            'La modifica è destinata a tutti i progetti e alle realizzazioni interessate.'
+        ),
+        Applicability.FUTURE: (
+            'La modifica è destinata alle nuove commesse o ai nuovi progetti. '
+            "L'applicazione ai progetti già esistenti deve essere valutata separatamente."
+        ),
+        Applicability.LIMITED: (
+            'La modifica si applica soltanto ai casi specificati nel dettaglio '
+            "dell'applicabilità."
+        ),
+    }
+
+    # Classe CSS badge per categoria — centralizzata qui, mai duplicata nei
+    # template (vedi src/css/main.css: .badge-applicability-*).
+    APPLICABILITY_BADGE_CLASSES = {
+        Applicability.GENERAL: 'badge-applicability-general',
+        Applicability.FUTURE:  'badge-applicability-future',
+        Applicability.LIMITED: 'badge-applicability-limited',
+    }
 
     # ------------------------------------------------------------------
     # Identificazione
@@ -61,6 +105,60 @@ class ChangeNotice(models.Model):
         max_length=100,
         blank=True,
         verbose_name='Commessa / ordine',
+    )
+
+    # ------------------------------------------------------------------
+    # Applicabilità — campo di applicazione della modifica.
+    #
+    # È una valutazione della CCB, compilata nel dossier istruttorio
+    # (ecn.services.update_ccb_dossier) dal responsabile istruttoria —
+    # NON una dichiarazione del proponente al momento della richiesta
+    # (TASK-037, correzione rispetto all'impostazione iniziale TASK-036,
+    # che la chiedeva per errore già in create_change_notice/ChangeNoticeForm).
+    #
+    # Nullable perché resta senza valore per due motivi legittimi, non solo
+    # uno:
+    #   - ECN standard non ancora arrivato in istruttoria CCB (DRAFT/appena
+    #     creato), o storico antecedente a questa funzionalità — NON va
+    #     inventato retroattivamente;
+    #   - ECN a flusso semplice (TASK-022): nessuna CCB si riunisce mai in
+    #     quel flusso, quindi l'applicabilità non viene mai richiesta né
+    #     decisa (decisione esplicita, non un'omissione).
+    #
+    # Obbligatoria applicativamente solo per l'ECN standard, solo prima
+    # dell'invio al voto quando si parte da CCB_PREPARATION (vedi
+    # ecn.services.submit_change_notice) e di nuovo, in difesa, al momento
+    # dell'approvazione finale (ecn.services.approve_change_notice) — mai
+    # al momento della creazione. Diventa immutabile appena l'ECN lascia
+    # CCB_PREPARATION (update_ccb_dossier non è più chiamabile).
+    #
+    # Distinto da:
+    #   - project/commessa: riferimento/contesto dell'ECN, non il suo campo
+    #     di applicazione;
+    #   - ccb_other_impact: impatti collaterali valutati in istruttoria CCB,
+    #     non l'ambito di applicazione della modifica;
+    #   - description/motivation: cosa cambia e perché, non a chi si applica.
+    # ------------------------------------------------------------------
+    applicability_category = models.CharField(
+        max_length=20,
+        choices=Applicability.choices,
+        null=True,
+        blank=True,
+        verbose_name='Applicabilità',
+        help_text=(
+            'Ambito di applicazione della modifica, valutato dalla CCB nel dossier '
+            'istruttorio. Nullo prima dell\'istruttoria, per gli ECN a flusso semplice '
+            '(nessuna CCB) e per gli ECN storici antecedenti a questa funzionalità.'
+        ),
+    )
+    applicability_detail = models.TextField(
+        blank=True,
+        verbose_name="Dettaglio dell'applicabilità",
+        help_text=(
+            'Obbligatorio per "Applicazione limitata": specifica progetti, commesse, '
+            'configurazioni, prodotti, unità, condizioni o eccezioni interessate. '
+            'Facoltativo per le altre due categorie.'
+        ),
     )
 
     # ------------------------------------------------------------------
@@ -188,16 +286,6 @@ class ChangeNotice(models.Model):
         blank=True,
         verbose_name='Impatto su altri documenti / parti',
     )
-    ccb_constructed_impact = models.TextField(
-        blank=True,
-        verbose_name='Impatto sul costruito',
-        help_text='Effetti della modifica su quanto già realizzato/installato.',
-    )
-    ccb_applicability = models.TextField(
-        blank=True,
-        verbose_name='Applicabilità',
-        help_text='A quali unità, lotti o configurazioni si applica la modifica.',
-    )
     ccb_notes = models.TextField(
         blank=True,
         verbose_name='Note CCB',
@@ -271,6 +359,20 @@ class ChangeNotice(models.Model):
         auto_now=True,
         verbose_name='Aggiornato il',
     )
+    locked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='locked_ecns',
+        verbose_name='In lavorazione da',
+        help_text='Utente che sta compilando il dossier o votando in questo momento (lock temporaneo).',
+    )
+    locked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='In lavorazione dal',
+    )
 
     class Meta:
         verbose_name        = 'ECN / Variante'
@@ -279,6 +381,92 @@ class ChangeNotice(models.Model):
 
     def __str__(self):
         return f"{self.code} — {self.title} [{self.get_status_display()}]"
+
+    # ------------------------------------------------------------------
+    # Applicabilità — helper centralizzati (validazione + presentazione)
+    # ------------------------------------------------------------------
+    @property
+    def applicability_is_registered(self):
+        """
+        False quando il valore è nullo — non ancora deciso dalla CCB
+        (istruttoria non completata), ECN a flusso semplice (nessuna CCB
+        si riunisce mai), o ECN storico antecedente a questa funzionalità.
+        """
+        return bool(self.applicability_category)
+
+    @property
+    def applicability_display(self):
+        """Etichetta leggibile, incluso il caso non ancora deciso/non applicabile."""
+        if not self.applicability_category:
+            return 'Applicabilità non specificata'
+        return self.get_applicability_category_display()
+
+    @property
+    def applicability_short_description(self):
+        """Descrizione sintetica della categoria (vuota se non registrata)."""
+        if not self.applicability_category:
+            return ''
+        return self.APPLICABILITY_DESCRIPTIONS.get(self.applicability_category, '')
+
+    @property
+    def applicability_badge_class(self):
+        """Classe CSS badge centralizzata (vedi src/css/main.css)."""
+        if not self.applicability_category:
+            return 'badge-applicability-unset'
+        return self.APPLICABILITY_BADGE_CLASSES.get(
+            self.applicability_category, 'badge-applicability-unset',
+        )
+
+    @property
+    def applicability_shows_scope_notice(self):
+        """
+        True per "Applicazione futura" e "Applicazione limitata": in questi
+        casi la UI deve mostrare l'avviso che l'applicabilità è
+        un'informazione dichiarativa e non assegna automaticamente revisioni
+        differenti ai singoli progetti (Document.current_version resta unico
+        e invariato — nessun resolver per-progetto introdotto da questo campo).
+        """
+        return self.applicability_category in (
+            self.Applicability.FUTURE, self.Applicability.LIMITED,
+        )
+
+    @classmethod
+    def validate_applicability(cls, category, detail):
+        """
+        Validazione centralizzata server-side, riusata da form e service
+        (mai bypassabile inviando direttamente al service saltando il form).
+
+        Ritorna (category, detail_pulito). Solleva ValidationError con un
+        error_dict {'applicability_category': ..., 'applicability_detail': ...}
+        così form.clean() può smistare i messaggi sul campo giusto.
+        """
+        errors = {}
+
+        if category not in cls.Applicability.values:
+            errors['applicability_category'] = (
+                "Seleziona una categoria di applicabilità valida "
+                "(Applicazione generale / futura / limitata)."
+            )
+
+        detail = (detail or '').strip()
+        if category == cls.Applicability.LIMITED:
+            if not detail:
+                errors['applicability_detail'] = (
+                    'Il dettaglio è obbligatorio per "Applicazione limitata": specifica '
+                    'progetti, commesse, configurazioni, prodotti, unità, condizioni o '
+                    'eccezioni a cui la modifica si applica o non si applica.'
+                )
+            elif len(detail) < cls.APPLICABILITY_DETAIL_MIN_LENGTH:
+                errors['applicability_detail'] = (
+                    'Il dettaglio inserito è troppo breve per essere informativo '
+                    f'(minimo {cls.APPLICABILITY_DETAIL_MIN_LENGTH} caratteri). '
+                    'Specifica concretamente progetti, commesse o condizioni interessate.'
+                )
+
+        if errors:
+            raise ValidationError(errors)
+
+        return category, detail
 
 
 class ChangeNoticeApprover(models.Model):

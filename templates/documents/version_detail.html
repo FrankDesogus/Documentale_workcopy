@@ -15,8 +15,11 @@
     <p class="text-gray-500 text-sm mt-1">{{ document.title }}</p>
   </div>
   <div class="flex items-center gap-2">
+    {% if version.approved_pdf.file %}
+    <a href="{% url 'version_approved_pdf_download' version.pk %}" class="btn-primary">⬇ Scarica PDF approvato</a>
+    {% endif %}
     {% if version.file %}
-    <a href="{% url 'version_download' version.pk %}" class="btn-secondary">⬇ Scarica file</a>
+    <a href="{% url 'version_download' version.pk %}" class="btn-secondary">⬇ Scarica sorgente</a>
     {% endif %}
     {% if show_edit %}
     <a href="{% url 'version_edit' version.pk %}" class="btn-secondary">Modifica bozza</a>
@@ -26,6 +29,15 @@
     {% endif %}
   </div>
 </div>
+
+{% if version.status == 'superseded' and document.current_version %}
+<div class="alert-info mb-4">
+  Esiste una revisione corrente successiva:
+  <a href="{% url 'version_detail' document.current_version.pk %}" class="link">
+    Rev. {{ document.current_version.revision_label }}
+  </a>
+</div>
+{% endif %}
 
 <!-- Metadati revisione -->
 <div class="card mb-4">
@@ -89,94 +101,139 @@
     {% endif %}
     {% if version.file %}
     <div class="detail-item">
-      <span class="detail-label">File operativo</span>
+      <span class="detail-label">File sorgente</span>
       <span class="detail-value font-mono text-xs">{{ version.file.original_filename }}</span>
     </div>
     {% endif %}
   </div>
 </div>
 
-<!-- PDF di rappresentazione (TASK-034) -->
-{% if show_edit and version.file %}
+<!-- PDF di rappresentazione (solo se il documento richiede il flusso PDF, o se esiste già da prima) -->
+{% if version.representation_pdf or document.requires_approved_pdf %}
 <div class="card mb-4">
   <div class="card-header">
     <h2 class="section-title mb-0">PDF di rappresentazione</h2>
   </div>
-  <div class="p-4 text-sm">
-    {% if version.representation_pdf %}
-      <p>
-        Origine:
-        {% if version.representation_pdf_origin == 'native' %}il sorgente è già un PDF
-        {% elif version.representation_pdf_origin == 'auto_converted' %}convertito automaticamente
-        {% elif version.representation_pdf_origin == 'manual_upload' %}caricato manualmente
-        {% else %}{{ version.representation_pdf_origin }}
+  <div class="detail-grid">
+    <div class="detail-item">
+      <span class="detail-label">Stato</span>
+      <span class="detail-value">
+        {% if not version.file %}
+          <span class="badge-status-draft">Nessun file sorgente</span>
+        {% elif not version.representation_pdf %}
+          <span class="badge-status-draft">Non ancora pronto</span>
+        {% else %}
+          {% with rep=version.representation_pdf %}
+          {% if rep.status == 'ready' %}<span class="badge-status-approved">Generato automaticamente</span>
+          {% elif rep.status == 'confirmed' %}<span class="badge-status-approved">Confermato</span>
+          {% elif rep.status == 'manual_uploaded' %}<span class="badge-status-in_approval">Caricato manualmente — da confermare</span>
+          {% elif rep.status == 'manual_upload_required' %}<span class="badge-status-rejected">Caricamento manuale richiesto</span>
+          {% elif rep.status == 'conversion_failed' %}<span class="badge-status-rejected">Conversione fallita</span>
+          {% elif rep.status == 'stale' %}<span class="badge-status-rejected">Non aggiornato (sorgente modificato)</span>
+          {% else %}<span>{{ rep.get_status_display }}</span>
+          {% endif %}
+          {% if rep.requires_confirmation and rep.status == 'ready' %}
+            <span class="ml-2 text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded">Da confermare</span>
+          {% endif %}
+          {% endwith %}
         {% endif %}
-        — generato il {{ version.representation_pdf_generated_at|date:"d/m/Y H:i" }}.
-      </p>
-      {% if version.representation_pdf_is_stale %}
-      <p class="text-red-700 font-medium mt-2">
-        ⚠ Il file sorgente è stato sostituito dopo questa generazione: il PDF di
-        rappresentazione non è più aggiornato. Ricaricare/rigenerare prima di inviare in approvazione.
-      </p>
-      {% elif version.representation_pdf_requires_confirmation and not version.representation_pdf_is_confirmed %}
-      <p class="text-amber-700 font-medium mt-2">
-        ⚠ Conversione automatica non garantita al 100% (fedeltà font/impaginazione):
-        verificare il PDF e confermarlo prima dell'invio.
-      </p>
-      <form method="post" action="{% url 'version_representation_pdf_confirm' version.pk %}" class="mt-2">
-        {% csrf_token %}
-        <button type="submit" class="btn-secondary">Confermo che il PDF rappresenta correttamente il sorgente</button>
-      </form>
-      {% elif version.representation_pdf_is_confirmed %}
-      <p class="text-green-700 mt-2">
-        ✔ Confermato da {{ version.representation_pdf_confirmed_by.get_full_name|default:version.representation_pdf_confirmed_by.username }}
-        il {{ version.representation_pdf_confirmed_at|date:"d/m/Y H:i" }}.
-      </p>
-      {% else %}
-      <p class="text-green-700 mt-2">✔ Pronto per l'invio in approvazione.</p>
-      {% endif %}
-    {% else %}
-      <p class="text-amber-700 font-medium">
-        Nessun PDF di rappresentazione disponibile: sarà necessario caricarlo manualmente
-        prima di poter inviare la revisione in approvazione.
-      </p>
+      </span>
+    </div>
+    {% if version.representation_pdf.error_message %}
+    <div class="detail-item md:col-span-2">
+      <span class="detail-label">Motivo</span>
+      <span class="detail-value text-xs">{{ version.representation_pdf.error_message }}</span>
+    </div>
     {% endif %}
-
-    <form method="post" action="{% url 'version_representation_pdf_upload' version.pk %}"
-          enctype="multipart/form-data" class="mt-3">
-      {% csrf_token %}
-      <label class="form-label" for="representation_pdf_file">
-        {% if version.representation_pdf %}Sostituisci con un PDF caricato manualmente{% else %}Carica un PDF{% endif %}
-      </label>
-      <input type="file" name="representation_pdf_file" id="representation_pdf_file" accept="application/pdf" required>
-      <button type="submit" class="btn-secondary mt-2">Carica</button>
-    </form>
+    {% if version.representation_pdf.confirmed_at %}
+    <div class="detail-item">
+      <span class="detail-label">Confermato</span>
+      <span class="detail-value text-xs">
+        {{ version.representation_pdf.confirmed_by.get_full_name|default:version.representation_pdf.confirmed_by.username }}
+        — {{ version.representation_pdf.confirmed_at|date:"d/m/Y H:i" }}
+      </span>
+    </div>
+    {% endif %}
   </div>
+  {% with rep=version.representation_pdf %}
+  {% if show_edit and rep.status == 'ready' or show_edit and rep.status == 'manual_uploaded' %}
+  <div class="px-4 pt-1">
+    <p class="alert-warning">
+      <strong>Ultimo passaggio:</strong> il PDF è stato caricato ma non è
+      ancora confermato. Clicca su «Conferma» qui sotto per poter inviare
+      la revisione in approvazione.
+    </p>
+  </div>
+  {% endif %}
+  {% endwith %}
+  {% if version.representation_pdf.file or show_edit %}
+  <div class="px-4 pb-4 flex flex-wrap items-center gap-2">
+    {% if version.representation_pdf.file %}
+    <a href="{% url 'version_representation_pdf_download' version.pk %}" class="btn-secondary btn-sm">⬇ Scarica PDF di rappresentazione</a>
+    {% endif %}
+    {% if show_edit %}
+    <form method="post" action="{% url 'version_pdf_upload' version.pk %}" enctype="multipart/form-data" class="flex items-center gap-2">
+      {% csrf_token %}
+      <input type="file" name="representation_pdf" accept="application/pdf" required class="text-xs">
+      <button type="submit" class="btn-secondary btn-sm">Carica PDF manualmente</button>
+    </form>
+    {% if version.representation_pdf.status == 'ready' or version.representation_pdf.status == 'manual_uploaded' %}
+    <form method="post" action="{% url 'version_pdf_confirm' version.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="btn-primary btn-sm">Confermo che il PDF rappresenta correttamente il sorgente</button>
+    </form>
+    {% endif %}
+    {% endif %}
+  </div>
+  {% endif %}
 </div>
 {% endif %}
 
-<!-- PDF approvato (TASK-038): principale per approved/superseded -->
+<!-- PDF approvato (solo per revisioni approvate/superate, e solo se già esiste o il documento richiede il flusso PDF) -->
 {% if version.status == 'approved' or version.status == 'superseded' %}
+{% if version.approved_pdf or document.requires_approved_pdf %}
 <div class="card mb-4">
   <div class="card-header">
     <h2 class="section-title mb-0">PDF approvato</h2>
   </div>
-  <div class="p-4 text-sm">
-    {% if version.status == 'superseded' %}
-    <p class="text-amber-700 mb-2">
-      ℹ Questa revisione è stata sostituita: esiste una revisione corrente più recente.
-      Il PDF approvato storico resta disponibile qui sotto.
-    </p>
+  <div class="detail-grid">
+    <div class="detail-item">
+      <span class="detail-label">Stato</span>
+      <span class="detail-value">
+        {% if not version.approved_pdf %}
+          <span class="badge-status-draft">Non disponibile per questa revisione storica</span>
+        {% elif version.approved_pdf.status == 'generated' %}
+          <span class="badge-status-approved">Generato</span>
+        {% elif version.approved_pdf.status == 'failed' %}
+          <span class="badge-status-rejected">Generazione fallita</span>
+        {% else %}
+          <span class="badge-status-in_approval">{{ version.approved_pdf.get_status_display }}</span>
+        {% endif %}
+      </span>
+    </div>
+    {% if version.approved_pdf.generated_at %}
+    <div class="detail-item">
+      <span class="detail-label">Generato il</span>
+      <span class="detail-value">{{ version.approved_pdf.generated_at|date:"d/m/Y H:i" }}</span>
+    </div>
     {% endif %}
-    {% if version.approved_pdf %}
-    <a href="{% url 'version_approved_pdf_download' version.pk %}" class="btn-primary">⬇ Scarica PDF approvato</a>
-    {% elif version.approved_pdf_generation_status == 'failed' %}
-    <p class="text-red-700 font-medium">⚠ Generazione fallita: {{ version.approved_pdf_generation_error }}</p>
-    {% else %}
-    <p class="text-gray-500">PDF approvato non ancora generato.</p>
+    {% if version.approved_pdf.error_message %}
+    <div class="detail-item md:col-span-2">
+      <span class="detail-label">Errore</span>
+      <span class="detail-value text-xs text-red-700">{{ version.approved_pdf.error_message }}</span>
+    </div>
     {% endif %}
   </div>
+  {% if version.approved_pdf.status == 'failed' and can_regenerate_approved_pdf %}
+  <div class="px-4 pb-4">
+    <form method="post" action="{% url 'version_approved_pdf_regenerate' version.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="btn-secondary btn-sm">Rigenera PDF approvato</button>
+    </form>
+  </div>
+  {% endif %}
 </div>
+{% endif %}
 {% endif %}
 
 <!-- ECN di origine -->

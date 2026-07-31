@@ -30,7 +30,6 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 
 | ID | Titolo | Priorità | Note |
 | -- | ------ | -------- | ---- |
-| TASK-029 | Documento: flag che blocca la richiesta di ECN semplice | Alta | Sposta in "In corso" dopo TASK-028 (un solo task in corso per agente) |
 
 ## Completati
 
@@ -59,22 +58,34 @@ prompt Cursor → test → review → commit gated) riuscito: vedi Completati.
 | TASK-020 | Tipo Documento come menu a cascata (dipendente da Categoria) + suffisso di riferimento | — | 2026-07-09 |
 | TASK-021 | Archivio: storico completo documenti (permesso view_history) + dettaglio compatto altrove | — | 2026-07-10 |
 | TASK-022 | Flusso ECN semplice per revisioni rapide (sostituisce "revisione senza ECN" come percorso demo) | — | 2026-07-10 |
-| TASK-023 | Chiarezza bozza-revisione + sezioni personali "Mie revisioni"/"Miei documenti" | — | 2026-07-13 |
-| TASK-024 | Mostrare l'ECN di origine nella pagina di approvazione revisione | — | 2026-07-13 |
-| TASK-025 | Chiusura ECN solo con revisione collegata approvata | — | 2026-07-13 |
-| TASK-026 | Archivio progetti: storico completo progetti (permesso view_history) + dettaglio compatto altrove | 7a2ff6f | 2026-07-22 |
-| TASK-027 | Verifica: obbligo commento sui rifiuti (documenti ed ECN) — già implementato, nessuna modifica | — | 2026-07-22 |
-| TASK-028 | Istruttoria CCB: aggiunti impatto sul costruito e applicabilità | — | 2026-07-22 |
-| TASK-029 | Documento: flag che blocca la richiesta di ECN semplice | — | 2026-07-22 |
-| TASK-030 | ECN: form voto CCB in due riquadri separati (Approva/Rifiuta), motivazione rifiuto con asterisco e HTML required | — | 2026-07-22 |
-| TASK-031 | Servizio centrale di policy PDF (sorgente → strategia), nessuna dipendenza da binari reali nei test | 81a13aa | 2026-07-27 |
-| TASK-032 | Modelli/migrazioni: `DocumentFile.kind`, campi PDF su `DocumentVersion`, `UserSignature` (nuovo modello, app `accounts`), snapshot firma su `ApprovalDecision` | — | 2026-07-27 |
-| TASK-033 | Firma visiva utente: upload/sostituzione/rimozione PNG, anteprima via data URI (nessun URL pubblico), validazione formato/dimensioni | — | 2026-07-27 |
-| TASK-034 | Bozza: `documents/pdf_rendition.py` (analisi, conversione reportlab/LibreOffice, upload manuale, conferma, invalidazione su cambio sorgente), UI di stato in `version_detail.html` | — | 2026-07-27 |
-| TASK-035 | Gate invio in approvazione (solo per revisioni con sorgente), congelamento contro sostituzioni silenziose, rimosso `signature_template_file` (sostituito dal PDF di rappresentazione tipizzato) | — | 2026-07-27 |
-| TASK-036/037/038 | `documents/approved_pdf.py` (registro firme via reportlab+pypdf, idempotente, non annulla approvazioni già registrate), snapshot firma in `approve_version`, azione admin di rigenerazione, UI approvazione (PDF da approvare) e documento (PDF approvato principale, storico su superseded) | — | 2026-07-27 |
-| TASK-039 | Audit trail: verifica trasversale del ciclo PDF/firma completo (`documents/tests_pdf_audit.py`), evento distinto `APPROVED_PDF_REGENERATED` per la rigenerazione admin, corretto un evento mancante su `generate_approved_pdf` (fallimento per assenza rappresentazione/richiesta) | — | 2026-07-27 |
-| TASK-040 | Suite completa (1323/1323 PASS), verifica end-to-end manuale contro il DB demo reale (non solo test), dati demo rigenerati con le nuove migrazioni, chiusura documentazione | — | 2026-07-27 |
+| TASK-023 | PDF di rappresentazione: policy di conversione centralizzata (`documents/pdf_strategy.py`) | — | 2026-07-27 |
+| TASK-024 | Modelli `RepresentationPDF` / `ApprovedPDFArtifact` + FK su `DocumentVersion` | — | 2026-07-27 |
+| TASK-025 | Convertitori pure-Python (reportlab/Pillow) + wiring bozza + upload manuale + conferma autore | — | 2026-07-27 |
+| TASK-026 | Gate di invio in approvazione (PDF obbligatorio solo all'invio) + stato in `version_detail` | — | 2026-07-27 |
+| TASK-027 | Download PDF di rappresentazione per approvatori (permessi + `approval_detail.html`) | — | 2026-07-27 |
+| TASK-028 | Firma visiva utente (`accounts.UserSignature`), nessuna URL pubblica | — | 2026-07-27 |
+| TASK-029 | Snapshot storico su `ApprovalDecision` (nome/ordine/firma, immutabile) | — | 2026-07-27 |
+| TASK-030 | Generazione PDF approvato (registro + firme, reportlab+pypdf), idempotente | — | 2026-07-27 |
+| TASK-031 | UI finale PDF approvato primario, permessi, rigenerazione artefatti falliti | — | 2026-07-27 |
+| TASK-033 | `Document.requires_approved_pdf`: l'intero flusso PDF diventa opzionale per documento | — | 2026-07-27 |
+| TASK-034 | Gate dell'intero flusso PDF dietro il flag opzionale (self-freezing senza campo dedicato) | — | 2026-07-27 |
+| TASK-035 | Matrice di test per la policy PDF opzionale (creazione, modifica, storico, workflow in corso) | — | 2026-07-27 |
+| TASK-036 | Applicabilità ECN obbligatoria (Fase 1: modello, service, form, view, admin, template principali, CSS sorgente) | — | 2026-07-29 |
+| TASK-036-2 | Applicabilità ECN (Fase 2: bugfix critico ApplicabilityFieldsMixin + correzione chiamate esistenti) | — | 2026-07-29 |
+| TASK-036-3 | Applicabilità ECN (Fase 3: template rimanenti + email) | c18eeb4 | 2026-07-29 |
+| TASK-036-4 | Applicabilità ECN (Fase 4: test dedicati) | b9a5797 | 2026-07-29 |
+| TASK-037 | Applicabilità ECN — correzione strutturale: decisa dalla CCB nel dossier, non dal proponente (Fase 1: modello, service, form, view, template, dati demo) | — | 2026-07-30 |
+| TASK-037-2 | Applicabilità ECN — correzione strutturale (Fase 2: fix suite di test) | — | 2026-07-30 |
+| TASK-038 | Fix UI Istruttoria CCB: bug commento multi-riga renderizzato, componenti CCB uniti a Proposta di variante, larghezza campi testo | — | 2026-07-30 |
+| TASK-039 | Lock "un utente alla volta" su pagine d'azione Approvazioni/ECN (`auditlog/locking.py`, timeout 20 min) | — | 2026-07-30 |
+| TASK-040 | Posizionamento libero firma su PDF approvazione (Fase 1: modello, service, endpoint PDF inline) | — | 2026-07-30 |
+| TASK-040-2 | Posizionamento libero firma (Fase 2: UI drag&drop con pdf.js, nuova dipendenza autorizzata) | — | 2026-07-30 |
+| TASK-041 | Fix UI Istruttoria CCB: sezione Applicabilità spostata in fondo, prima della sanatoria | — | 2026-07-30 |
+| TASK-042 | Fix UX gate PDF di rappresentazione: distinguere "PDF mancante" da "PDF caricato, da confermare" | — | 2026-07-30 |
+| TASK-040-3 | Posizionamento libero firma (Fase 3: la firma viene disegnata realmente sul PDF approvato) | — | 2026-07-30 |
+| TASK-043 | Fix bug CSS: checkbox selezionata visivamente invisibile (spunta bianca su sfondo bianco) | — | 2026-07-31 |
+| TASK-044 | Conversione automatica formati Office → PDF via LibreOffice headless (opzionale, gated a settings) | — | 2026-07-31 |
+| TASK-045 | UI dettaglio documento: card unica documento+versione, azioni raccolte in menu "Azioni" | — | 2026-07-31 |
 
 ---
 
@@ -2613,940 +2624,2627 @@ ECN semplice (oggi riusa `can_create_ecn` senza distinzioni).
 
 ---
 
-### TASK-023 — Chiarezza bozza-revisione + sezioni personali "Mie revisioni"/"Miei documenti" — Claude Code
+### TASK-023→035 — PDF di rappresentazione / PDF approvato / firma visiva (opzionale per documento) — Claude Code
 
 #### Obiettivo
 
-Segnalato dall'operatore usando la demo: dopo l'approvazione di un ECN,
-la creazione della revisione collegata mostra un bottone "Crea bozza"
-identico (nel testo) a quello di creazione di un nuovo documento,
-generando ambiguità. Inoltre non esiste un posto dove vedere **tutto**
-lo storico personale delle revisioni (non solo quelle aperte) né i
-documenti di cui si è autori nella loro versione più aggiornata.
+Distinguere file sorgente / PDF di rappresentazione (congelato, sottoposto
+agli approvatori) / PDF approvato (generato a fine workflow, con registro
+visivo delle approvazioni ed eventuali firme visive — mai firma digitale).
+A metà implementazione, richiesta di rendere l'intero flusso **opzionale
+per documento** (non obbligatorio per tutti i documenti gestiti dal
+sistema). Decisione tecnica completa (alternative considerate, freeze
+implicito senza campo dedicato, non-retroattività) in
+`C:\Users\riccardo.dibiagio\.claude\plans\logical-swinging-blanket.md`.
 
-#### Analisi
+#### Modello dati
 
-- `templates/documents/new_revision.html:177` — bottone genericamente
-  "Crea bozza", indistinguibile da "Crea documento e prima bozza" di
-  `new_document.html:114`.
-- `my_drafts` (`documents/views.py:599`) mostra solo
-  `DocumentVersion` con `status in (DRAFT, REJECTED)` create
-  dall'utente — non uno storico completo.
-- Non esisteva alcuna vista per "tutti i documenti di cui sono
-  autore" nella loro versione corrente.
+- `documents.RepresentationPDF` / `documents.ApprovedPDFArtifact` (nuovi),
+  FK nullable `DocumentVersion.representation_pdf` / `.approved_pdf`.
+- `Document.requires_approved_pdf` (BooleanField, default `False`) —
+  interruttore per documento, modificabile in creazione e successivamente
+  dai metadati (a differenza di `requires_ecn_for_revision`, fisso dopo la
+  creazione).
+- `ApprovalDecision`: campi snapshot (`snapshot_approver_display_name`,
+  `snapshot_approver_order`, `snapshot_signature_mode`,
+  `snapshot_signature_image`) popolati al momento della decisione.
+- `accounts.UserSignature` (nuovo modello, app prima vuota): immagine PNG
+  opzionale, nessuna URL pubblica.
 
-#### Soluzione
+#### Policy di conversione (`documents/pdf_strategy.py`)
 
-- `new_revision.html`: bottone rinominato in **"Crea bozza revisione"**
-  (nessun'altra label toccata).
-- Nuova vista `my_revisions` (`documents/views.py`): tutte le
-  `DocumentVersion` con `created_by=request.user`, **ogni stato**
-  (non solo bozze), ordinate per data di creazione decrescente.
-  Azioni condizionate allo stato: Modifica/Invia approvazione solo se
-  draft/rejected, altrimenti solo Visualizza.
-- Nuova vista `my_documents` (`documents/views.py`): tutti i
-  `Document` con `created_by=request.user` ("autore" = campo
-  `created_by`, coerente con `my_drafts`/`workspace_my_work` che usano
-  la stessa convenzione). Mostra, per ciascun documento, **l'ultima
-  `DocumentVersion` creata dall'utente stesso** — non
-  `document.current_version` (la versione pubblica/approvata visibile
-  a tutti in "Documenti"). Se l'autore ha già creato una revisione più
-  recente non ancora approvata, qui vede quella, con un avviso quando
-  differisce dalla versione pubblica corrente (chiarito
-  dall'operatore durante la review).
-- URL: `my-revisions/` → `my_revisions`, `my-documents/` →
-  `my_documents` (`config/urls.py`).
-- Sidebar (`templates/base.html`, sezione "Attività"): due nuove voci
-  "🕓 Mie revisioni" e "🗎 Miei documenti", accanto a "Mie bozze".
-  Nessun contatore badge aggiunto (fuori scope, non richiesto).
-- Nuovi template: `documents/my_revisions.html`,
-  `documents/my_documents.html` (stesso stile Tailwind di
-  `my_drafts.html`/`document_list.html`).
+Solo librerie Python pure (reportlab + Pillow): NATIVE_PDF (sorgente già
+PDF) / AUTO_RELIABLE (testo semplice, immagini) / MANUAL_REQUIRED (Office,
+formati a rischio, estensioni sconosciute). Nessun collegamento a
+LibreOffice/programmi esterni in questa iterazione (decisione confermata
+con l'operatore) — l'architettura resta estendibile per aggiungerlo in
+futuro senza redesign.
 
-#### File coinvolti
+#### Flusso opzionale — dove si legge il flag
 
-- `templates/documents/new_revision.html` (testo bottone)
-- `documents/views.py` (+`my_revisions`, +`my_documents`)
-- `config/urls.py` (import + 2 nuovi path)
-- `templates/base.html` (2 nuove voci sidebar)
-- `templates/documents/my_revisions.html` (nuovo)
-- `templates/documents/my_documents.html` (nuovo)
-- `documents/tests.py` (+`NewRevisionButtonLabelTests`,
-  +`MyRevisionsViewTests`, +`MyDocumentsViewTests`, 9 test)
+1. Bozza (`create_new_revision`/`update_draft_version`): la conversione
+   automatica parte solo se `document.requires_approved_pdf` è vero nel
+   momento in cui il file viene assegnato/sostituito.
+2. Invio in approvazione (`documents/pdf_gate.py`): gate saltato
+   interamente se il flag è spento — comportamento identico a prima di
+   questa funzionalità.
+3. Finalizzazione approvazione (`approvals/services.py:approve_version`):
+   **non** rilegge il flag — genera il PDF approvato solo se
+   `version.representation_pdf_id is not None` (fatto già fissato
+   all'invio). Questo è l'unico meccanismo di "congelamento": nessun campo
+   aggiuntivo di snapshot per la policy stessa, perché l'immutabilità della
+   `DocumentVersion` dopo l'invio più la presenza/assenza del FK bastano.
+
+#### File coinvolti (principali)
+
+Nuovi: `documents/pdf_strategy.py`, `documents/pdf_converters.py`,
+`documents/pdf_pipeline.py`, `documents/pdf_gate.py`,
+`documents/pdf_generation.py`, `accounts/models.py`, `accounts/forms.py`,
+`accounts/views.py`, `templates/accounts/signature_settings.html`.
+Modificati: `documents/models.py`, `documents/services.py`,
+`documents/views.py`, `documents/permissions.py`, `documents/forms.py`,
+`approvals/models.py`, `approvals/services.py`, `config/urls.py`,
+`templates/documents/version_detail.html`,
+`templates/documents/new_document.html`,
+`templates/documents/document_detail.html`,
+`templates/approvals/approval_detail.html`, `requirements.txt`
+(`reportlab`, `Pillow`, `pypdf`).
+
+#### Migrazioni
+
+`documents/0007_...` (nuovi modelli + FK), `documents/0008_document_requires_approved_pdf`,
+`approvals/0006_approvaldecision_snapshot_...`, `accounts/0001_initial`.
+Tutte additive/nullable o con default compatibile — nessun backfill,
+nessuna revisione storica toccata.
 
 #### Test
 
-- Bottone: verifica testuale "Crea bozza revisione" sulla pagina di
-  creazione revisione.
-- `my_revisions`: redirect anonimo, mostra revisioni proprie in ogni
-  stato, non mostra revisioni di altri utenti.
-- `my_documents`: redirect anonimo, mostra documenti propri con/senza
-  versione, non mostra documenti di altri utenti, e — caso chiave
-  segnalato in review — mostra l'ultima versione **propria** anche
-  quando non coincide ancora con la versione pubblica corrente
-  (`test_shows_my_latest_version_even_if_not_yet_public_current`).
-- Suite mirata: **9/9 PASS**. Suite completa (`scripts/test.sh`, tutte
-  le app): vedi esito finale registrato in `RUN_LOG.md`.
+Nuove classi in `documents/tests.py` e `approvals/tests.py`: policy di
+conversione, modelli, convertitori, wiring bozza, upload/conferma manuale,
+gate di invio (incluso il caso esplicito "nessun file → gate non si
+applica, fuori scope"), download rappresentazione/approvato, snapshot
+firma (immutabilità storica), generazione PDF approvato (idempotenza,
+retry dopo fallimento indotto, ANY/ALL/SEQUENTIAL), UI/permessi
+rigenerazione, e l'intera matrice della policy opzionale (creazione,
+modifica metadati + audit, non-retroattività storica, workflow in corso
+con flag cambiato a metà — incluso un bug reale di Django (`ModelForm`
+che popola l'istanza già in `is_valid()`) scoperto e corretto durante lo
+sviluppo dei test). `accounts/tests.py` nuovo (firma visiva).
 
-#### Backlog (fuori scope)
+#### Guardrail rispettati
 
-- Contatori badge sidebar per "Mie revisioni"/"Miei documenti" (non
-  richiesti).
-- Filtri/ricerca dentro le due nuove sezioni (elenco semplice per ora,
-  coerente con "soluzione semplice ma corretta").
+Nessun blocco all'upload del file sorgente in bozza. Nessuna dipendenza da
+programmi esterni. Nessuna firma digitale dichiarata. Nessuna generazione
+retroattiva per revisioni storiche. Flusso ECN completo/semplice e
+revisione-senza-ECN non toccati (il gate PDF è ortogonale e disattivato di
+default). Nessun merge, nessun push.
 
 ---
 
-### TASK-024 — Mostrare l'ECN di origine nella pagina di approvazione revisione — Claude Code
+### TASK-036 — Applicabilità ECN obbligatoria (Fase 1: modello, service, form, view, admin, template principali, CSS sorgente) — Claude Code
 
 #### Obiettivo
 
-Segnalato dall'operatore: quando un approvatore esamina la richiesta
-di approvazione di una revisione, non vede da quale ECN la revisione
-sia scaturita. Informazione importante perché la revisione è
-giuridicamente/tecnicamente legata all'ECN che l'ha autorizzata.
+Ogni ECN deve possedere obbligatoriamente una classificazione della propria
+applicabilità (Applicazione generale / futura / limitata), mutuamente
+esclusiva, ben visibile in tutte le schermate ECN. È un'informazione
+**dichiarativa e strutturata**, non un motore automatico: non tocca
+`Document.current_version`, il vincolo di unicità della revisione corrente,
+le baseline di progetto o i resolver di permessi/progetto.
 
-#### Analisi
+#### Analisi campi sovrapposti (fatta prima di implementare)
 
-- Il collegamento esiste già lato dati:
-  `ChangeNotice.executed_version` (FK, `related_name='ecns_executed'`
-  su `DocumentVersion`, `ecn/models.py:215`), popolato da
-  `create_new_revision(..., ecn=ecn)` in `documents/services.py`.
-  `templates/documents/version_detail.html` mostra già questa
-  informazione ("ECN di origine": codice, titolo, proponente, stato),
-  calcolata in `documents/views.py:version_detail`
-  (`version.ecns_executed.select_related('proposed_by').first()`,
-  filtrato da `can_view_ecn`).
-- `templates/approvals/approval_detail.html` (pagina che un
-  approvatore usa per esaminare/approvare/rifiutare) **non aveva
-  alcuna informazione ECN** — gap confermato.
+`commessa`/`project` = riferimento/contesto dell'ECN, non il suo campo di
+applicazione. `ccb_other_impact` = impatti collaterali valutati in
+istruttoria CCB (compilato dopo, dal responsabile istruttoria), non l'ambito
+dichiarato dal proponente. `description`/`motivation` = cosa cambia e
+perché, non a chi si applica. Nessuna sovrapposizione reale: campo nuovo
+giustificato.
 
-#### Soluzione
+#### Modello dati
 
-- `approvals/views.py:approval_detail`: aggiunto lo stesso calcolo di
-  `ecn_origin` usato in `documents.views.version_detail` (stesso
-  pattern, stesso controllo `can_view_ecn`), passato al template.
-- `templates/approvals/approval_detail.html`: aggiunta la stessa
-  sezione "ECN di origine" (codice con link a `ecn:ecn_detail`,
-  titolo, proponente, stato), subito dopo i metadati principali e
-  prima della tabella approvatori. Nessuna modifica a
-  `version_detail.html` (già corretto).
+`ecn/models.py:ChangeNotice` — `Applicability` (`TextChoices`: `general`/
+`future`/`limited`), `applicability_category` (CharField, **nullable** per
+compatibilità storica — nessun default retroattivo inventato) e
+`applicability_detail` (TextField, blank). Centralizzati sul modello:
+`APPLICABILITY_DESCRIPTIONS`, `APPLICABILITY_BADGE_CLASSES`,
+`applicability_display` (etichetta o "Applicabilità non registrata — ECN
+storico" per i record legacy), `applicability_badge_class`,
+`applicability_short_description`, `applicability_shows_scope_notice`
+(True per futura/limitata: pilota l'avviso "non assegna automaticamente
+revisioni differenti ai singoli progetti"), e il validatore centralizzato
+`ChangeNotice.validate_applicability(category, detail)` — unica fonte di
+verità server-side, riusata da form E service (mai bypassabile con un POST
+diretto). Soglia minima dettaglio per "limitata": 10 caratteri dopo strip
+(`APPLICABILITY_DETAIL_MIN_LENGTH`) — euristica semplice e dichiarata,
+nessuna valutazione linguistica/AI.
+
+Migrazione `ecn/migrations/0006_applicability.py`: solo `AddField`
+nullable/blank, nessun backfill, nessuna modifica a ECN esistenti.
+
+#### Obbligatorietà e finestra di modifica
+
+Applicabilità richiesta **già alla creazione** (stessa finestra di
+`motivation`, già obbligatorio a creazione in questo progetto — scelta di
+coerenza, non la "conferma solo prima di CCB" lasciata come alternativa
+dalla spec). `create_change_notice`/`create_simple_ecn` la validano prima
+di qualunque scrittura. `submit_change_notice` la rivalida comunque in
+difesa (un ECN standard non deve mai entrare in CCB senza applicabilità
+valida, indipendentemente da come è stato creato). `update_change_notice`
+resta utilizzabile **solo in DRAFT** (identico a title/motivation/commessa):
+è proprio questa finestra già esistente il meccanismo di immutabilità
+post-approvazione — nessun nuovo campo/flag di "freeze" introdotto,
+coerente con l'indicazione di non duplicare meccanismi già presenti.
+ECN semplice: obbligatoria e validata **prima** della creazione, perché
+l'ECN nasce già `APPROVED` (l'autoapprovazione non bypassa mai la
+validazione).
+
+#### Audit
+
+Riusa `_write_audit`/`create_audit_log` esistenti (nessun secondo sistema):
+`ECN_CREATED` registra la categoria scelta; `ECN_UPDATED` (da
+`update_change_notice`) registra old/new per categoria e dettaglio come gli
+altri campi base; `ECN_APPROVED` congela nell'audit trail il valore che
+diventa immutabile da quel momento. Nessun log per tentativi non
+autorizzati (il progetto non lo fa già per gli altri campi ECN).
+
+#### Design visuale (centralizzato)
+
+`src/css/main.css`: `badge-applicability-{general,future,limited,unset}`
+(verde/blu/arancione non allarmistico/grigio storico, light+dark, stesso
+pattern di `badge-ecn-*`), `.applicability-card` (riquadri radio
+selezionabili, 3 sempre visibili, distinzione anche per testo/etichetta/
+radio nativo — mai solo colore) e `.applicability-box` (riquadro dettaglio
+con bordo sinistro colorato). Nessuna classe duplicata nei template: sempre
+`ecn.applicability_badge_class`/i 4 template partial dedicati.
+
+#### Partial riutilizzabili (`templates/ecn/`)
+
+`_applicability_fields.html` (3 radio-card + textarea dettaglio, JS
+progressive-enhancement per required dinamico — la validazione vera resta
+server-side), `_applicability_badge.html` (badge compatto per liste),
+`_applicability_box.html` (riquadro esteso per il dettaglio ECN),
+`_applicability_summary.html` (riga compatta per pagine sola-lettura CCB).
+
+#### File coinvolti in questa Fase
+
+Modificati: `ecn/models.py`, `ecn/services.py`, `ecn/forms.py`,
+`ecn/views.py`, `ecn/admin.py`, `src/css/main.css`,
+`templates/ecn/ecn_form.html`, `ecn_edit_form.html`, `ecn_create_simple.html`,
+`ecn_detail.html`, `ecn_ccb_dossier.html`, `ecn_review_form.html`,
+`ecn_close_form.html`, `ecn_list.html`,
+`templates/documents/document_detail.html`,
+`templates/documents/archive_document_detail.html`,
+`templates/projects/project_detail.html`,
+`templates/projects/archive_project_detail.html`,
+`templates/workspace/my_work.html`.
+Nuovi: `ecn/migrations/0006_applicability.py`, i 4 partial
+`templates/ecn/_applicability_*.html`.
+
+#### Verifiche eseguite in questa fase
+
+`python manage.py check` OK, `makemigrations --check --dry-run` pulito
+(nessuna migrazione mancante dopo `0006_applicability`).
+
+#### Cosa NON è ancora fatto (Fasi successive)
+
+`npm install`/`npm run build` per compilare `static/css/tailwind.css` dalle
+nuove classi sorgente: **già eseguito da Claude Code** in questa stessa
+sessione (azione di tooling autorizzata per iscritto dall'operatore),
+incluso nel commit di questa Fase 1. `demo_full.py`/`demo_company.py`:
+**già aggiornati da Claude Code** (verificati con `demo_full --reset
+--no-email` reale), inclusi in questo commit.
+
+**TASK-036-2 completata** (da Claude Code, non da Cursor Agent — vedi
+sezione dedicata: durante la verifica pre-Cursor è emerso un bug critico
+in `ApplicabilityFieldsMixin` che rendeva l'obbligatorietà non realmente
+applicata lato form, corretto insieme alla correzione meccanica delle
+~66 chiamate esistenti rotte dal nuovo parametro obbligatorio). Suite
+`ecn` + `documents`/`approvals`/`notifications`: tutte verdi dopo questa
+fase.
+
+Restano da fare, delegabili a Cursor Agent (Fase 1 e 2 già committate come
+base stabile):
+- **TASK-036-3**: template rimanenti (`ecn_dashboard.html`,
+  `workspace/quality.html`, `ecn_configure_ccb.html`, `new_revision.html`,
+  `ecn_my.html`) + 3 email (`ecn/notifications.py`). Spec completa già
+  scritta in Dettaglio task.
+- **TASK-036-4**: test dedicati alla funzionalità applicabilità (modello,
+  form, service, view) — pianificato dopo TASK-036-3, spec da scrivere.
+
+---
+
+### TASK-036-2 — Applicabilità ECN (Fase 2: bugfix critico ApplicabilityFieldsMixin + correzione chiamate esistenti) — Claude Code
+
+#### Nota — pianificata per Cursor Agent, eseguita direttamente da Claude Code
+
+Questa fase era stata scritta come spec per Cursor Agent (correggere le
+chiamate esistenti rotte dal nuovo parametro obbligatorio). Prima di
+lanciare il ciclo Cursor, verificando manualmente il comportamento reale
+dei form appena scritti, è stato scoperto un **bug critico** in
+`ecn/forms.py` che rendeva la Fase 1 di fatto non funzionante lato UI:
+corretto immediatamente e direttamente da Claude Code, insieme alla
+correzione meccanica delle chiamate esistenti (che a quel punto era più
+efficiente fare con uno script Python mirato che delegare). Nessun ciclo
+Cursor Agent è stato eseguito per questa fase.
+
+#### Bug critico scoperto: `ApplicabilityFieldsMixin` non registrava i campi nel form
+
+`ApplicabilityFieldsMixin` (Fase 1) dichiarava `applicability_category` e
+`applicability_detail` come attributi Field a **livello di classe** del
+mixin. Il mixin non eredita da `forms.BaseForm` (per evitare conflitti
+MRO, stesso principio di `SanatoriaFieldsMixin`). Il metaclass di Django
+(`DeclarativeFieldsMetaclass`) però raccoglie i Field **solo** dagli attrs
+della classe Form "vera" in costruzione e dai base che hanno già
+l'attributo `declared_fields` (impostato solo su classi già passate dal
+metaclass in precedenza) — un mixin con metaclass `type` normale non viene
+mai considerato. Risultato: i due campi non finivano mai in
+`ChangeNoticeForm.base_fields` / `ChangeNoticeEditForm.base_fields` /
+`SimpleEcnForm.base_fields`. Erano visibili come attributi Python (quindi
+il codice non sollevava `AttributeError` da nessuna parte, il bug era
+silenzioso), ma **completamente assenti da `form.fields`**:
+`form.is_valid()` li ignorava del tutto, quindi un POST privo di
+`applicability_category` veniva accettato come valido — l'obbligatorietà
+lato server, requisito centrale della funzionalità, **non era realmente
+applicata** per nessuna delle tre form (create standard, edit, create
+semplice), nonostante `ecn.services.*` la validasse correttamente lato
+service. Riprodotto isolatamente in shell Django prima di intervenire
+(`ChangeNoticeEditForm(data_senza_applicability).is_valid()` → `True`,
+`cleaned_data` privo della chiave).
+
+**Fix**: i due campi sono ora aggiunti in `__init__` (assegnati a
+`self.fields[...]` dopo `super().__init__()`), esattamente lo stesso
+pattern già usato con successo da `SanatoriaFieldsMixin` — che infatti non
+soffriva di questo problema proprio perché inietta i campi a runtime,
+non dichiarativamente. Riverificato in shell: form senza categoria →
+`is_valid() == False` con errore "Questo campo è obbligatorio."; categoria
+`limited` senza dettaglio → errore dedicato sul campo dettaglio; categoria
+valida → form valido. Comportamento ora conforme al requisito.
+
+#### Correzione chiamate esistenti rotte dal nuovo parametro obbligatorio
+
+`applicability_category` obbligatorio (nessun default) su
+`create_change_notice`/`create_simple_ecn`/`update_change_notice` rompeva
+tutte le chiamate preesistenti nei test. Suite `ecn` prima della
+correzione: 352 test, 131 errori (quasi tutti `TypeError: ...() missing 1
+required positional argument: 'applicability_category'`) + 1 fallimento a
+cascata. Corretto con uno script Python dedicato (paren-matching sicuro,
+non regex ingenua — necessario perché diverse chiamate passano i primi
+argomenti posizionalmente, es. `self.update_change_notice(self.ecn,
+actor=...)`, quindi l'inserimento del nuovo kwarg doveva avvenire sempre
+come **ultimo** argomento della chiamata, mai subito dopo la parentesi
+aperta) su:
+- `ecn/tests.py` (49 chiamate)
+- `documents/tests.py` (7 chiamate + 1 import locale mancante aggiunto)
+- `approvals/tests.py` (6 chiamate)
+- `notifications/tests_workflow_emails.py` (4 chiamate)
+
+Più correzioni mirate non coperte dallo script: due helper factory
+`_make_ecn` (`ecn/tests.py` e `notifications/tests_workflow_emails.py`)
+che creano `ChangeNotice` direttamente via `.objects.create(...)`
+bypassando il service — aggiunto `applicability_category=GENERAL` nei
+default, altrimenti un ECN creato così e poi passato a
+`submit_change_notice` veniva bloccato dalla validazione difensiva
+(comportamento nuovo corretto, ma il test factory doveva produrre ECN
+validi di default). E 4 test a livello di vista (`ecn_create`,
+`ecn_create_simple` x2, `ecn_edit`) i cui payload POST non includevano
+`applicability_category` — corretti aggiungendo il campo al dizionario
+POST, non modificando gli assert.
+
+#### Verifica finale
+
+`python manage.py test ecn --keepdb -v1` → **352/352 OK**.
+`python manage.py test documents approvals notifications --keepdb -v1` →
+**617/617 OK**. `manage.py check` pulito. Nessuna modifica ad
+`accounts`/`projects` (non referenziano i service ECN, verificato via
+grep su tutto il repo prima di questa fase — non ri-eseguiti per motivi di
+tempo, ma strutturalmente non impattati).
 
 #### File coinvolti
 
-- `approvals/views.py`
-- `templates/approvals/approval_detail.html`
-- `approvals/tests.py` (+`test_approval_detail_shows_ecn_origin`,
-  +`test_approval_detail_no_ecn_section_when_not_from_ecn`)
+Bugfix: `ecn/forms.py` (`ApplicabilityFieldsMixin`, incluso nel commit di
+TASK-036 — non un commit separato, corregge codice non ancora pubblicato
+di questa stessa feature). Chiamate esistenti: `ecn/tests.py`,
+`documents/tests.py`, `approvals/tests.py`,
+`notifications/tests_workflow_emails.py` — commit separato (questa Fase 2).
+
+#### Guardrail rispettati
+
+Nessuna modifica alla logica/agli assert dei test esistenti, solo
+aggiunta del nuovo parametro obbligatorio nei punti in cui mancava.
+Nessuna modifica a `ecn/services.py`, `ecn/permissions.py`, template,
+migrazioni, `demo_full.py`/`demo_company.py` (già corretti in Fase 1).
+Nessun merge, nessun push.
+
+---
+
+### TASK-036-3 — Applicabilità ECN (Fase 3: template rimanenti + email) — Codex
+
+Nota: spec scritta per Cursor Agent, eseguita invece da Codex (operatore ha
+scelto di provare Codex come agente operativo per questa fase). Diff
+verificato riga per riga da Claude Code dopo l'esecuzione, suite
+969/969 PASS riconfermata indipendentemente (non solo il report di Codex).
+
+#### Obiettivo
+
+Completare la visibilità dell'applicabilità ECN (TASK-036) nei template e
+nelle email ancora privi del badge/riquadro. Da avviare solo dopo che
+TASK-036-2 è verde. **Non toccare** `ecn/models.py`, `ecn/services.py`,
+`ecn/forms.py`, `ecn/permissions.py`, `ecn/admin.py`, migrazioni, i 4
+partial `templates/ecn/_applicability_*.html`, `demo_full.py`,
+`demo_company.py`, CSS.
+
+#### Riferimenti da leggere prima di iniziare
+
+- `ecn/models.py`: proprietà `applicability_display`,
+  `applicability_badge_class`, `applicability_short_description`,
+  `applicability_shows_scope_notice`.
+- `templates/ecn/_applicability_badge.html` — badge compatto, richiede
+  `ecn` nel context: `{% include "ecn/_applicability_badge.html" with ecn=<var> %}`
+  (se la variabile di loop si chiama già `ecn`, basta
+  `{% include "ecn/_applicability_badge.html" %}`).
+- `templates/ecn/ecn_list.html` e `templates/projects/project_detail.html`
+  — esempio già fatto di colonna "Applicabilità" in una tabella
+  `data-table` esistente (stessa struttura `<th>`/`<td>` da replicare).
+
+#### Scope — Parte A: template rimanenti
+
+1. `templates/ecn/ecn_dashboard.html` — 5 liste (`draft_no_ccb`,
+   `draft_ccb_ready`, `under_review_data` con `row.ecn`, `approved_no_exec`,
+   `approved_exec`): aggiungi
+   `{% include "ecn/_applicability_badge.html" with ecn=ecn %}` (per
+   `under_review_data`: `with ecn=row.ecn`) subito dopo `{{ ecn.title }}`
+   nella colonna Titolo di ciascuna tabella (non serve una colonna nuova).
+2. `templates/workspace/quality.html` — 3 liste: `ecn_to_review` (loop
+   `ecn`), `pending_ccb` (loop `ca`, usa `with ecn=ca.change_notice`),
+   `ecn_to_close` (loop `ecn`) — stesso pattern, badge dopo il titolo.
+3. `templates/ecn/ecn_configure_ccb.html` — nel `<p class="page-header-sub">`
+   che mostra "Documento: ... · Proposto da: ...", aggiungi
+   `· Applicabilità: {% include "ecn/_applicability_badge.html" %}`
+   (variabile di contesto `ecn` già disponibile nel template).
+4. `templates/documents/new_revision.html` — tabella "ECN approvati
+   disponibili" (loop `ecn_item`, non `ecn`): aggiungi colonna
+   `<th>Applicabilità</th>` / `<td>{% include "ecn/_applicability_badge.html" with ecn=ecn_item %}</td>`.
+5. `templates/ecn/ecn_my.html` — tabella "Le mie richieste" (sezione 1,
+   loop `ecn`): aggiungi colonna Applicabilità con lo stesso pattern di
+   `ecn_list.html` (`<th>Applicabilità</th>` dopo `<th>Stato</th>`, cella
+   con l'include).
+
+#### Scope — Parte B: email (`ecn/notifications.py`)
+
+Aggiungi l'applicabilità (etichetta completa via
+`change_notice.applicability_display`, MAI il colore — email di solo
+testo) dove è rilevante capire la portata della modifica:
+
+- `notify_ecn_submitted` → dentro `_notify_ccb_member`: aggiungi
+  `f"Applicabilità : {change_notice.applicability_display}\n"` dopo la
+  riga `Policy CCB`. Se `change_notice.applicability_detail`, aggiungi
+  anche quella riga (nessun troncamento necessario per i corpi email di
+  questo progetto, sono già testo libero senza limite).
+- `notify_ecn_approved` → stessa riga, dopo `Classe variante`.
+- `notify_ecn_closed` quando `automatic=True` → stessa riga, dopo
+  `Note chiusura`.
+
+Non toccare `notify_ecn_created`, `notify_ecn_rejected`,
+`notify_ecn_coordinator_assigned`, `notify_ecn_vote_cast`,
+`notify_ecn_executed` — fuori scope.
+
+#### Non fare (guardrail)
+
+Vedi lista "Non toccare" nell'Obiettivo. In più: non scrivere test in
+questa fase (TASK-036-4). Non fare commit, push o merge. Non lanciare il
+server di sviluppo. Non introdurre nuove classi CSS.
+
+#### Acceptance criteria
+
+- `python manage.py check` pulito.
+- `python manage.py test ecn documents approvals notifications --keepdb -v1`
+  resta verde come dopo TASK-036-2 (nessuna regressione da questa fase).
+- Ogni file della Parte A mostra il badge/riquadro applicabilità nei punti
+  indicati, sempre tramite i partial esistenti (mai badge scritti a mano).
+- Le 3 email della Parte B mostrano l'etichetta completa
+  dell'applicabilità.
+
+#### Test richiesti in questa fase
+
+Nessuno di nuovo. Solo la suite esistente (comando sopra) deve restare
+verde.
+
+#### Esito (2026-07-29)
+
+Implementato lo scope previsto senza toccare modelli, service, form,
+permessi, admin, migrazioni, partial applicabilità, demo o CSS.
+
+- `templates/ecn/ecn_dashboard.html`: badge applicabilità aggiunto dopo
+  il titolo nelle 5 liste richieste (`draft_no_ccb`, `draft_ccb_ready`,
+  `under_review_data` con `row.ecn`, `approved_no_exec`, `approved_exec`).
+- `templates/workspace/quality.html`: badge aggiunto nelle 3 liste
+  richieste (`ecn_to_review`, `pending_ccb` con
+  `ca.change_notice`, `ecn_to_close`).
+- `templates/ecn/ecn_configure_ccb.html`: badge aggiunto nel sottotitolo
+  header, accanto a documento e proponente.
+- `templates/documents/new_revision.html`: colonna `Applicabilità`
+  aggiunta alla tabella degli ECN approvati disponibili usando
+  `ecn_item`.
+- `templates/ecn/ecn_my.html`: colonna `Applicabilità` aggiunta alla
+  tabella "Le mie richieste".
+- `ecn/notifications.py`: le email `notify_ecn_submitted`,
+  `notify_ecn_approved` e `notify_ecn_closed(automatic=True)` includono
+  l'etichetta testuale completa dell'applicabilità; per la notifica CCB
+  viene incluso anche il dettaglio applicabilità quando presente, come da
+  spec.
+
+Verifiche:
+
+```bash
+python manage.py check
+python manage.py test ecn documents approvals notifications --keepdb -v1
+```
+
+Esito: `manage.py check` pulito; suite richiesta verde,
+**969/969 test PASS**.
+
+---
+
+### TASK-036-4 — Applicabilità ECN (Fase 4: test dedicati) — Codex
+
+#### Obiettivo
+
+Le Fasi 1-3 (TASK-036, TASK-036-2, TASK-036-3, tutte committate) hanno
+implementato e reso visibile ovunque l'applicabilità ECN obbligatoria. La
+suite esistente (969 test) è verde, ma **nessun test esistente verifica
+davvero il comportamento della funzionalità stessa** — tutte le chiamate
+preesistenti usano semplicemente `applicability_category=GENERAL` come
+valore di riempimento neutro (aggiunto in TASK-036-2 solo per non rompere
+test che riguardano altro). Questa fase colma quel vuoto: test mirati su
+validazione, obbligatorietà, immutabilità, resa UI, storico ed email.
+
+**Non modificare** `ecn/models.py`, `ecn/services.py`, `ecn/forms.py`,
+`ecn/views.py`, `ecn/permissions.py`, `ecn/admin.py`, `ecn/notifications.py`,
+migrazioni, template, CSS, `demo_full.py`, `demo_company.py`: se un test
+fallisce, il problema è quasi certamente nel test stesso (aspettativa
+sbagliata), non nell'implementazione già verificata in tre fasi precedenti
+— se sei genuinamente convinto di aver trovato un bug reale
+nell'implementazione, documentalo con dettaglio nell'Esito invece di
+correggerlo silenziosamente, e lascialo per revisione.
+
+#### Riferimenti — leggi prima di scrivere test
+
+- `ecn/models.py`: `ChangeNotice.Applicability` (`GENERAL`/`FUTURE`/
+  `LIMITED`), `APPLICABILITY_DETAIL_MIN_LENGTH = 10`,
+  `ChangeNotice.validate_applicability(category, detail)` (classmethod,
+  ritorna `(category, detail_pulito)` o solleva `ValidationError` con
+  `error_dict` su `applicability_category`/`applicability_detail`),
+  proprietà `applicability_display`, `applicability_badge_class`,
+  `applicability_short_description`, `applicability_shows_scope_notice`,
+  `applicability_is_registered`.
+- `ecn/services.py`: `create_change_notice`/`create_simple_ecn`/
+  `update_change_notice` validano `applicability_category`/`_detail`
+  PRIMA di scrivere sul DB (nessuna riga parziale in caso di errore).
+  `submit_change_notice` rivalida difensivamente. `_write_audit` include
+  `applicability_category`/`_detail` nel metadata per le azioni
+  `ECN_CREATED` e `ECN_APPROVED`.
+- `ecn/forms.py`: `ApplicabilityFieldsMixin` (campi iniettati in
+  `__init__`, non dichiarativi — vedi nota storica in TASK-036-2 sul bug
+  già corretto: un test di regressione esplicito su questo punto è parte
+  di questa fase, vedi Parte B).
+- Helper di test già esistenti in `ecn/tests.py`: `_make_user`,
+  `_make_folder`, `_make_document`, `_make_version`, `_make_ecn` (quest'ultimo
+  ora crea ECN con `applicability_category=GENERAL` di default, override
+  con `**kwargs`, es. `_make_ecn(doc, ver, user, applicability_category=None)`
+  per simulare un ECN storico).
+- Partial template: `_applicability_fields.html` (form, 3 radio con
+  `value="general"`/`"future"`/`"limited"`), `_applicability_badge.html`
+  (classi `badge-applicability-general`/`-future`/`-limited`/`-unset`),
+  `_applicability_box.html` (classi `applicability-box-general`/`-future`/
+  `-limited`/`-unset`, testo "Applicabilità non registrata — ECN storico"
+  per `None`, avviso "non assegna automaticamente revisioni differenti" per
+  future/limited).
+
+#### Scope — Parte A: modello e validazione (nuova classe in `ecn/tests.py`, es. `ApplicabilityValidationTests`)
+
+1. `validate_applicability('general', '')` → ok, ritorna `('general', '')`.
+2. `validate_applicability('future', '')` → ok.
+3. `validate_applicability('limited', 'x' * 15)` → ok, dettaglio pulito
+   (strippato) ritornato.
+4. `validate_applicability('limited', '')` → `ValidationError` con
+   `applicability_detail` in `error_dict`.
+5. `validate_applicability('limited', '   ')` → stesso errore (solo spazi).
+6. `validate_applicability('limited', 'corto')` → errore (sotto soglia
+   `APPLICABILITY_DETAIL_MIN_LENGTH`, testo < 10 caratteri dopo strip).
+7. `validate_applicability('non_esiste', '')` → errore su
+   `applicability_category`.
+8. `validate_applicability(None, '')` → errore su `applicability_category`.
+9. `validate_applicability('general', 'qualunque testo')` → ok (dettaglio
+   facoltativo per generale, nessun vincolo di lunghezza se fornito).
+10. Proprietà su un ECN con `applicability_category=None` (crea con
+    `_make_ecn(..., applicability_category=None)`): `applicability_display
+    == 'Applicabilità non registrata — ECN storico'`,
+    `applicability_badge_class == 'badge-applicability-unset'`,
+    `applicability_short_description == ''`,
+    `applicability_shows_scope_notice is False`,
+    `applicability_is_registered is False`. Nessuna eccezione sollevata
+    (l'obiettivo è proprio verificare che gli ECN storici restino leggibili).
+11. Proprietà per ciascuna delle 3 categorie valide: `applicability_display`
+    coincide con `get_applicability_category_display()`,
+    `applicability_badge_class` è la classe attesa,
+    `applicability_short_description` non vuota,
+    `applicability_shows_scope_notice` è `True` solo per `future`/`limited`.
+
+#### Scope — Parte B: form (nuova classe o estensione in `ecn/tests.py`)
+
+12. **Test di regressione esplicito** (bug reale corretto in TASK-036-2):
+    `ChangeNoticeForm`/`ChangeNoticeEditForm`/`SimpleEcnForm` istanziati
+    SENZA `applicability_category` nei dati → `is_valid()` deve essere
+    `False` con errore su quel campo. Questo test esiste per impedire che
+    il bug del mixin (campi dichiarati a livello di classe invece che in
+    `__init__`) si ripresenti inosservato in futuro — motiva il test con un
+    commento che rimanda a TASK-036-2.
+13. `ChangeNoticeForm` con `applicability_category='limited'` e
+    `applicability_detail=''` → invalido, errore sul campo dettaglio.
+14. `ChangeNoticeForm` con `applicability_category='limited'` e dettaglio
+    valido (≥10 caratteri) → valido.
+15. Stesse verifiche minime (12-14) anche per `SimpleEcnForm` e
+    `ChangeNoticeEditForm` (bastano 1-2 casi ciascuna, non l'intera
+    matrice — l'obiettivo è coprire i tre form, non triplicare tutto).
+
+#### Scope — Parte C: service e ciclo di vita ECN standard (`ecn/tests.py`)
+
+16. `create_change_notice(..., applicability_category='limited',
+    applicability_detail='')` → `ValidationError`, **nessun** `ChangeNotice`
+    creato (verifica il conteggio prima/dopo, non solo l'eccezione).
+17. `create_change_notice(..., applicability_category='bogus')` →
+    `ValidationError`, nessuna riga creata.
+18. `update_change_notice` su ECN in `DRAFT`: cambia categoria da
+    `general` a `limited` con dettaglio valido → riuscito, valori
+    persistiti; `AuditLog` con `action='ECN_UPDATED'` contiene
+    `applicability_category`/`applicability_detail` sia nei valori vecchi
+    che nuovi (verifica sui campi del record, non solo che l'audit esista).
+19. `update_change_notice` su ECN con stato diverso da `DRAFT` (es.
+    `UNDER_REVIEW`, `APPROVED`, `REJECTED`, `CLOSED`) → `ValidationError`
+    per ciascuno di questi 4 stati, applicabilità invariata nel DB dopo il
+    tentativo fallito (immutabilità post-DRAFT).
+20. `submit_change_notice` su un ECN con `applicability_category=None`
+    (creato via `_make_ecn` bypassando il service, per simulare un caso
+    anomalo/storico) → `ValidationError`, l'ECN resta in `DRAFT` (verifica
+    difensiva già presente nel service — questo test la esercita
+    esplicitamente).
+21. Ciclo completo standard: crea ECN con `future`, configura CCB, invia,
+    approva (`approve_change_notice`) → `AuditLog` con
+    `action='ECN_APPROVED'` contiene `applicability_category='future'` nel
+    metadata (congelamento nell'audit, TASK-036 §Audit).
+22. Rifiuto (`reject_change_notice`) di un ECN con applicabilità
+    `limited`+dettaglio → applicabilità invariata dopo il rifiuto (nessuna
+    logica di reset).
+23. Chiusura automatica (`auto_close_executed_ecn_if_ready`) di un ECN
+    approvato con applicabilità valida → applicabilità invariata dopo la
+    chiusura (regressione: la chiusura automatica non deve mai toccare
+    questi campi).
+
+#### Scope — Parte D: ECN semplice (`ecn/tests.py`, classe `SimpleEcnServiceTests`/`SimpleEcnViewTests` esistenti o nuova)
+
+24. `create_simple_ecn(..., applicability_category='limited',
+    applicability_detail='')` → `ValidationError`, nessun `ChangeNotice`
+    creato (l'autoapprovazione non deve mai bypassare la validazione —
+    verifica esplicita del requisito).
+25. `create_simple_ecn(..., applicability_category=None)` →
+    `ValidationError`.
+26. `create_simple_ecn` con dati validi (una qualunque delle 3 categorie)
+    → ECN creato con `status=APPROVED`, applicabilità persistita
+    correttamente.
+27. Immutabilità immediata: su un ECN semplice appena creato (già
+    `APPROVED`), `update_change_notice` → `ValidationError` (stato non
+    `DRAFT`) anche tentando di cambiare solo l'applicabilità.
+28. La revisione di esecuzione collegata a un ECN semplice
+    (`create_new_revision` con `ecn=...`) e la sua chiusura automatica
+    restano invariate (regressione — riusa uno scenario già esistente in
+    `ecn/tests.py` se disponibile, altrimenti costruiscine uno minimo).
+
+#### Scope — Parte E: UI/view (`ecn/tests.py`, estendi `ECNViewTests`/`ECNEditViewTests`/`SimpleEcnViewTests` o nuova classe)
+
+29. GET `ecn_create`: la risposta contiene le 3 opzioni
+    (`assertContains` su `value="general"`, `value="future"`,
+    `value="limited"`, case-sensitive sul valore esatto).
+30. POST `ecn_create` senza `applicability_category` → **200** (non 302),
+    nessun `ChangeNotice` creato, form ri-renderizzato con errore.
+31. POST `ecn_create` con `applicability_category=limited` e
+    `applicability_detail` vuoto → 200, nessun ECN creato.
+32. POST `ecn_create_simple` senza `applicability_category` → 200, nessun
+    ECN creato (stesso principio del punto 24, mai bypassabile da UI).
+33. `ecn_list`: per un ECN con ciascuna delle 3 categorie, la riga contiene
+    la classe badge corretta (`assertContains` su
+    `badge-applicability-general` ecc. — occhio a seedare almeno un ECN
+    per categoria nel test, non riusare sempre lo stesso).
+34. `ecn_detail`: per un ECN `limited` con dettaglio, la pagina contiene il
+    testo del dettaglio E il testo dell'avviso "non assegna
+    automaticamente revisioni differenti"; per un ECN `general`, l'avviso
+    NON è presente (`assertNotContains`).
+35. `ecn_detail` di un ECN storico (`applicability_category=None`):
+    nessun errore 500, la pagina contiene "Applicabilità non registrata".
+36. Utente `stranger` (senza permessi) che tenta GET/POST diretto su
+    `ecn_edit`/`ecn_create` di un ECN non suo → stesso comportamento già
+    verificato dai permessi esistenti (403/PermissionDenied) — un solo
+    test di conferma che il nuovo campo non introduce un varco, non
+    l'intera matrice di permessi (già coperta altrove).
+
+#### Scope — Parte F: documento/progetto/archivio (estendi test esistenti se già presenti, altrimenti aggiungi un caso minimo)
+
+37. `document_detail`: la sezione "Ultimo ECN" mostra il badge
+    applicabilità per `latest_ecn` (cerca test esistenti su questa sezione
+    in `documents/tests.py` ed estendili; se non esistono, aggiungi un
+    test minimo nuovo).
+38. `archive_document_detail`: la tabella ECN mostra la colonna
+    Applicabilità con badge corretto.
+39. `project_detail`/`archive_project_detail`: la tabella ECN collegati
+    mostra la colonna Applicabilità (se non esiste già una classe di test
+    per queste view in `projects/tests.py`, aggiungine una minima — non
+    serve coprire tutto il resto della pagina, solo questo aspetto).
+
+#### Scope — Parte G: email (`notifications/tests_workflow_emails.py`)
+
+40. `notify_ecn_submitted` (via invio a CCB): il corpo email
+    (`mail.outbox`) contiene l'etichetta applicabilità completa.
+41. `notify_ecn_approved`: stesso controllo.
+42. `notify_ecn_closed` con `automatic=True`: stesso controllo. Il percorso
+    `automatic=False` non deve necessariamente contenere l'etichetta (fuori
+    scope TASK-036-3) ma non deve sollevare eccezioni.
+
+#### Non fare (guardrail)
+
+Vedi lista in Obiettivo. In più: non ridurre/rimuovere test esistenti, non
+cambiare `_make_ecn`/altri helper condivisi in modo che rompa test già
+verdi (se estendi `_make_ecn`, verifica che i default restino
+retrocompatibili). Non fare commit multipli granulari: un solo commit
+locale a fine fase, come per TASK-036-3. Non fare push, merge, rebase. Non
+lanciare il server di sviluppo.
+
+#### Acceptance criteria
+
+- Tutti i nuovi test passano.
+- `python manage.py test ecn documents approvals notifications projects --keepdb -v1`
+  resta verde e il numero di test è **maggiore** di 969 (nuovi test
+  effettivamente aggiunti, non solo dichiarati).
+- `python manage.py check` pulito.
+- Nessuna modifica ai file applicativi elencati in "Non fare".
+- `docs/ai/TASKS.md` aggiornato: TASK-036-4 spostato in Completati con
+  l'hash del commit (verificabile solo dopo aver committato — vedi nota in
+  TASK-036-3 sulla stessa difficoltà, stessa soluzione: usa un
+  riferimento testuale tipo "vedi commit più recente" se non puoi
+  conoscere l'hash in anticipo, sarà corretto in un secondo momento) e con
+  un Esito che elenca quanti test sono stati aggiunti per ciascuna Parte
+  (A-G) e il conteggio finale della suite.
+
+#### Esito (2026-07-29)
+
+Implementati 34 nuovi metodi di test dedicati e 1 test esistente esteso:
+
+- Parte A: 6 nuovi test modello/validazione in `ecn/tests.py`.
+- Parte B: 3 nuovi test form in `ecn/tests.py`, incluso il test di
+  regressione esplicito per `ApplicabilityFieldsMixin`/TASK-036-2.
+- Parte C: 7 nuovi test service/ciclo di vita ECN standard in
+  `ecn/tests.py`.
+- Parte D: 3 nuovi test ECN semplice in `ecn/tests.py` e 1 test esistente
+  esteso per confermare che revisione di esecuzione e chiusura automatica
+  non modificano l'applicabilità.
+- Parte E: 7 nuovi test UI/view in `ecn/tests.py`.
+- Parte F: 4 nuovi test integrazione documento/progetto/archivio in
+  `documents/tests.py` e `projects/tests.py`.
+- Parte G: 4 nuovi test email in `notifications/tests_workflow_emails.py`.
+
+Verifiche eseguite:
+
+- `python manage.py check` pulito.
+- Target mirato dei nuovi test: 62/62 PASS.
+- `python manage.py test ecn documents approvals notifications projects --keepdb -v1`
+  verde: **1432/1432 test PASS**.
+
+Nessuna modifica ai file applicativi fuori scope; modificati solo test e
+questo documento.
+
+#### Test richiesti in questa fase
+
+Questa fase **è** la scrittura dei test (Parti A-G sopra, 42 casi
+indicativi — puoi consolidare o aggiungere metodi di test purché la
+copertura descritta sia rispettata nella sostanza, non serve un metodo per
+punto elenco se un singolo test parametrizzato copre più casi in modo
+chiaro).
+
+---
+
+### TASK-037 — Applicabilità ECN: correzione strutturale (Fase 1) — Claude Code
+
+#### Errore corretto
+
+TASK-036 (Fase 1-4, completate e testate il 2026-07-29) aveva implementato
+l'applicabilità come un dato compilato dal **proponente** al momento della
+creazione dell'ECN (`ChangeNoticeForm`/`SimpleEcnForm`, obbligatorio già in
+`create_change_notice`/`create_simple_ecn`). L'operatore ha segnalato
+(2026-07-30) un errore concettuale reale: **l'applicabilità è una
+valutazione della CCB**, decisa quando la CCB si riunisce/istruisce la
+pratica — non una dichiarazione del richiedente. Chiarito con l'operatore
+(due domande dirette, non assunto):
+
+1. Nel flusso standard, l'applicabilità va compilata nel **dossier
+   istruttorio** (`ChangeNoticeDossierForm`/`update_ccb_dossier`), dal
+   responsabile istruttoria (ccb_coordinator) o Quality Manager — stesso
+   meccanismo già in uso per `ccb_class`/`ccb_requirements`/
+   `ccb_technical_impact`: opzionale al salvataggio bozza, obbligatoria
+   prima dell'invio al voto.
+2. L'ECN semplice (nessuna CCB, autoapprovazione immediata) **non ha
+   applicabilità**: nessuna CCB si riunisce mai in quel flusso, quindi
+   resta sempre nulla (come gli ECN storici), per decisione esplicita
+   dell'operatore — non un'omissione.
+
+#### Modifiche (tutte dirette, nessun ciclo Cursor/Codex per questa fase:
+correzione di un errore di design, non implementazione di funzionalità nuova)
+
+- **`ecn/models.py`**: nessuna modifica di schema (il campo era già
+  nullable). Aggiornati docstring/help_text di `Applicability`,
+  `applicability_category`/`applicability_detail` e delle proprietà
+  (`applicability_display`, `applicability_is_registered`) per riflettere
+  la nuova semantica: nullo per 3 motivi legittimi (non ancora istruito,
+  flusso semplice, storico), non solo "storico". Testo di
+  `applicability_display` per il caso nullo cambiato da "Applicabilità non
+  registrata — ECN storico" a "Applicabilità non specificata" (il vecchio
+  testo era fuorviante: ora un ECN standard appena creato, non ancora in
+  istruttoria, è anch'esso "non specificato" senza essere storico).
+  Migrazione `0007_alter_changenotice_applicability_category.py`
+  (solo help_text, nessun impatto reale su schema/dati).
+- **`ecn/services.py`**:
+  - `create_change_notice`/`create_simple_ecn`: **rimossi** i parametri
+    `applicability_category`/`applicability_detail` (non più accettati —
+    l'ECN nasce sempre senza applicabilità).
+  - `update_change_notice`: **rimossi** gli stessi parametri (il
+    proponente non modifica l'applicabilità nemmeno in bozza).
+  - `update_ccb_dossier`: **aggiunti** `applicability_category=None,
+    applicability_detail=''`, stesso pattern "preserva se non fornito" già
+    usato per `ccb_class`. Audit `CCB_DOSSIER_UPDATED` include ora
+    `applicability_category`.
+  - `submit_change_notice`: il controllo di applicabilità (già presente
+    da TASK-036) è stato **spostato** dentro il blocco
+    `if change_notice.status == CCB_PREPARATION:`, alla pari di
+    `ccb_class`/`ccb_requirements`/`ccb_technical_impact` — non più un
+    controllo incondizionato a monte. Stesso trattamento already
+    riservato agli altri campi dossier: il percorso legacy
+    DRAFT→UNDER_REVIEW resta esente, per retrocompatibilità con la suite
+    di test preesistente (la stessa eccezione già documentata per gli
+    altri campi, non una nuova).
+  - `approve_change_notice`: **valutato e scartato** un controllo
+    difensivo aggiuntivo alla finalizzazione (simmetrico a quello già
+    esistente per `ccb_class`) — avrebbe rotto ogni test di approvazione
+    preesistente nel progetto (decine di call site, nessuno a conoscenza
+    di un concetto introdotto solo da questa funzionalità). Lasciato un
+    commento esplicito nel codice che spiega la scelta e la asimmetria
+    intenzionale rispetto a `ccb_class`.
+- **`ecn/forms.py`**: rimosso `ApplicabilityFieldsMixin` (nessun
+  consumatore rimasto). `ChangeNoticeForm`/`ChangeNoticeEditForm`/
+  `SimpleEcnForm` non hanno più i campi applicabilità.
+  `ChangeNoticeDossierForm` li ha acquisiti come campi diretti (non
+  mixin — niente rischio del bug metaclass di TASK-036-2, dato che sono
+  dichiarati direttamente nel corpo della classe Form),
+  `required=False` come gli altri campi dossier, con
+  `validate_for_submit()` esteso per richiederli (categoria sempre,
+  dettaglio se "limitata") prima dell'invio.
+- **`ecn/views.py`**: `ecn_create`/`ecn_create_simple`/`ecn_edit` non
+  passano più applicabilità ai service. `ecn_ccb_dossier` la passa a
+  `update_ccb_dossier` e la pre-popola nel form GET.
+- **Template**: rimossa la sezione "Applicabilità" da `ecn_form.html`,
+  `ecn_edit_form.html`, `ecn_create_simple.html` (con nota nella UI che
+  spiega dove verrà decisa/perché non si applica). Aggiunta a
+  `ecn_ccb_dossier.html` (radio card nel form editabile + riga nel
+  riepilogo read-only "Contenuto dossier"). `_applicability_box.html`
+  aggiornato: testo del caso "non specificata" ora distingue flusso
+  semplice / bozza-o-istruttoria-in-corso / storico effettivo, invece di
+  assumere sempre "storico".
+- **Dati demo** (`demo_full.py`, `demo_company.py`): tutte le chiamate a
+  `create_change_notice`/`create_simple_ecn` non passano più
+  applicabilità; spostata nelle chiamate `update_ccb_dossier`/`_setup_ccb`
+  già esistenti per gli scenari che la richiedono. Verificato con
+  `demo_full --reset --no-email` eseguito realmente, esito pulito.
+
+#### Verifiche eseguite in questa fase
+
+`python manage.py check` pulito. `makemigrations --check --dry-run` pulito
+dopo aver generato la migrazione 0007. `demo_full --reset --no-email`
+eseguito con successo end-to-end.
+
+**Suite di test**: non ancora verde — rottura nota e circoscritta,
+interamente riconducibile al cambio di firma dei service (stesso pattern
+già visto in TASK-036-2, ma ora nella direzione opposta: i parametri
+aggiunti allora vanno ora rimossi). `ecn`: 378 test, 136 errori (tutti
+`TypeError`, parametro non più accettato) + 13 fallimenti (test TASK-036-4
+che verificavano il comportamento sbagliato — applicabilità in
+`ChangeNoticeForm`/`SimpleEcnForm`/`create_change_notice` invece che nel
+dossier). `documents`+`approvals`+`notifications`+`projects`: 1054 test,
+17 errori (stessi `TypeError`). **Zero effetti collaterali imprevisti**:
+nessun errore riconducibile al controllo `submit_change_notice` spostato
+dentro il blocco CCB_PREPARATION (verificato: i soli test che passano da
+quel percorso già chiamavano `update_ccb_dossier` per gli altri campi
+dossier, quindi il perimetro è lo stesso, non più ampio).
+
+Correzione della suite delegata a Codex — vedi TASK-037-2 (spec completa
+sotto), con analisi già fatta caso per caso per evitare che debba
+riscoprire da zero quali test siano rotti meccanicamente e quali abbiano
+invece un'aspettativa concettualmente sbagliata da riscrivere.
+
+#### File coinvolti
+
+`ecn/models.py`, `ecn/services.py`, `ecn/forms.py`, `ecn/views.py`,
+`ecn/migrations/0007_alter_changenotice_applicability_category.py`,
+`templates/ecn/ecn_form.html`, `ecn_edit_form.html`,
+`ecn_create_simple.html`, `ecn_ccb_dossier.html`,
+`templates/ecn/_applicability_box.html`, `_applicability_fields.html`,
+`documents/management/commands/demo_full.py`, `demo_company.py`.
+
+#### Guardrail rispettati
+
+Nessuna modifica a `Document.current_version`, baseline, resolver di
+permessi/progetto. Nessuna modifica al vincolo "una sola categoria
+selezionabile" né alla soglia minima dettaglio (10 caratteri). Nessun
+default retroattivo inventato per gli ECN storici. Nessun merge, nessun
+push.
+
+---
+
+### TASK-037-2 — Applicabilità ECN: correzione strutturale (Fase 2: fix suite di test) — Claude Code
+
+#### Nota — pianificata per Codex, eseguita direttamente da Claude Code
+
+L'operatore ha chiesto esplicitamente di eseguire questa fase direttamente,
+senza aspettare Codex. Analisi e correzioni applicate esattamente secondo
+la spec sotto (già scritta in precedenza, riusata come piano di lavoro).
+
+#### Esito (2026-07-30)
+
+Parte A (fix meccanico): rimossi `applicability_category=`/
+`applicability_detail=` da tutte le chiamate a `create_change_notice`/
+`create_simple_ecn`/`update_change_notice` in `ecn/tests.py`,
+`documents/tests.py`, `approvals/tests.py`,
+`notifications/tests_workflow_emails.py` (script paren-aware per i casi
+appesi a fine riga, generato per questa sessione). Lasciati invariati gli
+usi diretti di `_make_ecn`/`ChangeNotice.objects.create(...)` (bypassano
+il service, restano validi).
+
+Parte B (test concettualmente sbagliati): applicati tutti i 19 punti della
+spec in `ecn/tests.py` — rimossi i test che verificavano l'applicabilità
+nelle form di creazione/modifica ECN (non esiste più lì), riscritti quelli
+sul ciclo di vita service (`update_ccb_dossier` al posto di
+`create_change_notice`/`update_change_notice` per applicabilità),
+aggiunti 3 nuovi test per `ChangeNoticeDossierForm`
+(`ApplicabilityFormTests`), corretto il testo atteso da "Applicabilità non
+registrata — ECN storico" a "Applicabilità non specificata" (cambiato in
+TASK-037 Fase 1) in 2 punti.
+
+**Scoperta durante l'esecuzione, non prevista dalla spec originale**: oltre
+alle chiamate dirette a `create_change_notice`/`create_simple_ecn`/
+`update_change_notice`, **12 chiamate preesistenti a `update_ccb_dossier`**
+(sparse in `CCBDossierTests`, `CCBVoteTests`, `CCBPolicyTests`,
+`CCBEmailNotificationTests`, `CCBAuditTests` — nessuna delle quali ha a che
+fare con l'applicabilità, testano invito/voto/policy/email/audit CCB)
+proseguivano con `submit_change_notice` su un ECN in `CCB_PREPARATION`,
+innescando il nuovo controllo di TASK-037 senza mai aver fornito
+applicabilità. Individuate una per una (non un fix cieco) e corrette
+aggiungendo `applicability_category=ChangeNotice.Applicability.GENERAL`
+alle chiamate `update_ccb_dossier` esistenti — stesso principio già
+applicato da TASK-036-2 alle chiamate `create_change_notice`, ma qui il
+punto di innesco è la transizione di stato del dossier, non la creazione.
+
+**Verifica finale**: `python manage.py check` pulito.
+`python manage.py test ecn --keepdb -v1` → **373/373 PASS**.
+`python manage.py test documents approvals notifications projects --keepdb -v1`
+→ **1054/1054 PASS**. Nessuna modifica a file applicativi, solo ai 4 file
+di test elencati nella Parte A.
+
+#### Obiettivo
+
+TASK-037 (Fase 1, committata) ha spostato l'applicabilità ECN dalla
+creazione (proponente) al dossier istruttorio CCB (responsabile
+istruttoria), correggendo un errore concettuale. Questo ha rotto la suite
+di test in due modi distinti, **non fare confusione tra i due**:
+
+1. **Rottura meccanica** (153 `TypeError`, ~90% dei casi): chiamate
+   esistenti a `create_change_notice`/`create_simple_ecn`/
+   `update_change_notice` che passano ancora
+   `applicability_category=`/`applicability_detail=` — questi parametri
+   non esistono più su queste tre funzioni. Fix: **rimuovi il parametro
+   dalla chiamata**, punto. Non serve altro.
+2. **Test concettualmente sbagliati** (13 fallimenti, tutti in
+   `ecn/tests.py`, classi `ApplicabilityFormTests`,
+   `ApplicabilityServiceLifecycleTests`, `SimpleEcnServiceTests`,
+   `ApplicabilityViewTests` — aggiunte in TASK-036-4): verificano un
+   comportamento che non è più quello corretto (es. "l'applicabilità è
+   obbligatoria nel form di creazione ECN standard" — ora è falso, è
+   obbligatoria nel dossier). Questi vanno **riscritti o rimossi**, non
+   semplicemente corretti nella sintassi della chiamata. Elenco preciso
+   sotto (Parte B) — analisi già fatta, non ripeterla da zero.
+
+**Non modificare** `ecn/models.py`, `ecn/services.py`, `ecn/forms.py`,
+`ecn/views.py`, `ecn/permissions.py`, `ecn/admin.py`, `ecn/notifications.py`,
+migrazioni, template, `demo_full.py`, `demo_company.py`: la Fase 1 è già
+completa e verificata (`manage.py check` pulito, `demo_full --reset`
+eseguito con successo).
+
+#### Riferimenti — comportamento corretto dopo TASK-037
+
+- `create_change_notice(document, proposed_by, title, motivation, description='', motivation_detail='', commessa='', project=None, document_version=None, code=None, created_by=None, send_notifications=True)`
+  — **nessun parametro applicabilità**. L'ECN nasce sempre con
+  `applicability_category=None`.
+- `create_simple_ecn(document, proposed_by, title, description='', created_by=None, send_notifications=True)`
+  — idem, **nessun parametro applicabilità**, mai.
+- `update_change_notice(change_notice, actor, title, motivation, description='', motivation_detail='', commessa='', project=None)`
+  — idem, **nessun parametro applicabilità**.
+- `update_ccb_dossier(change_notice, actor, applicability_category=None, applicability_detail='', ccb_class=None, ccb_requirements='', ...)`
+  — **qui** vive l'applicabilità ora. Se non fornita (None/''), il valore
+  esistente non viene toccato (stesso comportamento di `ccb_class`).
+  Nessuna validazione di completezza in questa funzione (è un salvataggio
+  bozza).
+- `submit_change_notice`: solleva `ValidationError` se
+  `change_notice.applicability_category` non è valida **solo quando**
+  `change_notice.status == ChangeNotice.Status.CCB_PREPARATION` (cioè
+  quando l'ECN è passato da `configure_ccb`/dossier moderno). Il percorso
+  legacy DRAFT→UNDER_REVIEW non la richiede (stessa eccezione già
+  esistente per `ccb_class`/`ccb_requirements`/`ccb_technical_impact`).
+- `ChangeNoticeDossierForm`: ha ora `applicability_category`
+  (`RadioSelect`, `required=False`) e `applicability_detail`
+  (`required=False`). `form.validate_for_submit()` li richiede (categoria
+  sempre; dettaglio se categoria è `'limited'`, minimo 10 caratteri dopo
+  strip) insieme agli altri campi dossier.
+- `ecn.models.ChangeNotice.applicability_display` per categoria nulla
+  ora ritorna `'Applicabilità non specificata'` (non più "— ECN
+  storico").
+
+#### Scope — Parte A: fix meccanico (rimuovi il parametro)
+
+Per ciascuno dei seguenti file, esegui
+`grep -n "create_change_notice(\|create_simple_ecn(\|update_change_notice(\|self.update_change_notice(" <file>`
+e per **ogni** chiamata trovata che passa `applicability_category=` e/o
+`applicability_detail=`, **rimuovi quegli argomenti dalla chiamata**
+(lascia invariati tutti gli altri argomenti, non toccare l'ordine né gli
+altri valori):
+
+1. `ecn/tests.py` (il grosso del volume)
+2. `documents/tests.py`
+3. `approvals/tests.py`
+4. `notifications/tests_workflow_emails.py`
+
+Non toccare le chiamate a `update_ccb_dossier(...)` che già passano
+`applicability_category=`/`applicability_detail=` (es. se presenti in
+test scritti per altre fasi) — quelle sono corrette, il parametro esiste
+davvero lì.
+
+Non toccare i due helper factory `_make_ecn` (uno in `ecn/tests.py`, uno
+in `notifications/tests_workflow_emails.py`) che creano `ChangeNotice`
+direttamente via `.objects.create(applicability_category=..., ...)`,
+bypassando il service: sono chiamate dirette al modello, non al service,
+e restano valide così come sono (il default `GENERAL` che impostano è
+innocuo e non richiede modifiche).
+
+#### Scope — Parte B: test da riscrivere o rimuovere (non solo correggere la sintassi)
+
+In `ecn/tests.py`:
+
+1. **`ApplicabilityFormTests.test_regression_mixin_fields_are_injected_and_required_on_all_forms`**
+   — **rimuovi interamente**. Verificava che `ChangeNoticeForm`/
+   `ChangeNoticeEditForm`/`SimpleEcnForm` avessero i campi applicabilità
+   (bug ora corretto tramite rimozione del mixin, non più applicabile:
+   quei form non hanno mai più questi campi, per design). Il rischio che
+   guardava (metaclass Django che ignora Field dichiarati in un mixin
+   plain) non può più verificarsi perché `ApplicabilityFieldsMixin` non
+   esiste più — i campi sono ora dichiarati direttamente nel corpo di
+   `ChangeNoticeDossierForm`, una vera sottoclasse di `forms.Form`.
+2. **`test_change_notice_form_validates_limited_detail`** — **rimuovi**
+   (testa un campo che `ChangeNoticeForm` non ha più).
+3. **`test_simple_and_edit_forms_validate_limited_detail`** — **rimuovi**
+   (stesso motivo, `SimpleEcnForm`/`ChangeNoticeEditForm`).
+4. **Aggiungi** un paio di test equivalenti per `ChangeNoticeDossierForm`
+   al loro posto: (a) form valido senza applicabilità (bozza, non
+   richiesta al salvataggio) → `form.is_valid()` `True`, ma
+   `form.validate_for_submit()` solleva errore su `applicability_category`;
+   (b) `applicability_category='limited'` con `applicability_detail=''`
+   → `validate_for_submit()` solleva errore su `applicability_detail`;
+   (c) `applicability_category='limited'` con dettaglio valido →
+   `validate_for_submit()` non solleva.
+
+In `ApplicabilityServiceLifecycleTests`:
+
+5. **`test_create_change_notice_rejects_invalid_applicability_without_writing`**
+   — **rimuovi** (`create_change_notice` non accetta più applicabilità,
+   non può più rifiutarla).
+6. **`test_update_change_notice_persists_applicability_and_writes_audit_old_new_values`**
+   — **rimuovi** (`update_change_notice` non tocca più l'applicabilità).
+7. **`test_update_change_notice_rejects_non_draft_states_and_keeps_applicability_unchanged`**
+   — **rimuovi** la parte applicabilità dalla chiamata `update_change_notice`
+   (il test verifica anche altro, cioè che lo stato non-DRAFT blocchi
+   l'update in generale — quella parte resta valida, aggiusta solo la
+   chiamata). **Aggiungi** un test nuovo equivalente ma per
+   `update_ccb_dossier`: chiamarlo su un ECN con stato diverso da
+   DRAFT/CCB_PREPARATION (es. UNDER_REVIEW) deve sollevare
+   `ValidationError`, applicabilità invariata.
+8. **`test_submit_change_notice_revalidates_historical_missing_applicability`**
+   — **riscrivi**: l'ECN creato da `_make_ecn(..., applicability_category=None)`
+   resta in `DRAFT` per default, e `submit_change_notice` NON controlla
+   più l'applicabilità sul percorso DRAFT legacy (solo su
+   CCB_PREPARATION). Per testare il controllo reale: imposta
+   esplicitamente `ecn.status = ChangeNotice.Status.CCB_PREPARATION`
+   (con `save(update_fields=['status'])`) prima di chiamare
+   `submit_change_notice` — a quel punto deve sollevare `ValidationError`
+   con `applicability_category` in `error_dict`, ECN invariato.
+9. **`test_standard_approval_audit_freezes_applicability_metadata`** —
+   **riscrivi** il setup: crea l'ECN con `create_change_notice` (senza
+   applicabilità), poi `configure_ccb(...)`, poi
+   `update_ccb_dossier(ecn, actor=..., applicability_category=ChangeNotice.Applicability.FUTURE, ccb_class=..., ccb_requirements=..., ccb_technical_impact=...)`,
+   poi `submit_change_notice`, poi `approve_change_notice`. L'asserzione
+   finale (metadata `ECN_APPROVED` contiene `applicability_category`
+   `'future'`) resta valida così com'è.
+10. **`test_reject_keeps_limited_applicability_unchanged`** e
+    **`test_auto_close_keeps_applicability_unchanged`** — usano
+    `_make_ecn(...)` direttamente (non il service), **non serve
+    modificarli**: verifica solo che passino così come sono.
+
+In `SimpleEcnServiceTests`:
+
+11. **`test_rejects_invalid_applicability_without_writing`** — **rimuovi**
+    (`create_simple_ecn` non accetta più applicabilità).
+12. **`test_persists_valid_applicability_on_autoapproved_ecn`** —
+    **riscrivi**: verifica invece che l'ECN semplice creato NON abbia
+    applicabilità (`ecn.applicability_category` è `None`) — è il
+    comportamento corretto ora, non un caso limite.
+13. **`test_autoapproved_simple_ecn_applicability_is_immediately_immutable`**
+    — **rimuovi** (testava l'immutabilità di un campo che l'ECN semplice
+    non ha più). Se vuoi, sostituiscilo con un test più generico che
+    verifica che `update_change_notice` su un ECN semplice (già
+    `APPROVED`) sollevi `ValidationError` per lo stato non-DRAFT — ma
+    senza menzionare applicabilità, dato che `update_change_notice` non
+    la tocca più.
+
+In `AutoCloseEcnTests` (cerca la chiamata `create_simple_ecn(...,
+applicability_category=ChangeNotice.Applicability.LIMITED,
+applicability_detail=...)` aggiunta in TASK-036-2): rimuovi i due
+parametri dalla chiamata (Parte A), e rimuovi anche le due asserzioni
+successive `self.assertEqual(ecn.applicability_category, LIMITED)` /
+`self.assertEqual(ecn.applicability_detail, ...)` — non sono più vere
+(l'ECN semplice non ha applicabilità).
+
+In `ApplicabilityViewTests`:
+
+14. **`test_ecn_create_get_renders_three_applicability_options`** —
+    **rimuovi** (la pagina di creazione ECN standard non mostra più le 3
+    opzioni). Se vuoi un test equivalente, spostalo sulla pagina dossier
+    (`GET /ecn/<pk>/ccb-dossier/` con un ECN in CCB_PREPARATION e utente
+    con `can_compile_dossier`) verificando `value="general"` ecc. lì.
+15. **`test_ecn_create_post_missing_or_invalid_limited_applicability_rerenders_without_create`**
+    — **rimuovi** (la creazione ECN standard non richiede più
+    applicabilità: un POST senza questi campi ora crea l'ECN normalmente,
+    con status 302, non 200).
+16. **`test_ecn_create_simple_post_missing_applicability_rerenders_without_create`**
+    — **rimuovi** (stesso motivo, l'ECN semplice non richiede mai
+    applicabilità: il POST del test esistente prima di TASK-036 già
+    funzionava, deve tornare a farlo).
+17. **`test_ecn_list_renders_badge_classes_for_all_categories`** e
+    **`test_ecn_detail_limited_shows_detail_and_scope_notice_general_does_not`**
+    — usano `_make_ecn(...)` direttamente, **non serve modificarli**:
+    verifica solo che passino.
+18. **`test_ecn_detail_historical_missing_applicability_does_not_500`** —
+    l'ECN creato da `_make_ecn(..., applicability_category=None)` resta
+    in `DRAFT` per default, e il testo mostrato ora per DRAFT/CCB_PREPARATION
+    è diverso da "Applicabilità non registrata" (vedi
+    `templates/ecn/_applicability_box.html`, che distingue i 3 casi).
+    **Aggiorna l'asserzione** al testo realmente mostrato per un ECN
+    DRAFT (leggi il template per il testo esatto), oppure imposta
+    esplicitamente `ecn.status` a un valore diverso da DRAFT/CCB_PREPARATION
+    (es. `REJECTED`) per esercitare il ramo "storico" del template e
+    mantenere l'assert originale — a tua scelta, purché il test verifichi
+    ancora concretamente "niente errore 500 su un ECN senza applicabilità".
+19. **`test_applicability_field_does_not_bypass_existing_permissions`** —
+    i payload includono ancora `applicability_category` nei dati POST:
+    innocuo (i form non hanno più quel campo, Django ignora le chiavi
+    sconosciute), ma non testa più nulla di specifico
+    sull'applicabilità. Puoi semplificarlo rimuovendo quelle chiavi dai
+    payload (resta comunque un test valido di permessi generali), oppure
+    lasciarlo — la scelta è tua, non è un problema di correttezza.
+
+In `documents/tests.py` e `projects/tests.py`: i test aggiunti in
+TASK-036-4 (`test_archive_detail_shows_ecn_applicability_badge`,
+`test_compact_detail_shows_latest_ecn_applicability_badge`,
+`ProjectEcnApplicabilityViewTests`) creano `ChangeNotice` **direttamente**
+via `.objects.create(applicability_category=..., ...)`, bypassando il
+service — **non richiedono modifiche**, verifica solo che passino.
+
+#### Non fare (guardrail)
+
+Vedi lista in Obiettivo. In più: non introdurre nuovi controlli di
+validazione, non modificare il comportamento di
+`update_ccb_dossier`/`submit_change_notice`/`ChangeNoticeDossierForm` se
+un test non torna verde come ti aspetti — probabilmente è il test che va
+adattato al comportamento (già corretto) della Fase 1, non il contrario.
+Se sei genuinamente convinto di un bug reale nella Fase 1, documentalo
+nell'Esito invece di correggerlo. Un solo commit locale a fine fase. Non
+fare push, merge, rebase. Non lanciare il server di sviluppo.
+
+#### Acceptance criteria
+
+- `python manage.py check` pulito.
+- `python manage.py test ecn documents approvals notifications projects --keepdb -v1`
+  verde (**0 errori, 0 fallimenti**).
+- Nessuna modifica fuori dai 4 file di test elencati nella Parte A (più
+  eventuali file di test nuovi se preferisci separare i test aggiunti per
+  `ChangeNoticeDossierForm`/`update_ccb_dossier` — non obbligatorio,
+  estendere le classi esistenti va bene).
+
+#### Test richiesti in questa fase
+
+Fix + adattamento dei test esistenti (Parti A-B sopra). Non serve
+ampliare la copertura oltre a colmare i buchi lasciati dalle rimozioni
+(punti 4 e 7 sopra già indicano dove aggiungere gli equivalenti corretti).
+
+---
+
+### TASK-038 — Fix UI Istruttoria CCB — Claude Code
+
+Eseguito direttamente da Claude Code (modifiche template/CSS mirate,
+nessun ciclo Cursor/Codex), su segnalazione diretta dell'operatore dopo
+aver visionato la pagina "Istruttoria CCB" (`ecn_ccb_dossier.html`) nel
+browser.
+
+#### Bug reale scoperto e corretto
+
+Il tokenizer di Django per i commenti `{# ... #}` non usa `re.DOTALL`:
+un commento su più righe non viene riconosciuto come tale e viene
+stampato letteralmente in pagina. Due file avevano commenti multi-riga
+con questa sintassi, entrambi pre-esistenti (introdotti in TASK-036/037,
+non una regressione di questa sessione):
+`templates/ecn/_applicability_fields.html` (7 righe, sopra il blocco
+Applicabilità del dossier) e `templates/ecn/_applicability_summary.html`
+(3 righe, incluso da `ecn_review_form.html` e `ecn_close_form.html`).
+Convertiti entrambi in `{% comment %}...{% endcomment %}`, che gestisce
+correttamente il multi-riga. Verificato nel browser (Chrome, via
+`supervisor_demo`) che il testo del commento non compare più su nessuna
+delle pagine coinvolte.
+
+#### Altre modifiche richieste dall'operatore
+
+- **Componenti CCB** integrati dentro "Proposta di variante" in cima a
+  `ecn_ccb_dossier.html` (nuovo `<div class="detail-item md:col-span-2">`
+  con lo stesso elenco numerato di prima); rimossa la sezione
+  `form-section` separata "Componenti CCB (N)".
+- **Larghezza campi**: `input`/`select`/`textarea` in tutto il progetto
+  non avevano mai una regola `width: 100%` — bug sistemico (visibile in
+  particolare sul campo "Dettaglio dell'applicabilità", che restava alla
+  larghezza intrinseca del browser invece di riempire la sezione).
+  Aggiunta in `src/css/main.css` (`@layer base`) la regola
+  `select, textarea, input:not([type="checkbox"]):not([type="radio"])
+  { display: block; width: 100%; }` (checkbox/radio esclusi
+  esplicitamente per non alterarne il rendering). Rigenerato
+  `static/css/tailwind.css` con `npm run build`.
+- Le descrizioni brevi delle 3 categorie di applicabilità sotto le radio
+  card restano sempre visibili (nessun cambiamento lì: un primo tentativo
+  di nasconderle dietro un pulsante "info" è stato fatto e poi annullato
+  su richiesta esplicita dell'operatore, che nel frattempo aveva
+  confuso il bug del commento con quella UI).
+
+#### File coinvolti
+
+`templates/ecn/_applicability_fields.html`,
+`templates/ecn/_applicability_summary.html`,
+`templates/ecn/ecn_ccb_dossier.html`, `src/css/main.css`,
+`static/css/tailwind.css` (generato).
+
+#### Verifiche eseguite
+
+`python manage.py check` pulito. `npm run build` (Tailwind) senza errori.
+Verifica visiva reale nel browser (Chrome via `claude-in-chrome`, utente
+`supervisor_demo`) su `ecn/3/ccb-dossier/` (Istruttoria CCB) e
+`ecn/4/review/` (Decisione CCB): nessun testo di commento visibile,
+componenti CCB uniti, campo dettaglio applicabilità a larghezza piena,
+nessuna regressione visiva evidente sugli altri campi della pagina
+(select classificazione, textarea impatti, checkbox sanatoria invariata).
+Suite `ecn` completa: **373/373 PASS**.
+
+#### Guardrail rispettati
+
+Nessuna modifica a modelli, service, form, permessi, migrazioni. Nessun
+push, merge, rebase.
+
+---
+
+### TASK-039 — Lock "un utente alla volta" su pagine d'azione Approvazioni/ECN — Cursor Agent
+
+#### Obiettivo
+
+Introdurre un lock applicativo che permetta **un solo utente alla volta**
+di lavorare sulle pagine d'azione di Approvazioni (`approval_detail`) ed
+ECN (`ecn_ccb_dossier`, `ecn_review`), indipendentemente dalla policy
+(`any`/`all`/`sequential`). Le pagine di sola consultazione (dettaglio
+ECN, dettaglio documento, dettaglio progetto, storico) **non sono
+toccate da questo task** e restano multi-utente come oggi. Motivazione
+di prodotto (decisa con l'operatore, non dedurla altrimenti): abilita in
+un task futuro il posizionamento libero (drag&drop) della firma visiva
+sul PDF senza rischio di sovrapposizioni concorrenti, ma è già un
+miglioramento operativo a sé stante anche senza quel task successivo.
+
+#### Scope
+
+Consentito modificare **solo**:
+- `ecn/models.py` (nuovi campi su `ChangeNotice`)
+- `ecn/migrations/` (nuova migrazione)
+- `ecn/views.py` (solo le funzioni `ecn_ccb_dossier` e `ecn_review`)
+- `approvals/models.py` (nuovi campi su `ApprovalRequest`)
+- `approvals/migrations/` (nuova migrazione)
+- `approvals/views.py` (solo la funzione `approval_detail`)
+- `auditlog/locking.py` (nuovo file)
+- `auditlog/tests.py` (nuovi test, in coda al file)
+- `ecn/tests.py` (nuovi test, in coda al file)
+- `approvals/tests.py` (nuovi test, in coda al file)
+
+**Non toccare**: nessun template (`templates/**`), nessun file CSS,
+`ecn/permissions.py`, `ecn/forms.py`, `ecn/services.py`,
+`approvals/services.py`, `demo_full.py`, `demo_company.py`, admin.py di
+qualunque app. Questo task **non richiede modifiche a nessun template**:
+il caso "lock detenuto da un altro utente" si gestisce con un redirect +
+`messages.warning(...)` verso la pagina di dettaglio già esistente
+(stesso pattern già usato in `ecn_review` per lo stato sbagliato, righe
+655-660 di `ecn/views.py`), non con una nuova pagina o un nuovo blocco
+HTML.
+
+#### 1. Nuovo modulo condiviso `auditlog/locking.py`
+
+Nessun `ContentType`/`GenericForeignKey`: il lock opera per duck-typing
+su qualunque oggetto con i campi `locked_by`/`locked_at` (solo 2 modelli
+coinvolti, non serve un'astrazione più generica). Contenuto esatto:
+
+```python
+"""
+Lock applicativo "un utente alla volta" per le pagine d'azione dei
+flussi di approvazione (documento) ed ECN (dossier istruttorio, voto
+CCB). Opera per duck-typing su qualunque model con i campi
+locked_by/locked_at (ChangeNotice, ApprovalRequest) — nessun
+ContentType/GenericForeignKey, solo 2 modelli coinvolti.
+
+Il lock scade automaticamente dopo LOCK_TIMEOUT di inattività (nessuna
+azione di sblocco manuale in questa fase): un lock scaduto è
+equivalente a "nessun lock" agli occhi di lock_holder/acquire_lock.
+"""
+from datetime import timedelta
+
+from django.utils import timezone
+
+LOCK_TIMEOUT = timedelta(minutes=20)
+
+
+def lock_holder(obj):
+    """Restituisce l'utente che detiene un lock valido (non scaduto) su `obj`, o None."""
+    if obj.locked_by_id and obj.locked_at and timezone.now() - obj.locked_at <= LOCK_TIMEOUT:
+        return obj.locked_by
+    return None
+
+
+def acquire_lock(obj, user):
+    """
+    Prova ad acquisire il lock su `obj` per `user`.
+    Restituisce True se acquisito (o già detenuto da `user`: rinnova il
+    timestamp), False se detenuto da un altro utente con lock non scaduto
+    (in tal caso non modifica nulla).
+    """
+    holder = lock_holder(obj)
+    if holder is not None and holder.pk != user.pk:
+        return False
+    obj.locked_by = user
+    obj.locked_at = timezone.now()
+    obj.save(update_fields=['locked_by', 'locked_at'])
+    return True
+
+
+def release_lock(obj, user):
+    """Rilascia il lock su `obj` solo se detenuto da `user` (anche se già scaduto)."""
+    if obj.locked_by_id == user.pk:
+        obj.locked_by = None
+        obj.locked_at = None
+        obj.save(update_fields=['locked_by', 'locked_at'])
+```
+
+#### 2. Campi nuovi su `ChangeNotice` (`ecn/models.py`)
+
+Aggiungi subito dopo il campo `updated_at` (cerca `updated_at =
+models.DateTimeField(\n        auto_now=True,\n        verbose_name='Aggiornato il',\n    )`,
+poco prima di `class Meta:`), stesso stile di `closed_by`/`closed_at`
+già presente nello stesso file:
+
+```python
+    locked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='locked_ecns',
+        verbose_name='In lavorazione da',
+        help_text='Utente che sta compilando il dossier o votando in questo momento (lock temporaneo).',
+    )
+    locked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='In lavorazione dal',
+    )
+```
+
+Genera la migrazione con `python manage.py makemigrations ecn` (deve
+risultare `ecn/migrations/0008_changenotice_locked_at_changenotice_locked_by.py`
+o nome equivalente auto-generato — non scriverla a mano).
+
+#### 3. Campi nuovi su `ApprovalRequest` (`approvals/models.py`)
+
+Aggiungi subito dopo `completed_at`, prima di `class Meta:`:
+
+```python
+    locked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='locked_approval_requests',
+        verbose_name='In lavorazione da',
+        help_text='Utente che sta decidendo questa richiesta in questo momento (lock temporaneo).',
+    )
+    locked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='In lavorazione dal',
+    )
+```
+
+Genera la migrazione con `python manage.py makemigrations approvals`
+(nome auto-generato, atteso `approvals/migrations/0007_...py`).
+
+#### 4. `ecn/views.py` — `ecn_ccb_dossier` (righe 490-602 nella versione attuale)
+
+Aggiungi in testa al file l'import:
+```python
+from auditlog.locking import acquire_lock, lock_holder, release_lock
+```
+e, se non già presente in questo file, `from django.utils import
+timezone` (verifica prima con grep: non risultava presente all'inizio
+di questo task).
+
+Subito dopo la riga `dossier_editable = can_compile_dossier(request.user, ecn)`
+inserisci:
+```python
+    if dossier_editable:
+        holder = lock_holder(ecn)
+        if holder is not None and holder.pk != request.user.pk:
+            messages.warning(
+                request,
+                f"Dossier in lavorazione da {holder.get_full_name() or holder.username} "
+                f"dalle {timezone.localtime(ecn.locked_at).strftime('%d/%m/%Y %H:%M')}. Riprova più tardi.",
+            )
+            return redirect('ecn:ecn_detail', ecn_id=ecn_id)
+        acquire_lock(ecn, request.user)
+```
+Questo copre sia GET (mostra il form) sia POST (salva bozza/invia):
+acquisire il lock ad ogni richiesta valida rinnova il timestamp per
+l'utente che già lo detiene, così un lavoro lungo su una bozza non
+scade mentre è ancora in corso.
+
+Nel ramo `if action == 'submit':` che ha successo (subito dopo la
+chiamata a `submit_change_notice(...)`, prima del
+`messages.success(request, f'{ecn.code}: dossier inviato...')`
+successivo), aggiungi:
+```python
+                        release_lock(ecn, request.user)
+```
+Il salvataggio bozza (`action == 'save'`) **non** rilascia il lock
+(l'utente potrebbe voler continuare a lavorarci).
+
+#### 5. `ecn/views.py` — `ecn_review` (righe 635-721 nella versione attuale)
+
+Subito dopo il blocco esistente:
+```python
+    if ecn.status != ChangeNotice.Status.UNDER_REVIEW:
+        messages.error(...)
+        return redirect('ecn:ecn_detail', ecn_id=ecn_id)
+```
+e prima di `if request.method == 'POST':`, inserisci:
+```python
+    holder = lock_holder(ecn)
+    if holder is not None and holder.pk != request.user.pk:
+        messages.warning(
+            request,
+            f"Decisione CCB in lavorazione da {holder.get_full_name() or holder.username} "
+            f"dalle {timezone.localtime(ecn.locked_at).strftime('%d/%m/%Y %H:%M')}. Riprova più tardi.",
+        )
+        return redirect('ecn:ecn_detail', ecn_id=ecn_id)
+    acquire_lock(ecn, request.user)
+```
+
+Sia il ramo di approvazione sia quello di rifiuto terminano con lo
+stesso `return redirect('ecn:ecn_detail', ecn_id=ecn_id)` dopo l'
+`if`/`else`: aggiungi **una sola volta**, subito prima di quel
+`return` condiviso (dopo i due blocchi `messages.success(...)`):
+```python
+                return redirect('ecn:ecn_detail', ecn_id=ecn_id)
+```
+diventa
+```python
+                release_lock(ecn, request.user)
+                return redirect('ecn:ecn_detail', ecn_id=ecn_id)
+```
+(un solo punto di modifica, non duplicarlo nei due rami).
+
+#### 6. `approvals/views.py` — `approval_detail` (righe 112-221 nella versione attuale)
+
+Aggiungi in testa al file:
+```python
+from django.utils import timezone
+
+from auditlog.locking import acquire_lock, lock_holder, release_lock
+```
+
+Subito dopo il blocco esistente:
+```python
+    is_assigned = ar.approvers.filter(approver=request.user).exists()
+    if not is_assigned and not request.user.is_superuser:
+        raise PermissionDenied
+```
+inserisci:
+```python
+    if ar.status == ApprovalRequest.Status.PENDING:
+        holder = lock_holder(ar)
+        if holder is not None and holder.pk != request.user.pk:
+            messages.warning(
+                request,
+                f"Decisione in lavorazione da {holder.get_full_name() or holder.username} "
+                f"dalle {timezone.localtime(ar.locked_at).strftime('%d/%m/%Y %H:%M')}. Riprova più tardi.",
+            )
+            return redirect('approval_queue')
+        acquire_lock(ar, request.user)
+```
+Il lock si applica solo quando `ar.status == PENDING` (una richiesta già
+decisa è consultazione storica, multi-utente come oggi — nessuna
+modifica per quel caso).
+
+Nel ramo `if action == 'approve':` che ha successo, subito prima di
+`return redirect('approval_queue')` (quello dentro il blocco try,
+dopo i `messages.success`/`messages.info`), aggiungi
+`release_lock(ar, request.user)`. Stessa cosa nel ramo
+`elif action == 'reject':` che ha successo, prima del suo
+`return redirect('approval_queue')`. Sono **due punti distinti** (non
+condivisi come in `ecn_review`): vanno modificati entrambi.
+
+#### Acceptance criteria
+
+- [ ] `python manage.py check` pulito.
+- [ ] `python manage.py makemigrations --check --dry-run` pulito (le due
+      migrazioni sono già state generate e committate).
+- [ ] Un secondo utente con permesso di compilare/votare/decidere, che
+      prova ad aprire GET o POST su una delle 3 pagine mentre un altro
+      utente detiene il lock (non scaduto), viene rediretto con un
+      messaggio `messages.warning` e **non vede il form**.
+- [ ] Lo stesso utente che detiene già il lock può riaprire/ri-salvare
+      la stessa pagina senza essere bloccato (il lock è suo).
+- [ ] Un lock con `locked_at` più vecchio di `LOCK_TIMEOUT` (20 minuti)
+      non blocca più nessuno (equivalente a nessun lock).
+- [ ] Dopo un invio dossier riuscito (`ecn_ccb_dossier`, action
+      submit), un voto riuscito (`ecn_review`), o una decisione riuscita
+      (`approval_detail`, approve o reject), `locked_by`/`locked_at`
+      tornano `None` sull'oggetto.
+- [ ] Salvare una bozza dossier (`ecn_ccb_dossier`, action save) **non**
+      rilascia il lock.
+- [ ] Le pagine di sola consultazione (`ecn_detail`, `document_detail`,
+      `project_detail`, storico) restano accessibili da più utenti senza
+      alcun lock: nessun test esistente su quelle viste deve rompersi.
+- [ ] Nessuna regressione sulla suite esistente.
+
+#### Test richiesti
+
+Aggiungi test (non serve un file nuovo, in coda alle classi/test
+esistenti pertinenti):
+
+- `auditlog/tests.py`: test unitari diretti su `acquire_lock`,
+  `release_lock`, `lock_holder` (acquisizione da utente libero,
+  blocco da utente diverso, riacquisizione dallo stesso utente,
+  scadenza timeout impostando manualmente `locked_at` nel passato oltre
+  `LOCK_TIMEOUT`, rilascio da parte di chi non detiene il lock — deve
+  essere un no-op silenzioso).
+- `ecn/tests.py`: per `ecn_ccb_dossier` — secondo utente autorizzato
+  bloccato mentre il primo detiene il lock (GET e POST); lock rilasciato
+  dopo `submit` riuscito; lock NON rilasciato dopo `save` bozza; lock
+  scaduto non blocca. Per `ecn_review` — stesso schema (blocco, rilascio
+  dopo voto riuscito, scadenza).
+- `approvals/tests.py`: per `approval_detail` — stesso schema (blocco,
+  rilascio dopo approve/reject riuscito, nessun lock applicato quando
+  `ar.status != PENDING`).
+
+Comando di verifica finale:
+```bash
+python manage.py test ecn approvals auditlog --keepdb -v1
+```
+Deve concludere con 0 errori e 0 fallimenti rispetto al conteggio
+attuale (373 test in `ecn`, verificane il numero esatto in `approvals`
+e `auditlog` prima di iniziare con `python manage.py test approvals
+auditlog --keepdb -v1` sul codice non modificato).
+
+#### Guardrail
+
+- Non modificare `ecn/permissions.py`, `ecn/forms.py`, `ecn/services.py`,
+  `approvals/services.py`: la logica di permesso/policy resta identica,
+  il lock si aggiunge come controllo indipendente.
+- Non toccare alcun template né file CSS.
+- Non toccare `demo_full.py`/`demo_company.py`.
+- Non introdurre `ContentType`/`GenericForeignKey`: solo i 2 modelli
+  elencati, con campi diretti.
+- Non introdurre un meccanismo di sblocco manuale (admin, bottone,
+  comando di management): solo il timeout automatico.
+- Nessun commit, push, merge, rebase da parte dell'implementatore.
+- Nessuna dipendenza esterna nuova, nessuna installazione di pacchetti.
+- Non lanciare il server di sviluppo.
+
+#### Note operative
+
+Questo task **non** implementa il posizionamento libero della firma
+(task futuro, fuori scope): si ferma al meccanismo di lock generico.
+Verifica preliminare già fatta da Claude Code prima di scrivere questa
+spec: le 3 viste coinvolte, i loro esatti punti di ingresso/uscita e gli
+import mancanti (`timezone` non era importato in nessuno dei due file
+`ecn/views.py`/`approvals/views.py` prima di questo task) sono stati
+letti riga per riga — usa i numeri di riga sopra come riferimento
+approssimativo (potrebbero essere leggermente spostati se il file è
+cambiato), non come garanzia assoluta: cerca sempre i blocchi di codice
+per contenuto, non solo per numero di riga.
+
+#### Esito (2026-07-30)
+
+Implementato da Cursor Agent esattamente secondo spec (via
+`ai-cycle.sh --run`), verificato riga per riga da Claude Code prima del
+commit.
+
+- Nuovo modulo `auditlog/locking.py`: `lock_holder`/`acquire_lock`/
+  `release_lock`, `LOCK_TIMEOUT = 20 minuti`, duck-typing su
+  `locked_by`/`locked_at` (nessun `ContentType`/`GenericForeignKey`).
+- `ChangeNotice`/`ApprovalRequest`: campi `locked_by`/`locked_at`
+  aggiunti esattamente dove specificato. Migrazioni
+  `ecn/migrations/0008_changenotice_locked_at_changenotice_locked_by.py`
+  e
+  `approvals/migrations/0007_approvalrequest_locked_at_approvalrequest_locked_by.py`.
+- `ecn_ccb_dossier`, `ecn_review`, `approval_detail`: lock applicato solo
+  nelle condizioni previste (`dossier_editable`; sempre in `ecn_review`
+  dopo il check di stato; solo `status == PENDING` in
+  `approval_detail`). Rilascio dopo invio dossier riuscito, voto CCB
+  riuscito, approvazione/rifiuto riusciti; **non** rilasciato dopo il
+  salvataggio di una bozza dossier. Utente diverso da chi detiene un
+  lock non scaduto viene rediretto con `messages.warning` (niente form,
+  niente nuovo template).
+- Test aggiunti: `auditlog.tests.LockingTests` (6), `ecn.tests.ECNActionPageLockTests` (8),
+  `approvals.tests.ApprovalDetailLockTests` (6) — coprono acquisizione,
+  blocco da altro utente, riacquisizione dallo stesso utente, scadenza
+  timeout, rilascio dopo azione riuscita, bozza che non rilascia,
+  nessun lock quando la richiesta di approvazione non è più PENDING.
+
+**Bug operativo trovato e corretto durante la verifica (non nel
+codice)**: le due nuove migrazioni non erano ancora applicate al
+database di sviluppo (`db.sqlite3`) usato dal server locale già avviato
+per la sessione — qualunque pagina che leggesse `ApprovalRequest`
+falliva con `OperationalError: no such column:
+approvals_approvalrequest.locked_by_id`, comprese le liste (ECN,
+coda approvazioni), non solo le pagine d'azione — un problema di
+allineamento schema/DB, non della logica di lock (che infatti non
+tocca le viste di lista). Risolto con `python manage.py migrate
+ecn`/`migrate approvals` sul DB di sviluppo; verificato con richieste
+HTTP reali (login `supervisor_demo`) che lista ECN, dettaglio ECN, coda
+approvazioni, Istruttoria CCB e Decisione CCB rispondono tutte 200.
+
+Verifiche: `python manage.py check` pulito;
+`makemigrations --check --dry-run` pulito;
+`python manage.py test ecn approvals auditlog --settings=config.test_settings -v2`
+→ **523/523 PASS**.
+
+---
+
+### TASK-040 — Posizionamento libero firma su PDF approvazione (Fase 1: fondamenta backend) — Cursor Agent
+
+#### Obiettivo
+
+Prima fase di una funzionalità più ampia: permettere a un approvatore di
+posizionare manualmente la propria firma visiva su un punto libero
+(pagina + coordinate) del PDF di rappresentazione, in alternativa alla
+firma automatica impilata nel registro "in calce" (comportamento attuale,
+invariato). Questa fase è **solo backend**: nuovi campi dati, estensione
+del service, nuovo endpoint per servire il PDF in modo "inline"
+(necessario alle fasi successive per il rendering client-side con
+pdf.js, autorizzato esplicitamente dall'operatore). **Nessuna UI di
+disegno/trascinamento in questa fase** — quella è la Fase 2, task
+separato, non ancora scritto.
+
+Riguarda **solo il flusso di approvazione documento**
+(`approvals`/`documents`), non l'ECN/CCB — l'operatore ha chiarito che
+la richiesta originale ("firma automatica del documento") si riferisce
+specificamente a questo flusso.
+
+#### Scope
+
+Consentito modificare **solo**:
+- `approvals/models.py` (nuovi campi su `ApprovalDecision`)
+- `approvals/migrations/` (nuova migrazione)
+- `approvals/services.py` (solo la funzione `approve_version`)
+- `documents/views.py` (nuova vista)
+- `config/urls.py` (nuova route)
+- `approvals/tests.py`, `documents/tests.py` (nuovi test, in coda)
+
+**Non toccare**: nessun template, nessun file CSS/JS, nessun file
+`static/`, `documents/pdf_generation.py`, `reject_version`,
+`documents/permissions.py` (riusa `can_download_representation_pdf`
+esistente, non crearne una nuova), `accounts/models.py`. Non aggiungere
+`pdfjs-dist` o altre dipendenze in questa fase (verrà fatto nella Fase
+2, insieme al vendoring dei file statici).
+
+#### 1. Nuovi campi su `ApprovalDecision` (`approvals/models.py`)
+
+Aggiungi subito dopo il campo `snapshot_signature_image` (cerca
+`snapshot_signature_image = models.ImageField(...)`, poco prima di
+`class Meta:` dentro `ApprovalDecision`):
+
+```python
+    signature_page = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Pagina firma (posizionamento libero)',
+        help_text=(
+            'Numero di pagina (1-based) dove è stata posizionata '
+            'manualmente la firma. Nullo = firma automatica in calce '
+            '(comportamento invariato).'
+        ),
+    )
+    signature_x = models.FloatField(
+        null=True,
+        blank=True,
+        verbose_name='Posizione firma X',
+        help_text='Coordinata X normalizzata (0.0-1.0, da sinistra) del centro della firma.',
+    )
+    signature_y = models.FloatField(
+        null=True,
+        blank=True,
+        verbose_name='Posizione firma Y',
+        help_text='Coordinata Y normalizzata (0.0-1.0, dall\'alto) del centro della firma.',
+    )
+```
+
+Genera la migrazione con `python manage.py makemigrations approvals`
+(nome auto-generato atteso `approvals/migrations/0008_...py`, non
+scriverla a mano).
+
+#### 2. Estensione `approve_version` (`approvals/services.py`, righe 85-224 nella versione attuale)
+
+Cambia la firma da:
+```python
+def approve_version(approval_request, approved_by, comment="", send_notifications=True):
+```
+a:
+```python
+def approve_version(
+    approval_request, approved_by, comment="", send_notifications=True,
+    signature_page=None, signature_x=None, signature_y=None,
+):
+```
+
+Aggiungi una validazione **prima** del blocco `with transaction.atomic():`
+esistente (dopo il controllo 5, policy SEQUENTIAL):
+
+```python
+    # 6. Posizionamento libero firma: o tutti e 3 i valori sono forniti
+    #    (firma manuale), o nessuno (firma automatica in calce, comportamento
+    #    invariato) — nessuno stato intermedio ammesso.
+    placement_fields = (signature_page, signature_x, signature_y)
+    if any(f is not None for f in placement_fields) and not all(f is not None for f in placement_fields):
+        raise ValidationError(
+            "Per posizionare manualmente la firma servono pagina, X e Y insieme."
+        )
+    if signature_page is not None:
+        if signature_page < 1:
+            raise ValidationError("La pagina della firma deve essere >= 1.")
+        if not (0.0 <= signature_x <= 1.0) or not (0.0 <= signature_y <= 1.0):
+            raise ValidationError("Le coordinate della firma devono essere comprese tra 0.0 e 1.0.")
+```
+
+Nel blocco `with transaction.atomic():`, modifica la creazione di
+`ApprovalDecision` (attualmente):
+```python
+        decision = ApprovalDecision.objects.create(
+            approval_request=approval_request,
+            approver=approved_by,
+            decision=ApprovalDecision.Decision.APPROVED,
+            notes=comment,
+        )
+```
+aggiungendo i 3 nuovi campi:
+```python
+        decision = ApprovalDecision.objects.create(
+            approval_request=approval_request,
+            approver=approved_by,
+            decision=ApprovalDecision.Decision.APPROVED,
+            notes=comment,
+            signature_page=signature_page,
+            signature_x=signature_x,
+            signature_y=signature_y,
+        )
+```
+
+Non toccare `_build_decision_snapshot` né `reject_version`: il
+posizionamento riguarda solo le approvazioni.
+
+#### 3. Nuovo endpoint "vista inline" del PDF di rappresentazione
+
+Il download esistente (`documents/views.py`, funzione
+`download_representation_pdf`) forza `as_attachment=True`: il browser
+scarica il file invece di poterlo caricare via JS (necessario in Fase 2
+per pdf.js). Aggiungi una **nuova vista separata**, subito dopo
+`download_representation_pdf` nello stesso file, senza modificare
+quella esistente:
+
+```python
+@login_required
+def view_representation_pdf_inline(request, version_id):
+    """
+    Come download_representation_pdf, ma senza forzare il download: serve
+    per il rendering client-side (pdf.js) nel posizionamento libero della
+    firma. Stessa identica autorizzazione della vista di download.
+    """
+    from documents.permissions import can_download_representation_pdf
+
+    version = get_object_or_404(DocumentVersion, pk=version_id)
+    rep = version.representation_pdf
+
+    if rep is None or not rep.file:
+        raise Http404
+
+    if not can_download_representation_pdf(request.user, version):
+        raise PermissionDenied
+
+    file_path = rep.file.path
+    if not os.path.exists(file_path):
+        raise Http404
+
+    return FileResponse(
+        open(file_path, 'rb'),
+        content_type='application/pdf',
+    )
+```
+
+Aggiungi la route in `config/urls.py`, subito dopo la riga della route
+`version_representation_pdf_download`:
+```python
+    path('versions/<int:version_id>/pdf/representation/view/', view_representation_pdf_inline, name='version_representation_pdf_view'),
+```
+(ricorda di importare `view_representation_pdf_inline` insieme alle
+altre view di `documents.views` già importate in cima al file, stesso
+punto in cui è importata `download_representation_pdf`).
+
+#### Acceptance criteria
+
+- [ ] `python manage.py check` pulito.
+- [ ] `python manage.py makemigrations --check --dry-run` pulito (la
+      migrazione è già stata generata e committata).
+- [ ] `approve_version` senza i 3 nuovi parametri (comportamento
+      esistente, tutti i call site attuali) funziona esattamente come
+      prima: nessuna regressione sui test esistenti.
+- [ ] `approve_version` con i 3 parametri validi crea una
+      `ApprovalDecision` con `signature_page`/`signature_x`/`signature_y`
+      valorizzati.
+- [ ] `approve_version` con solo 1 o 2 dei 3 parametri (non tutti e 3, e
+      non nessuno) solleva `ValidationError`.
+- [ ] `approve_version` con `signature_page < 1`, o `signature_x`/`signature_y`
+      fuori da `[0.0, 1.0]`, solleva `ValidationError`.
+- [ ] La nuova vista `view_representation_pdf_inline` restituisce lo
+      stesso identico PDF di `download_representation_pdf` per lo stesso
+      utente/versione, ma **senza** header che forzino il download (il
+      test verifica che la risposta non contenga
+      `Content-Disposition: attachment` — non serve verificare l'header
+      esatto, basta che il comportamento `as_attachment` non sia
+      presente).
+- [ ] Stessa autorizzazione della vista di download esistente: un
+      utente che non può scaricare il PDF di rappresentazione riceve
+      `PermissionDenied`/404 anche dalla nuova vista inline, con gli
+      stessi identici casi già coperti dai test esistenti di
+      `download_representation_pdf` (replica quei casi per la nuova
+      vista, non serve inventarne di nuovi).
+
+#### Test richiesti
+
+- `approvals/tests.py`: estendi/aggiungi test per `approve_version` —
+  chiamata senza i nuovi parametri (invariata), con i 3 validi, con 1-2
+  forniti e gli altri mancanti (errore), con valori fuori range
+  (errore). Verifica che `ApprovalDecision` salvi correttamente i 3
+  campi quando forniti.
+- `documents/tests.py`: nuova classe di test per
+  `view_representation_pdf_inline`, che ripete (non necessariamente
+  copia riga per riga, ma copre gli stessi scenari) i casi già testati
+  per `download_representation_pdf` nello stesso file — cercali per
+  nome (`download_representation_pdf`) per trovare i test esistenti da
+  cui prendere spunto per gli scenari di permesso.
+
+Comando di verifica finale:
+```bash
+python manage.py test approvals documents --keepdb -v1
+```
+
+#### Guardrail
+
+- Non toccare `documents/pdf_generation.py`: il posizionamento salvato
+  in questa fase non viene ancora usato nella generazione del PDF
+  finale (Fase 3, task futuro).
+- Non toccare `reject_version`, `documents/permissions.py`,
+  `accounts/models.py`.
+- Non introdurre `pdfjs-dist` o altre dipendenze npm/pip in questa
+  fase.
+- Non toccare alcun template.
+- Nessun commit, push, merge, rebase da parte dell'implementatore.
+- Non lanciare il server di sviluppo.
+
+#### Note operative
+
+Verifica preliminare già fatta da Claude Code: la vista
+`download_representation_pdf` (righe 1110-1132 di `documents/views.py`
+nella versione attuale) e `can_download_representation_pdf`
+(`documents/permissions.py`, riga 456) sono state lette per intero.
+`approve_version` (righe 85-224 di `approvals/services.py`) è stata
+letta per intero: il punto di creazione di `ApprovalDecision` è alle
+righe 134-139 circa. Usa i numeri di riga come riferimento
+approssimativo, cerca sempre per contenuto.
+
+#### Esito (2026-07-30)
+
+Implementato da Cursor Agent secondo spec (via `ai-cycle.sh --run`),
+verificato riga per riga da Claude Code prima del commit.
+
+- `ApprovalDecision`: campi `signature_page`/`signature_x`/`signature_y`
+  aggiunti esattamente dove specificato. Migrazione scritta a mano da
+  Cursor Agent (ambiente senza shell disponibile per `makemigrations`):
+  verificata identica a quella che Django avrebbe generato
+  (`makemigrations --check --dry-run` → nessuna modifica mancante).
+- `approve_version`: firma estesa con i 3 parametri opzionali,
+  validazione "tutti o nessuno" + range coordinate + pagina ≥ 1, prima
+  della transazione. Nessuna modifica a `reject_version`.
+- Nuova vista `view_representation_pdf_inline` (`documents/views.py`) +
+  route `version_representation_pdf_view` (`config/urls.py`): stessa
+  identica autorizzazione di `download_representation_pdf`, senza
+  `as_attachment`.
+- Test aggiunti: `approvals.tests.ApproveVersionSignaturePlacementTests`
+  (5), `documents.tests.RepresentationPDFInlineViewTests` (4).
+
+**Bug trovato e corretto durante la verifica**: un test
+(`test_inline_serves_same_pdf_as_download`) confrontava
+`response.content` su una `FileResponse` — attributo non disponibile
+per risposte streaming nel test client Django
+(`AttributeError: This FileResponse instance has no 'content' attribute`).
+Non un bug del codice applicativo (la vista funziona correttamente),
+solo dell'asserzione di test. Corretto da Claude Code confrontando
+`b''.join(response.streaming_content)` invece di `.content`.
+
+Verifiche: `python manage.py check` pulito;
+`makemigrations --check --dry-run` pulito;
+`python manage.py test approvals documents --settings=config.test_settings -v1`
+→ **603/603 PASS** (dopo il fix del test).
+
+Nessuna UI in questa fase (nessun template toccato, nessuna dipendenza
+nuova installata): la Fase 2 (interfaccia di trascinamento con pdf.js,
+già autorizzata dall'operatore) resta un task futuro separato, non
+ancora scritto.
+
+---
+
+### TASK-040-2 — Posizionamento libero firma su PDF approvazione (Fase 2: UI drag&drop con pdf.js) — Claude Code
+
+Eseguito direttamente da Claude Code (JS/canvas interattivo, non
+delegato a Cursor Agent — richiede iterazione visiva, non solo
+correttezza meccanica del diff). Sessione interrotta a metà per
+disconnessione dell'operatore, ripresa in una finestra di contesto
+successiva a partire da `docs/ai/SESSION_HANDOFF_2026-07-30.md` (file
+non tracciato, poi superato da questo aggiornamento).
+
+#### Obiettivo
+
+Interfaccia utente per il posizionamento libero della firma
+sull'approvazione documento (fondamenta backend già in TASK-040 Fase
+1): un approvatore vede il PDF di rappresentazione renderizzato nel
+browser e trascina la propria firma nel punto desiderato, oppure lascia
+il comportamento automatico invariato (checkbox non spuntata).
+
+#### Dipendenza nuova (autorizzata esplicitamente dall'operatore)
+
+`pdfjs-dist@6.2.108` (devDependency). **Prima dipendenza esterna nuova
+introdotta in questo progetto** — tutte le precedenti erano già
+presenti o sono state rimosse (TASK-009). Vendorizzati
+`node_modules/pdfjs-dist/build/pdf.min.mjs` e `pdf.worker.min.mjs`
+(build "moderna" ES module, non la build "legacy": pdfjs-dist v6 non
+ha più build UMD) in `static/vendor/pdfjs/`, committati direttamente
+nel repo — stesso pattern già in uso per `static/css/tailwind.css`
+("no Node in produzione"). Script `npm run vendor:pdfjs` aggiunto a
+`package.json` per rigenerarli in futuro. `npm audit` segnala 1
+vulnerabilità high, ma su `postcss` (transitiva di `tailwindcss`,
+pre-esistente): `pdfjs-dist` non ha sotto-dipendenze proprie.
+
+#### Modifiche
+
+- **`approvals/views.py`** (`approval_detail`): nel ramo `action ==
+  'approve'`, legge `signature_page`/`signature_x`/`signature_y` dal
+  POST solo se presenti **tutti e 3** (altrimenti li tratta come
+  assenti, silenziosamente — la validazione stringente è comunque già
+  in `approve_version`, Fase 1); valori non numerici vengono scartati
+  allo stesso modo invece di propagare un `ValueError` non gestito.
+  Nuovo context: `existing_signature_placements` (lista di
+  `{page, x, y, label}` per le decisioni già registrate su questa
+  `ApprovalRequest` con posizionamento salvato — mostrata come
+  segnaposto di sola lettura al prossimo firmatario) e
+  `user_signature_url` (URL dell'immagine firma dell'utente corrente
+  via `user.signature_profile`, `None` se l'utente non ne ha una
+  caricata).
+- **`templates/approvals/approval_detail.html`**: nel form "Approva",
+  se `version.representation_pdf.file` esiste **e** `user_signature_url`
+  non è `None`, mostra un checkbox "Posiziona manualmente la firma sul
+  documento" che rivela: navigazione pagina (precedente/successiva),
+  `<canvas>` renderizzato da pdf.js, overlay assoluto con i segnaposto
+  delle firme già apposte (grigi, sola lettura, filtrati per pagina
+  corrente) e la firma trascinabile dell'utente (immagine reale, quadro
+  verde). I dati dei segnaposto esistenti sono passati al JS tramite
+  `{{ existing_signature_placements|json_script:"signature-existing-placements" }}`
+  (escaping automatico Django, niente `json.dumps` manuale). Campi
+  hidden `signature_page`/`signature_x`/`signature_y` popolati da JS
+  durante il drag; se il checkbox viene deselezionato tornano vuoti
+  (torna il comportamento automatico, invariato). Script in
+  `{% block extra_js %}`, caricato solo se il widget è mostrato;
+  `pdf.min.mjs` importato con `import()` dinamico (modulo ES, non serve
+  marcare l'intero blocco `<script type="module">`).
+- **`src/css/main.css`**: nuovo blocco `@layer components` in fondo al
+  file con le classi del widget
+  (`.signature-placement-canvas-wrap`/`.signature-overlay`/
+  `.signature-marker*`). CSS ricompilato con `npm run build`.
+- **`package.json`**: aggiunta `pdfjs-dist` a `devDependencies`, nuovo
+  script `vendor:pdfjs`.
+
+#### Test aggiunti
+
+`approvals/tests.py`,
+`ApprovalDetailSignaturePlacementViewTests` (5 test, integrazione a
+livello vista, non solo service — già coperto a livello service in
+Fase 1): salvataggio corretto con posizionamento valido via POST;
+nessun posizionamento quando i campi non sono forniti (comportamento
+automatico); valori non numerici scartati senza errore 500; contesto
+del template include `user_signature_url`/`existing_signature_placements`
+per un utente con firma; il checkbox non compare affatto per una
+versione senza PDF di rappresentazione.
+
+#### Verifiche eseguite
+
+`python manage.py check` pulito. `npm run build` senza errori.
+`python manage.py test approvals documents --settings=config.test_settings -v1`
+→ **608/608 PASS** (603 di Fase 1 + 5 nuovi di questa fase; conteggio
+riconfermato identico dopo tutti i fix trovati con la verifica visiva,
+vedi sotto — un fallimento intermedio dovuto a un bug nel test stesso,
+non nel codice applicativo, corretto durante il percorso).
+
+**Verifica server-side via richieste HTTP reali** (non solo lettura di
+codice): creato uno scenario di prova ad hoc (documento
+`DEMO-SIGPLACE-001`, sorgente `.txt`, PDF di rappresentazione
+auto-generato e confermato, richiesta di approvazione assegnata a
+`supervisor_demo`, che ha già una firma visiva caricata nel dataset
+demo) — verificato con `curl` autenticato: la pagina
+`/approvals/25/` risponde 200 senza errori di template, contiene tutto
+il markup atteso (checkbox, contenitore widget con
+`data-pdf-url`/`data-signature-url` corretti, blocco `json_script` con
+`[]` come atteso — nessuna firma ancora posizionata su quella
+richiesta, canvas, i 3 campi hidden, lo script con l'`import()` di
+pdf.js); gli asset statici `pdf.min.mjs`/`pdf.worker.min.mjs`
+rispondono 200 con `content-type: text/javascript`; il nuovo endpoint
+`/versions/27/pdf/representation/view/` (Fase 1) risponde 200 con un
+PDF valido (verificato con `file`) e header `Content-Disposition:
+inline` (non `attachment`).
+
+**Verifica visiva interattiva eseguita** (in una ripresa successiva
+della stessa sessione, dopo che l'operatore ha riavviato Chrome e
+l'estensione si è riconnessa): aperto `/approvals/25/` con
+`supervisor_demo`, spuntato "Posiziona manualmente la firma sul
+documento", verificato che il canvas mostra davvero il contenuto del
+PDF (818 righe di testo visibili), che il segnaposto della firma
+compare come immagine reale trascinabile, che il trascinamento
+(simulato con eventi mouse nativi via JS per bypassare
+un'incongruenza di scala tra le coordinate del tool di screenshot e
+quelle CSS del viewport — `devicePixelRatio: 1.5`) aggiorna
+correttamente sia la posizione visiva sia i campi hidden, e che dopo
+"Approva revisione" la richiesta risulta `APPROVED` con
+`ApprovalDecision.signature_page/x/y` salvati esattamente al punto
+trascinato (verificato via `manage.py shell`, non solo dedotto).
+
+**3 bug reali trovati e corretti durante questa verifica** (nessuno
+individuabile dalla sola lettura del codice o dai test automatici, che
+infatti restavano tutti verdi con codice comunque rotto lato browser):
+
+1. **Versione di `pdfjs-dist` incompatibile con il Chrome disponibile**:
+   sia la build "moderna" sia quella "legacy" di `pdfjs-dist@6.2.108`
+   usano internamente `Map.prototype.getOrInsertComputed`, un metodo
+   JS troppo recente (non disponibile nemmeno in un Chrome 143
+   aggiornato). Errore in console:
+   `TypeError: this[#Ra].getOrInsertComputed is not a function`,
+   canvas che restava vuoto. Corretto **pinnando la dipendenza a
+   `pdfjs-dist@5.0.375`** (versione esatta, non un range `^`, per
+   evitare che un futuro `npm install` riporti lo stesso problema) e
+   rivendorizzando `static/vendor/pdfjs/` dalla build `legacy/build/`
+   di quella versione (0 occorrenze dell'API problematica, verificato
+   con grep prima di procedere).
+2. **`user.signature_profile.image.url` non funzionava**: nessuna
+   route in `config/urls.py` serve `/media/` direttamente in questo
+   progetto (accesso ai file sempre tramite view autenticate, per
+   design — confermato con un grep mirato: `.image.url`/`.file.url`
+   non compaiono in nessun altro punto del codebase). L'URL restituiva
+   404 anche se il file esisteva davvero su disco. Corretto in
+   `approvals/views.py` (`approval_detail`) riusando lo stesso pattern
+   già presente in `accounts/views.py` (`signature_settings`): il file
+   viene letto e incorporato come `data:image/png;base64,...` invece
+   di un URL, `import base64` aggiunto in cima al file.
+3. **Cache del browser sul modulo ES `pdf.min.mjs`**: durante il primo
+   giro di fix (prima di scoprire il vero problema al punto 1), il
+   browser ha continuato a servire una versione già scaricata del file
+   nonostante il contenuto su disco fosse cambiato, mascherando
+   temporaneamente l'indagine. Aggiunto un cache-buster statico
+   (`?v=1`/`?v=2` sull'URL dell'`import()` dinamico in
+   `approval_detail.html`) — utile anche in futuro se il file
+   vendorizzato verrà aggiornato senza cambiare nome.
+
+Questi 3 problemi erano **tutti invisibili lato server** (nessun errore
+Django, nessun test rotto): solo l'esecuzione JS reale in un browser li
+ha esposti — a riprova del perché la verifica "solo HTTP/curl" fatta
+nel primo giro di questa fase non poteva bastare da sola per una
+feature con questa quantità di logica client-side.
+
+**4° problema, trovato invece dai test** (bug reale nella suite di
+questa stessa fase, non nel codice applicativo): la correzione del
+punto 2 fa sì che `approval_detail` ora apra davvero il file immagine
+della firma (prima con `.image.url` non lo apriva mai). Un test
+(`test_widget_hidden_without_representation_pdf`) faceva la GET fuori
+dal blocco `with self.settings(MEDIA_ROOT=self.temp_media)`, quindi
+cercava il file nella media directory sbagliata → `FileNotFoundError`
+in un test che prima passava per un motivo sbagliato (non toccava mai
+il file). Corretto il test. **Occasione per un fix difensivo reale,
+non speculativo** (il fallimento del test lo ha dimostrato
+concretamente): un file firma mancante su disco nonostante il record
+DB esistente (scenario plausibile: backup/restore incompleto,
+cancellazione manuale) ora non fa più fallire l'intera pagina di
+approvazione con un 500 — `approval_detail` cattura `OSError` attorno
+alla lettura del file e degrada silenziosamente a
+`user_signature_url = None` (niente widget di posizionamento libero,
+resta comunque la modalità automatica).
+
+#### Non ancora fatto (Fase 3, task futuro separato)
+
+Le coordinate salvate **non hanno ancora alcun effetto sul PDF
+approvato finale**: `documents/pdf_generation.py` non è stato toccato
+in questa fase. Una decisione con posizionamento manuale finisce
+comunque, oggi, nel registro "in calce" standard come tutte le altre
+(il campo è salvato ma inutilizzato lato generazione PDF). Serve un
+task dedicato per usare `signature_page`/`signature_x`/`signature_y`
+nella generazione effettiva, disegnando la firma nel punto scelto
+invece che nella riga del registro per le decisioni che lo hanno
+impostato.
+
+---
+
+### TASK-041 — Fix UI Istruttoria CCB: riposizionamento sezione Applicabilità — Claude Code
+
+Eseguito direttamente da Claude Code (modifica di layout mirata), su
+segnalazione diretta dell'operatore dopo TASK-038.
+
+#### Difetto segnalato
+
+Nel form editabile di `ecn_ccb_dossier.html`, la sezione "Applicabilità"
+era la prima subito dopo l'apertura del `<form>` (prima di
+"Classificazione variante" e "Analisi istruttoria"), risultando quasi
+in cima alla pagina. L'operatore la voleva invece in fondo, appena
+prima della sezione sanatoria.
+
+#### Modifica
+
+Spostato il blocco `<div class="form-section">` di "Applicabilità"
+(con l'`{% include "ecn/_applicability_fields.html" %}`) dalla prima
+posizione nel form all'ultima, subito prima di
+`{% include "auditlog/sanatoria_fields.html" %}`. Nuovo ordine:
+Classificazione variante → Analisi istruttoria → Applicabilità →
+Sanatoria storica → pulsanti. Nessuna modifica al contenuto delle
+sezioni, solo all'ordine nel template.
+
+#### File coinvolti
+
+`templates/ecn/ecn_ccb_dossier.html` (unico file toccato).
+
+#### Verifiche eseguite
+
+`python manage.py check` pulito. Verifica visiva reale nel browser
+(`ecn/3/ccb-dossier/`, utente `supervisor_demo`): confermato il nuovo
+ordine, "Applicabilità" ora immediatamente sopra "Sanatoria storica".
+Suite `ecn` completa: **381/381 PASS** (nessuna regressione, atteso —
+nessun test verifica l'ordine visivo delle sezioni).
+
+---
+
+### TASK-042 — Fix UX gate PDF di rappresentazione: distinguere "PDF mancante" da "PDF caricato, da confermare" — Claude Code
+
+Eseguito direttamente da Claude Code, su segnalazione diretta
+dell'operatore: dopo aver caricato manualmente il PDF di
+rappresentazione (es. per un sorgente `.docx`), il sistema continuava
+a sembrare bloccato "come se il PDF mancasse ancora".
+
+#### Difetto segnalato
+
+Il gate di invio in approvazione (`documents/pdf_gate.py`, TASK-026,
+invariato in questo task) prevede due passaggi distinti per un formato
+a caricamento manuale: 1) caricare il PDF, 2) confermare esplicitamente
+che rappresenta il sorgente. Prima di questo fix, sia
+`submit_for_approval.html` sia `version_detail.html` mostravano lo
+stesso riquadro rosso/errore identico sia per "PDF davvero assente"
+sia per "PDF caricato, manca solo la conferma" — nessuna distinzione
+visiva, e il messaggio di successo dopo l'upload ("Ricordarsi di
+confermarlo...") era un avviso passivo, facile da non notare.
+**Analisi del backend** (`documents/pdf_pipeline.py`,
+`documents/pdf_gate.py`): nessun bug logico trovato, il gate calcola
+correttamente lo stato — il problema era esclusivamente di
+presentazione/UX. L'operatore ha scelto esplicitamente di mantenere i
+due passaggi separati (upload + conferma), non di unificarli in un
+solo click.
+
+#### Modifica
+
+- `documents/views.py` (`upload_representation_pdf_view`): messaggio
+  dopo l'upload cambiato da `messages.success` (passivo) a
+  `messages.warning`, testo esplicito sul passaggio mancante ("Manca
+  ancora un passaggio: clicca sul pulsante «Confermo...» qui sotto").
+- `templates/documents/submit_for_approval.html`: nuovo ramo
+  `{% elif representation_pdf.status == 'ready' or ... == 'manual_uploaded' %}`
+  con riquadro ambra (`alert-warning`) dedicato al caso "caricato, da
+  confermare", distinto dal riquadro rosso (`alert-danger`) riservato
+  ai casi realmente bloccanti (assente, scaduto, conversione fallita,
+  caricamento manuale mai avviato). Testo mantiene la parola
+  "Confermare" per continuità con il messaggio del gate.
+- `templates/documents/version_detail.html`: stesso principio, nuovo
+  riquadro ambra mostrato solo quando `rep.status` è `ready` o
+  `manual_uploaded` (stessa condizione già usata per mostrare il
+  pulsante "Conferma" esistente), posizionato subito sopra i pulsanti
+  di azione.
+
+**Bug introdotto e corretto durante la verifica**: la prima versione
+usava la condizione `rep.requires_confirmation and not rep.confirmed_at`
+per decidere quando mostrare il riquadro ambra — troppo ampia,
+risultava vera anche per "conversione fallita" e "caricamento manuale
+mai avviato" (che hanno anch'essi `requires_confirmation=True` ma
+nessun file da confermare), nascondendo il vero errore dietro un
+messaggio rassicurante. Corretto restringendo la condizione agli stati
+effettivamente confermabili (`status in ('ready', 'manual_uploaded')`),
+la stessa già usata per mostrare il pulsante "Conferma".
+
+#### File coinvolti
+
+`documents/views.py`, `templates/documents/submit_for_approval.html`,
+`templates/documents/version_detail.html`. Nessuna modifica a
+`documents/pdf_gate.py`/`documents/pdf_pipeline.py` (il gate stesso è
+corretto, solo la presentazione cambia).
+
+#### Verifiche eseguite
+
+`python manage.py check` pulito. Suite `documents approvals` completa:
+**608/608 PASS** (un fallimento intermedio durante lo sviluppo, dovuto
+al bug di condizione descritto sopra, individuato e corretto prima del
+commit). Verifica visiva nel browser non eseguita in questa sessione
+(estensione Chrome non connessa) — verificato invece con l'esecuzione
+reale della suite di test (Django test client, richieste HTTP reali,
+non solo lettura di codice).
+
+#### Nota separata (non implementata in questo task)
+
+L'operatore ha chiesto anche una valutazione di fattibilità per la
+conversione automatica `.docx → PDF` (oggi richiede sempre upload
+manuale, per scelta di design in `documents/pdf_strategy.py`: nessuna
+libreria Python pura affidabile per questa conversione). Verificato che
+`LibreOffice` (`/usr/bin/soffice`, v25.8.7.3) è già installato su
+questa macchina di sviluppo e una conversione headless reale
+`.docx → .pdf` in una directory temporanea isolata ha funzionato in
+meno di 1 secondo. Nessuna modifica al codice applicativo:
+resta un task futuro separato, da specificare in dettaglio se
+l'operatore decide di procedere (dipendenza di sistema, non pip —
+richiede autorizzazione esplicita per l'installazione in ogni
+ambiente di deploy).
+
+---
+
+### TASK-040-3 — Posizionamento libero firma su PDF approvazione (Fase 3: firma disegnata realmente sul PDF) — Claude Code
+
+Eseguito direttamente da Claude Code (modifica chirurgica di codice di
+generazione PDF ad alto rischio — stessa scelta già fatta per Fase 2,
+per precisione e controllo diretto invece di delegare a Cursor Agent).
+
+#### Obiettivo
+
+Le coordinate di posizionamento libero salvate su `ApprovalDecision`
+nelle Fasi 1/2 (`signature_page`/`signature_x`/`signature_y`) non
+avevano ancora alcun effetto sul PDF approvato finale
+(`documents/pdf_generation.py` non era mai stato toccato): ogni
+decisione, anche con posizionamento manuale, finiva comunque nel
+registro "in calce" standard. Questa fase chiude la funzionalità: la
+firma viene disegnata davvero nel punto scelto dall'approvatore.
+
+#### Modifica (`documents/pdf_generation.py`, unico file applicativo toccato)
+
+- Nuova `_decisions_with_valid_manual_placement(decisions, n_pages)`:
+  seleziona solo le decisioni con posizionamento **davvero utilizzabile**
+  — tutti e 3 i campi presenti, pagina nel range del PDF, immagine firma
+  realmente leggibile su disco (`os.path.exists`). Qualunque controllo
+  fallisca, la decisione resta fuori e ricade sul comportamento
+  automatico preesistente (immagine nel registro) — mai una firma persa,
+  mai un errore di generazione per un dato incoerente (es. revisione
+  ri-generata con un PDF di rappresentazione diverso, meno pagine di
+  quando la firma fu posizionata).
+- Nuova `_build_signature_placements_overlay(placements, orig_width, orig_height, y_offset)`:
+  disegna la firma (40×16mm, più grande della miniatura 26×9mm del
+  registro) centrata sulle coordinate normalizzate, con clamping
+  (`_clamp_center`) per restare sempre dentro i bordi della pagina.
+  `y_offset` gestisce il caso speciale in cui la pagina target **è
+  anche** l'ultima pagina estesa per il footer "in calce" (Y traslata
+  della stessa quantità del contenuto originale, per restare
+  visivamente nello stesso punto scelto) — per tutte le altre pagine
+  `y_offset=0`.
+- `_stamp_footer_on_last_page`/`_append_page`: entrambi i percorsi
+  (footer "in calce" e pagina dedicata di fallback) ora fanno il merge
+  dell'overlay firma sulla pagina corretta, prima di aggiungerla al
+  `PdfWriter`.
+- `_build_footer_overlay`/`_build_registry_standalone_page`: per le
+  decisioni con posizionamento valido, la riga del registro resta solo
+  testuale (niente immagine duplicata) con una nota
+  `(firma apposta a pag. N)`; `_estimate_footer_height` aggiornata di
+  conseguenza (riga testuale, non con immagine, per il calcolo
+  dell'altezza).
+
+#### Guardrail rispettati
+
+Nessuna modifica a `approvals/services.py`, `approvals/models.py`,
+`documents/views.py`, template, o alla logica del gate PDF (TASK-026/042,
+invariata). Nessuna nuova dipendenza. Il PDF di rappresentazione
+sorgente non viene mai modificato (si lavora sempre su una copia in
+memoria, comportamento preesistente invariato).
+
+#### Test aggiunti
+
+`approvals/tests.py`, `ApprovedPDFManualSignaturePlacementTests` (5
+test, verificano il PDF risultante byte per byte via `pypdf`, non solo
+il comportamento del service):
+- firma disegnata sulla pagina corretta, non duplicata come immagine
+  nel registro (conteggio reale delle immagini incorporate via
+  `page.images`, testo del registro con la nota di pagina);
+- pagina fuori range → fallback automatico silenzioso (immagine nel
+  registro, nessuna nota);
+- posizionamento su una pagina diversa dall'ultima → nessun offset
+  verticale indebito (verificato su documento a 2 pagine);
+- posizionamento rispettato anche nel percorso di fallback a pagina
+  dedicata (molti approvatori);
+- coordinate estreme (0.0/0.0) non fanno fallire la generazione
+  (clamping).
+
+#### Verifiche eseguite
+
+`python manage.py check` pulito. Suite `documents approvals` completa:
+**613/613 PASS** (608 preesistenti + 5 nuovi di questa fase, tutti
+verdi al primo tentativo). Verifica visiva nel browser non eseguita in
+questa sessione (estensione Chrome non connessa, stesso problema già
+segnalato in Fase 2/TASK-042) — verifica invece tramite parsing reale
+del PDF generato (conteggio immagini incorporate, estrazione testo),
+non solo lettura di codice o mock del service.
+
+---
+
+### TASK-043 — Fix bug CSS: checkbox selezionata visivamente invisibile — Claude Code
+
+Eseguito direttamente da Claude Code, su segnalazione diretta
+dell'operatore ("non riesco a selezionare sia ECN semplice sia PDF
+firmato contemporaneamente, una si deseleziona quando seleziono
+l'altra"). Indagine lunga e a più falsi indizi prima di trovare la
+causa reale — documentata qui per intero perché il percorso stesso
+insegna qualcosa di riusabile.
+
+#### Percorso dell'indagine (falsi indizi esclusi, non solo il risultato finale)
+
+1. **Audit codice completo** (modello, form, `ecn/services.py`,
+   template, JS di `new_document.html` e `base.html`): nessun
+   collegamento tra `allow_simple_ecn` e `requires_approved_pdf` — i
+   due campi sono e restano indipendenti. Nessun bug trovato qui.
+2. **Test end-to-end reale in Chrome** (browser automation, login
+   reale, click reali, verifica dello stato `.checked` via query DOM
+   diretta): entrambe le checkbox risultavano `true` contemporaneamente
+   senza problemi — **conclusione (errata) riportata all'operatore**:
+   "funziona in Chrome, il problema è specifico di Firefox/sistema".
+   L'errore: la verifica ha controllato solo la proprietà JS `.checked`
+   (corretta), mai lo **stile calcolato reale** — gli screenshot in
+   quella sessione fallivano per un problema tecnico del tool e non è
+   stata approfondita l'assenza di conferma visiva.
+3. **Diagnosi guidata con un LLM esterno** (prompt scritto da Claude
+   Code con contesto tecnico completo, eseguito dall'operatore):
+   script di probe JS (polling stato `checked`/`indeterminate` +
+   listener su tutti gli eventi rilevanti) eseguito dall'operatore nel
+   proprio Firefox reale. Il probe ha confermato: **lo stato DOM reale
+   era sempre corretto** (`checked` non veniva mai alterato, nessun
+   evento anomalo, nessun secondo click, nessuna label condivisa) — il
+   problema era quindi visivo, non funzionale. L'operatore ha
+   completato l'indagine da solo ispezionando lo stile calcolato reale
+   della checkbox: `background-color` restava bianco anche a
+   `checked:true`, con un `background-image` SVG bianco (la spunta)
+   sopra — spunta bianca su sfondo bianco, invisibile, salvo un attimo
+   durante l'hover.
+
+#### Causa reale
+
+`src/css/main.css`, regola (righe 75-80 prima del fix):
+```css
+input[type="checkbox"],
+input[type="radio"] {
+  background-color: var(--field-bg);
+  border-color: var(--field-border);
+  @apply text-elt-cyan-500 focus:ring-elt-cyan-500/40;
+}
+```
+Il plugin `@tailwindcss/forms` genera per lo stato selezionato
+`input:where([type=checkbox]):checked{background-color:currentColor;...}`
+(reso visibile grazie a `color` impostato dalla nostra stessa regola)
+— ma usa `:where()`, che azzera la specificità di tutto ciò che
+contiene. La nostra regola sopra usa invece un vero selettore
+d'attributo `[type="checkbox"]`, risultando nella **stessa specificità
+CSS** della regola `:checked` del plugin (`(0,1,1)` in entrambi i
+casi) ma **successiva** nel file compilato (`static/css/tailwind.css`,
+verificato con offset byte espliciti) — a parità di specificità vince
+l'ultima regola dichiarata, quindi il nostro `background-color` bianco
+sovrascriveva sempre quello del plugin, checkbox selezionata o meno.
+Spiega anche perché l'hover "rivelava" temporaneamente la spunta: la
+regola `:checked:hover` del plugin ha specificità più alta
+(`(0,2,1)`) e in quel momento vinceva.
+
+**Non è mai stato un bug di Firefox, del sistema operativo, di
+un'estensione, o un comportamento "tipo radio button"** tra le due
+checkbox — un puro bug di cascata CSS, presente identico in qualunque
+browser. Il motivo per cui non compariva nel test Chrome
+dell'operatore è che quel test verificava solo `.checked` (JS), mai lo
+stile calcolato/visivo.
+
+#### Modifica
+
+`src/css/main.css`: la regola `background-color`/`border-color`
+ristretta a `input[type="checkbox"]:not(:checked)` (e analogo per
+`radio`), separata dalla regola `color`/focus-ring che resta
+incondizionata. Con `:not(:checked)` la regola non può più competere
+strutturalmente con quella `:checked` del plugin, indipendentemente da
+specificità/ordine futuri. `npm run build` per ricompilare
+`static/css/tailwind.css`.
+
+#### File coinvolti
+
+`src/css/main.css`, `static/css/tailwind.css` (rigenerato),
+`documents/tests.py` (nuovo test di regressione).
+
+#### Verifiche eseguite
+
+Verificato nel file compilato (non solo nel sorgente) che la regola
+ora sia strutturalmente disgiunta da `:checked`. Verifica visiva reale
+in Chrome dopo il fix: `getComputedStyle` su una checkbox forzata
+`checked=true` → `backgroundColor: "rgb(16, 184, 212)"` (il cyan del
+brand, non più bianco) — conferma diretta che il fix funziona.
+`python manage.py check` pulito. Nuovo test
+`documents.tests.CheckboxCheckedStyleRegressionTests` (verifica che la
+regola sorgente resti scoped a `:not(:checked)`, unico controllo
+possibile da una suite Django che non renderizza CSS in un browser
+reale — la verifica dello stile calcolato resta manuale/browser,
+documentata sopra). Suite `documents` completa: **512/512 PASS**
+(nessuna regressione, 1 nuovo test di regressione CSS).
+
+### TASK-044 — Conversione automatica formati Office → PDF via LibreOffice headless — Claude Code
+
+Task facoltativo valutato (non implementato) nella sessione del
+2026-07-31, ora implementato su richiesta esplicita dell'operatore.
+LibreOffice risultava già installato sul sistema (`/usr/bin/soffice`,
+Manjaro) — **nessuna installazione di pacchetti eseguita**, solo
+integrazione software con un binario già presente.
+
+#### Obiettivo
+
+Prima di questo task, i formati "Office-like" (`docx`, `doc`, `docm`,
+`odt`, `rtf`, `xlsx`, `xls`, `xlsm`, `ods`, `pptx`, `ppt`, `pptm`,
+`odp`) risultavano sempre `PDFStrategy.MANUAL_REQUIRED`
+(`documents/pdf_strategy.py`, motivo `_REASON_OFFICE_UNAVAILABLE`):
+l'autore doveva sempre caricare il PDF di rappresentazione a mano.
+Obiettivo: quando LibreOffice è disponibile ed esplicitamente abilitato
+via settings, tentare una conversione automatica reale (comunque non
+byte-per-byte identica al sorgente, quindi `requires_confirmation`
+resta `True` come per `AUTO_RELIABLE`), mantenendo intatto il
+fallback al caricamento manuale quando LibreOffice non è disponibile o
+la conversione fallisce.
+
+#### Decisione di design: gating esplicito via settings, non solo rilevamento del binario
+
+`documents/pdf_strategy.py` si dichiara esplicitamente una "funzione
+pura: nessun accesso a filesystem, rete o modelli Django" — invariante
+mantenuto. `determine_pdf_strategy(extension, office_converter_available=False)`
+riceve la disponibilità come parametro iniettato dal chiamante, non la
+calcola internamente. **Il default resta `False`**: ogni chiamata
+esistente (inclusi tutti i test già scritti prima di questo task) non
+passa il nuovo parametro e ottiene **esattamente lo stesso
+comportamento di prima**, byte per byte — zero rischio di regressione
+sui test esistenti.
+
+La disponibilità reale è calcolata in un nuovo modulo dedicato,
+`documents/pdf_converters_external.py::is_libreoffice_available()`,
+che richiede **entrambe** le condizioni:
+1. `settings.LIBREOFFICE_CONVERSION_ENABLED` (nuovo, default `True` in
+   produzione/sviluppo via `config/settings.py`, **esplicitamente
+   `False` in `config/test_settings.py`** — la suite reale non deve
+   mai dipendere dal fatto che la macchina che esegue i test abbia
+   LibreOffice installato, deve restare deterministica e veloce);
+2. `shutil.which(settings.LIBREOFFICE_BINARY)` non `None` (binario
+   davvero presente sul PATH in quell'ambiente).
+
+`config/demo_settings.py` non sovrascrive il flag: eredita `True` da
+`config/settings.py`, quindi la demo mostra la conversione automatica
+reale se LibreOffice è installato sulla macchina che la esegue.
+
+**Perché non nella policy pura**: verificare il PATH è I/O, non
+appartiene a una funzione dichiarata pura. Iniettare la disponibilità
+dall'esterno mantiene `pdf_strategy.py` invariato nel suo contratto e
+isola la nuova dipendenza di sistema in un modulo a parte,
+esplicitamente separato da `documents/pdf_converters.py` (che resta
+dichiaratamente "pure-Python, nessuna dipendenza di sistema").
+
+#### Modifiche
+
+- `documents/pdf_strategy.py`: nuova strategia
+  `PDFStrategy.AUTO_EXTERNAL` e nuovo convertitore
+  `PDFConverter.OFFICE_LIBREOFFICE`. `determine_pdf_strategy`/
+  `determine_pdf_strategy_for_file` accettano
+  `office_converter_available` (default `False`); quando `True` e
+  l'estensione è Office-like, restituiscono `AUTO_EXTERNAL` invece di
+  `MANUAL_REQUIRED`. Il registro `_OFFICE_LIKE_MANUAL_EXTENSIONS` non
+  cambia (stesso elenco estensioni, solo la decisione finale dipende
+  ora anche dal nuovo parametro).
+- `documents/pdf_converters_external.py` (nuovo file):
+  `is_libreoffice_available()` e `render_office_to_pdf_bytes(source_bytes, extension)`.
+  Quest'ultima scrive il sorgente in una directory temporanea dedicata
+  (`tempfile.TemporaryDirectory`), invoca
+  `soffice --headless --convert-to pdf --outdir ... <file>` con
+  **`-env:UserInstallation=` puntato a un profilo utente temporaneo
+  dedicato per ogni conversione** (evita il lock "soffice già in
+  esecuzione" quando più conversioni avvengono in rapida successione —
+  problema noto e documentato di LibreOffice headless in contesti
+  concorrenti), timeout 60s, `subprocess.run` **senza `shell=True`**
+  con argomenti in lista (nessun rischio di command injection: il nome
+  file scritto su disco è sempre fisso, `source.<estensione>`, mai
+  derivato dal nome file originale caricato dall'utente). Solleva
+  `RuntimeError` con messaggio chiaro su binario assente, timeout,
+  codice di uscita non zero o PDF di output mancante — catturato dal
+  chiamante esistente in `pdf_pipeline.py` esattamente come già
+  avveniva per `AUTO_RELIABLE` (→ stato `CONVERSION_FAILED`, nessun
+  path nuovo di gestione errore).
+- `documents/pdf_pipeline.py`: `sync_representation_pdf_for_new_source`
+  calcola `is_libreoffice_available()` una volta e la passa a
+  `determine_pdf_strategy_for_file`; il ramo `elif decision.strategy ==
+  PDFStrategy.AUTO_RELIABLE:` esteso a `in (PDFStrategy.AUTO_RELIABLE,
+  PDFStrategy.AUTO_EXTERNAL)` (stesso identico codice try/except,
+  nessuna duplicazione). `_convert` accetta ora anche `extension` (serve
+  a LibreOffice per scegliere il filtro di importazione corretto) e
+  gestisce `PDFConverter.OFFICE_LIBREOFFICE`.
+- `config/settings.py`: `LIBREOFFICE_CONVERSION_ENABLED` (default
+  `True`, `cast=bool`) e `LIBREOFFICE_BINARY` (default `'soffice'`) via
+  `decouple.config`, stesso pattern di tutte le altre impostazioni.
+- `config/test_settings.py`: `LIBREOFFICE_CONVERSION_ENABLED = False`
+  esplicito.
+- `.env.example`: documentate le due nuove variabili opzionali.
 
 #### Test
 
-- Revisione creata da ECN semplice (`create_simple_ecn`, TASK-022):
-  la pagina di approvazione mostra codice, titolo e la sezione "ECN
-  di origine".
-- Revisione senza ECN di origine: la sezione non compare.
-- Suite mirata: **2/2 PASS**. App `approvals` completa: **52/52
-  PASS** (nessuna regressione).
-
-#### Backlog (fuori scope)
-
-- Nessuno: modifica puramente additiva, riusa dati e permessi già
-  esistenti (`can_view_ecn`).
-
----
-
-### TASK-025 — Chiusura ECN solo con revisione collegata approvata — Claude Code
-
-#### Obiettivo
-
-Segnalato dall'operatore, poi confrontato con le prassi reali di
-change management (ISO 9001, AS9100, PTC Windchill, NASA CR/PR — vedi
-analisi esterna allegata a questo task): oggi un ECN può essere
-chiuso (`CLOSED`, "modifica completata") anche mentre la revisione
-documento che dovrebbe attuarlo è ancora in Bozza, in approvazione, o
-è stata rifiutata. La creazione della bozza di revisione dimostra
-solo che l'attuazione è *iniziata*, non che sia stata *completata e
-verificata*.
-
-#### Analisi (confermata leggendo il codice)
-
-- `create_new_revision(..., ecn=ecn)` imposta `ecn.executed_version`
-  ed `ecn.executed_at` nell'istante in cui la nuova revisione viene
-  **creata** (stato DRAFT), non quando viene approvata.
-- `close_change_notice` (`ecn/services.py`) controllava solo:
-  `status == APPROVED` e `executed_version_id is not None` — mai lo
-  stato della revisione collegata.
-- `can_close_ecn` (`ecn/permissions.py`) è puramente un controllo di
-  ruolo (Quality Manager/superuser), corretto così: la regola "quando"
-  si può chiudere è una regola di business, non di permesso.
-- `templates/ecn/ecn_detail.html` invitava già alla chiusura
-  ("Procedi con la chiusura formale") appena `executed_version` era
-  presente, indipendentemente dal suo stato.
-- `approve_version`/`reject_version` (`approvals/services.py`) non
-  toccano mai il `ChangeNotice` collegato: se la revisione viene
-  rifiutata dopo che l'ECN è (teoricamente) chiudibile, nulla riapre
-  né corregge l'ECN — da qui la scelta di bloccare la chiusura a
-  monte piuttosto che gestire una riapertura a valle.
-
-#### Soluzione (opzione "A+", vedi analisi esterna)
-
-- `ecn/services.py:close_change_notice`: nuovo controllo — se
-  `executed_version.status != DocumentVersion.Status.APPROVED`,
-  solleva `ValidationError` con messaggio esplicito (stato attuale
-  della revisione). L'ECN resta `APPROVED` (non chiudibile, non
-  riaperto/richiuso automaticamente).
-- `ecn/views.py:ecn_close`: calcola `warn_revision_not_approved`
-  (stesso pattern di `warn_no_version` già esistente).
-- `templates/ecn/ecn_close_form.html`: avviso esplicito e bottone
-  "Conferma chiusura ECN" **disabilitato** quando la chiusura
-  fallirebbe comunque lato server (nessuna revisione collegata, o
-  revisione non ancora approvata). Corretto anche il testo
-  fuorviante del vecchio avviso "Puoi procedere con la chiusura..."
-  (falso: il service la bloccava comunque).
-- `templates/ecn/ecn_detail.html`: il messaggio "Prossima azione" per
-  stato `approved` ora distingue revisione approvata (pronta per la
-  chiusura) da revisione ancora in bozza/in approvazione/rifiutata
-  (spiega perché non è ancora chiudibile). Il bottone "Chiudi ECN"
-  nella barra azioni compare solo quando la revisione collegata è
-  realmente approvata.
-- `documents/templatetags/nav_tags.py:nav_ecn_to_close`: il contatore
-  sidebar "ECN pronti per la chiusura" ora richiede
-  `executed_version__status=APPROVED`, non solo
-  `executed_version__isnull=False` — altrimenti il badge segnalava
-  come "pronti" ECN che in realtà il service avrebbe rifiutato.
-
-#### File coinvolti
-
-- `ecn/services.py`
-- `ecn/views.py`
-- `templates/ecn/ecn_detail.html`
-- `templates/ecn/ecn_close_form.html`
-- `documents/templatetags/nav_tags.py`
-- `ecn/tests.py` (+`test_close_fails_if_executed_version_still_draft`,
-  +`test_close_fails_if_executed_version_in_approval`,
-  +`test_close_fails_if_executed_version_rejected`,
-  +`test_ecn_close_manager_sees_warning_when_exec_version_not_approved`;
-  corretto `_make_executed_version` — default ora
-  `status=APPROVED` (prima creava sempre una revisione DRAFT, il che
-  rendeva "vero" per accidente il vecchio comportamento non corretto
-  in quasi tutti i test esistenti di chiusura riuscita; aggiornato un
-  test che si aspettava ancora il vecchio testo "Attenzione").
-
-#### Test
-
-- Chiusura bloccata se la revisione collegata è: bozza, in
-  approvazione, rifiutata (l'ECN resta `APPROVED` in tutti e tre i
-  casi, nessuna riapertura automatica).
-- Chiusura riuscita quando la revisione è approvata (percorso
-  esistente, verificato ancora valido).
-- UI: avviso e bottone disabilitato nel form di chiusura quando non
-  ancora possibile; messaggio corretto in `ecn_detail.html`.
-- App `ecn`+`documents`+`approvals`: **783/783 PASS** (nessuna
-  regressione oltre al test aggiornato).
-
-#### Backlog (fuori scope, vedi analisi esterna allegata)
-
-- Rinominare/separare concettualmente `executed_version` in
-  "revisione attuativa" (valorizzata alla creazione) vs "revisione
-  eseguita" (valorizzata solo ad approvazione) — refactor più ampio
-  di modello/migrazione, non necessario per risolvere il problema
-  concreto segnalato.
-- Automatizzare la chiusura alla sola approvazione della revisione
-  (opzione B) o eliminare lo stato `CLOSED` (opzione C): entrambe
-  valutate e scartate per ora — vedi analisi esterna allegata a
-  questo task per il confronto con le prassi reali di change
-  management.
-
----
-
-### TASK-026 — Archivio progetti: storico completo progetti + dettaglio compatto altrove — Claude Code
-
-#### Obiettivo
-
-Stesso pattern di TASK-021 (Archivio documenti), applicato ai progetti su
-richiesta dell'operatore: confinare lo storico completo del progetto
-(snapshot versione/revisione salvati, confronto con la baseline corrente,
-storico eventi) in una sezione Archivio progetti permission-gated,
-lasciando nel dettaglio progetto normale solo le informazioni correnti
-(documenti, ECN collegati, struttura cartelle) più un riepilogo compatto
-dell'ultima revisione salvata.
-
-#### Soluzione
-
-- `projects/permissions.py`: nuova `can_view_archived_project(user, project)`,
-  wrapper su `documents.permissions.can_view_audit(user, folder=project.root_folder)`
-  (riusa lo stesso permesso `view_history` / ruoli globali già usato per
-  l'Archivio documenti — nessun nuovo concetto di permesso introdotto).
-- `projects/views.py`: `project_detail` alleggerito (rimossi `show_audit`,
-  `audit_logs`, `comparison_rows`, sostituiti da un `current_baseline`
-  leggero per il riepilogo compatto); nuove viste `archive_project_list` e
-  `archive_project_detail`; `project_revision_detail` ora richiede
-  `can_view_archived_project` invece del precedente controllo più debole
-  (`view_projects`).
-- `config/urls.py`: nuove route `/archivio-progetti/` e
-  `/archivio-progetti/<id>/`.
-- `templates/base.html`: nuova voce sidebar "Archivio progetti" nella
-  sezione "Storico", stesso gate `sb_can_archive` già usato per "Archivio
-  documenti".
-- `templates/projects/project_detail.html`: rimosse le sezioni "Storico
-  progetto" (versioni/revisioni salvate + pulsanti "Salva versione/
-  revisione"), "Confronto con revisione corrente", "Storico eventi";
-  aggiunta card compatta "Ultima revisione salvata" + link "Vedi storico
-  completo".
-- Nuovi template `templates/projects/archive_project_list.html` e
-  `archive_project_detail.html` (le sezioni rimosse, spostate qui).
-- `templates/projects/project_snapshot_form.html`,
-  `project_revision_detail.html`: breadcrumb e link "Annulla" aggiornati
-  per puntare all'Archivio progetti (uniche pagine da cui sono ora
-  raggiungibili).
-
-#### File coinvolti
-
-- `projects/permissions.py`, `projects/views.py`, `config/urls.py`
-- `templates/base.html`
-- `templates/projects/project_detail.html`, `project_revision_detail.html`,
-  `project_snapshot_form.html`
-- Nuovi: `templates/projects/archive_project_list.html`,
-  `archive_project_detail.html`
-- `projects/tests.py` (test spostati/aggiornati per verificare che le
-  sezioni compaiano solo in Archivio e non più nel dettaglio compatto)
-
-#### Test
-
-- Suite `projects`: **416/416 PASS**.
-- Verifica a video (browser, utente `supervisor_demo`): dettaglio
-  progetto pulito con link "Vedi storico completo"; Archivio progetti con
-  tutte le sezioni spostate; voce sidebar attiva correttamente.
-
----
-
-### TASK-027 — Verifica: obbligo commento sui rifiuti (documenti ed ECN) — Claude Code
-
-#### Obiettivo
-
-Richiesta operatore: "tutti i rifiuti, anche quelli dell'ECN, devono
-avere l'obbligo del commento". Prima di modificare codice, verificare lo
-stato attuale (principio Station: il repository è la fonte della
-verità — non procedere per assunzione).
-
-#### Analisi (confermata leggendo il codice e i test esistenti)
-
-- Rifiuto `DocumentVersion` (`approvals/views.py:163-165` +
-  `approvals/services.py:reject_version`): `rejection_reason`
-  obbligatorio sia lato vista (messaggio d'errore se vuoto) sia lato
-  service (`ValidationError`).
-- Rifiuto individuale voto CCB (`ecn/forms.py:ChangeNoticeReviewForm.clean`,
-  righe 223-233): `ccb_notes` ("Motivazione rifiuto") reso obbligatorio
-  in `clean()` quando `action == REJECT`.
-- Rifiuto finale ECN (`ecn/services.py:reject_change_notice`, riga ~620):
-  solleva `ValidationError` se `reason` è vuoto o solo spazi.
-- Nessun altro percorso di rifiuto trovato in `ecn/views.py` (unico
-  match per "reject" è la vista `ecn_review`).
-- Test esistenti che confermano il comportamento già corretto:
-  `ecn/tests.py:1358` (`test_reject_fails_without_reason`),
-  `ecn/tests.py:1815` (`test_ecn_review_reject_without_notes_shows_error`),
-  `ecn/tests.py:3087` (`test_reject_without_reason_fails`).
-
-#### Esito
-
-**Nessuna modifica necessaria.** Il commento/motivazione è già
-obbligatorio in ogni percorso di rifiuto del sistema (documenti ed ECN,
-sia voto individuale sia rifiuto finale), sia lato form/vista sia lato
-service, con copertura test verde preesistente. Confermato anche a video
-in demo (login come approvatore/membro CCB, tentativo di rifiuto senza
-commento → errore bloccante in entrambi i flussi).
-
-Task chiuso come verifica, non come implementazione.
-
----
-
-### TASK-028 — Istruttoria CCB: impatto sul costruito e applicabilità — Claude Code
-
-#### Obiettivo
-
-Richiesta operatore: aggiungere all'istruttoria CCB (dossier compilato
-prima dell'invio ai votanti) due nuovi campi — "impatto sul costruito" e
-"applicabilità" — accanto ai campi di impatto già esistenti
-(`ccb_technical_impact`, `ccb_cost_impact`, `ccb_time_impact`,
-`ccb_quality_impact`, `ccb_other_impact`).
-
-#### Scope
-
-- Due nuovi campi `TextField(blank=True)` su `ChangeNotice`:
-  `ccb_constructed_impact` ("Impatto sul costruito") e
-  `ccb_applicability` ("Applicabilità") — stesso pattern e stesso livello
-  di obbligatorietà dei campi di impatto secondari già esistenti
-  (opzionali, non bloccanti per l'invio alla CCB — solo `ccb_class`,
-  `ccb_requirements`, `ccb_technical_impact` restano obbligatori prima
-  dell'invio, come oggi).
-- Migrazione dedicata.
-- `ecn/forms.py:ChangeNoticeDossierForm`: due nuovi campi form.
-- `ecn/services.py:update_ccb_dossier`: nuovi parametri, persistiti sul
-  `ChangeNotice`.
-- `ecn/views.py:ecn_ccb_dossier`: passa i nuovi campi al service e li
-  pre-popola in GET.
-- `templates/ecn/ecn_ccb_dossier.html`: nuovi campi nel form di
-  compilazione e nella vista di dettaglio in sola lettura.
-- Non tocca: validazione di invio (`validate_for_submit`), permessi
-  (`can_compile_dossier`), flusso di stato ECN.
-
-#### File coinvolti
-
-- `ecn/models.py` (+ migrazione `0005_changenotice_ccb_applicability_and_more`)
-- `ecn/forms.py`
-- `ecn/services.py`
-- `ecn/views.py`
-- `templates/ecn/ecn_ccb_dossier.html`, `ecn_detail.html`, `ecn_review_form.html`
-  (i due nuovi campi compaiono anche nelle viste di sola lettura del
-  dossier già esistenti in questi due template, non solo nella pagina di
-  compilazione)
-- `ecn/tests.py` (+5 test: persistenza service, opzionalità all'invio,
-  salvataggio/visualizzazione via view in bozza istruttoria, visualizzazione
-  in `ecn_detail` dopo approvazione)
-
-#### Test
-
-- Branch: `task/documentale-ccb-dossier-impact-fields`.
-- Suite `ecn`: **340/340 PASS**.
-
----
-
-### TASK-029 — Documento: flag che blocca la richiesta di ECN semplice — Claude Code
-
-#### Obiettivo
-
-Richiesta operatore: poter impedire, per un documento specifico, la
-richiesta di un ECN semplice (flusso autoapprovato senza CCB, TASK-022).
-La spunta è impostabile alla creazione del documento; un admin/superuser
-o il supervisore demo (`supervisor_demo`) devono poter modificare questa
-caratteristica anche dopo la creazione.
-
-#### Soluzione
-
-- `documents/models.py`: nuovo campo `Document.allows_simple_ecn`
-  (`BooleanField(default=True)`, stesso pattern semantico di
-  `requires_ecn_for_revision`) + migrazione
-  `0007_document_allows_simple_ecn`.
-- `documents/forms.py`:
-  - `DocumentCreateForm`: nuovo checkbox `block_simple_ecn` (semantica
-    invertita, stesso pattern di `ecn_exemption` → `requires_ecn_for_revision`).
-  - `DocumentMetadataEditForm`: campo `allows_simple_ecn` aggiunto
-    dinamicamente in `__init__` **solo** se `current_user` soddisfa il
-    nuovo `can_edit_simple_ecn_flag` — non è nei `Meta.fields` della
-    ModelForm, quindi un utente senza permesso non può forzarlo nemmeno
-    con un POST raw (il campo semplicemente non esiste nel form).
-- `documents/permissions.py`: nuova `can_edit_simple_ecn_flag(user)` —
-  solo superuser o `supervisor_demo` (via `config.demo_utils.is_demo_supervisor`),
-  deliberatamente più ristretta di `can_edit_document_metadata` (che
-  autori/manager hanno già per titolo/descrizione/schema revisione).
-- `documents/views.py`:
-  - `new_document`: traduce `block_simple_ecn` → `allows_simple_ecn`
-    alla creazione, registrato anche in AuditLog.
-  - `edit_document_metadata`: passa `current_user` al form; se il campo
-    è presente lo assegna esplicitamente all'istanza prima di
-    `full_clean()`/`save()`.
-- `ecn/services.py:create_simple_ecn`: nuovo gate — `ValidationError` se
-  `not document.allows_simple_ecn`, prima ancora del controllo
-  "versione corrente presente".
-- `ecn/views.py:ecn_create_simple`: stesso gate lato vista (redirect con
-  messaggio d'errore invece di mostrare il form, sia GET che POST) —
-  difesa in profondità oltre al gate del service.
-- Template:
-  - `templates/documents/new_document.html`: nuova sezione "Governance ECN"
-    con il checkbox. **Corretto anche un bug preesistente** (non
-    introdotto da questo task, scoperto durante la verifica a video):
-    un commento Django multi-riga `{# ... #}` in questo stesso file
-    veniva reso come testo visibile invece di essere nascosto — il tag
-    breve `{# #}` non supporta il multi-riga nel motore template di
-    Django. Convertito in `{% comment %}...{% endcomment %}`.
-  - `templates/documents/document_detail.html`: pulsante
-    "+ Crea ECN semplice" mostrato solo se `document.allows_simple_ecn`;
-    "+ Richiedi ECN standard" resta sempre disponibile.
-  - `templates/documents/edit_document_metadata.html`: nessuna modifica
-    necessaria — itera già genericamente su `form` campo per campo, il
-    nuovo campo compare automaticamente quando presente nel form.
-
-#### File coinvolti
-
-- `documents/models.py` (+ migrazione `0007_document_allows_simple_ecn`)
-- `documents/forms.py`, `documents/permissions.py`, `documents/views.py`
-- `ecn/services.py`, `ecn/views.py`
-- `templates/documents/new_document.html`, `document_detail.html`
-- `documents/tests.py`, `ecn/tests.py`
-
-#### Test
-
-- Branch: `task/documentale-block-simple-ecn-flag`.
-- Suite `documents` + `ecn`: **744/744 PASS**.
-- Verifica a video (supervisor_demo): checkbox in creazione documento
-  renderizzata correttamente (bug commento multi-riga risolto); campo
-  "Consenti ECN semplice" visibile in Modifica metadati; disattivazione
-  del flag nasconde immediatamente "+ Crea ECN semplice" nel dettaglio
-  documento lasciando "+ Richiedi ECN standard"; dato demo ripristinato
-  al termine della verifica.
-
----
-
-### TASK-030 — ECN: form voto CCB in due riquadri separati — Claude Code
-
-#### Obiettivo
-
-Segnalato dall'operatore durante la verifica di TASK-027: il rifiuto di
-un ECN richiede già obbligatoriamente una motivazione lato server (form
-+ service), ma la UI del voto CCB (`ecn_review_form.html`) non lo
-comunicava — nessun asterisco, nessun attributo HTML `required`, un
-unico form con selettore radio Approva/Rifiuta invece dei due riquadri
-separati già usati per l'approvazione/rifiuto di una revisione documento
-(`approval_detail.html`). Allineare la UI a quel pattern.
-
-#### Soluzione
-
-- `templates/ecn/ecn_review_form.html`: sostituito il form unico con
-  selettore radio con due `<form>` indipendenti affiancati (verde
-  "✔ Approva ECN" / rosso "✖ Rifiuta ECN"), ciascuno con un campo
-  nascosto `action`, stesso schema esatto di `approval_detail.html`.
-  Il campo "Motivazione rifiuto" ha ora l'asterisco rosso e l'attributo
-  HTML `required` (blocco lato client, oltre alla validazione server
-  già esistente e non modificata).
-- Nessuna modifica a `ecn/forms.py`, `ecn/services.py`, `ecn/views.py`:
-  `ChangeNoticeReviewForm` continua a ricevere gli stessi nomi di campo
-  (`action`, `comment`, `ccb_notes`) indipendentemente da come il
-  markup li produce; la validazione (motivazione obbligatoria solo se
-  `action == reject`) è invariata.
-- Verificato a video: invio rifiuto a campo vuoto bloccato dal browser
-  (nessuna richiesta POST inviata); rifiuto con motivazione compilata
-  funziona correttamente end-to-end (ECN passa a `REJECTED`, motivo
-  visibile in `ecn_detail.html`).
-
-#### File coinvolti
-
-- `templates/ecn/ecn_review_form.html`
-
-#### Test
-
-- Branch: `task/documentale-ecn-review-form-ui`.
-- Suite `ecn`: **336/336 PASS** (nessuna modifica ai test: la
-  validazione server non è cambiata, solo la presentazione).
-- Verifica manuale a video (vedi Soluzione).
-
----
-
-### TASK-031 — Servizio centrale di policy PDF (sorgente → strategia) — Claude Code
-
-#### Obiettivo
-
-Un servizio unico e testabile che risponda "qual è la strategia PDF per
-questo file, in questo ambiente?" — vedi `docs/ai/PDF_APPROVAL_DECISION.md`
-per l'analisi completa. Nessun modello, nessuna UI in questo task: solo la
-logica di decisione.
-
-#### Scope
-
-- Nuovo modulo `documents/pdf_policy.py`: strategie
-  `NATIVE_PDF` / `AUTO_RELIABLE` / `AUTO_UNCERTAIN` / `MANUAL_REQUIRED` /
-  `UNSUPPORTED`, rilevamento runtime del convertitore (es.
-  `shutil.which('soffice')`), motivo sempre restituito.
-- Non implementare ancora la conversione reale né toccare modelli/form/view.
-
-#### File coinvolti
-
-- `documents/pdf_policy.py` (nuovo)
-- `documents/tests_pdf_policy.py` o sezione dedicata in `documents/tests.py`
-
-#### Acceptance criteria
-
-- [ ] `get_pdf_strategy(...)` centralizza la decisione (niente `if` sparsi
-      sulle estensioni altrove).
-- [ ] Il rilevamento del convertitore è iniettabile/mockabile nei test
-      (nessuna dipendenza da binari reali in CI).
-- [ ] Ogni esito include un motivo leggibile.
-
-#### Test richiesti
-
-- Un caso per ciascuna strategia della tabella in
-  `PDF_APPROVAL_DECISION.md` §3, inclusi i due sotto-casi di
-  `MANUAL_REQUIRED` (formato rischioso vs. convertitore assente).
-
-#### Guardrail
-
-- No push, no merge.
-- Nessuna nuova dipendenza in questo task (reportlab/Pillow arrivano in
-  TASK-032/033/036, quando servono davvero).
-
----
-
-### TASK-032 — Modelli/migrazioni PDF e firma visiva — Claude Code
-
-#### Obiettivo
-
-Base dati per l'intera feature, senza generare nulla retroattivamente sulle
-revisioni esistenti.
-
-#### Scope
-
-- `DocumentFile.kind` (`source`/`representation_pdf`/`approved_pdf`,
-  default `source` per compatibilità con le righe esistenti).
-- Campi su `DocumentVersion`: `representation_pdf`, `representation_pdf_source_file`,
-  `representation_pdf_origin`, `representation_pdf_generated_at`,
-  `representation_pdf_confirmed_by/_at`, `approved_pdf`,
-  `approved_pdf_generated_at`, `approved_pdf_generation_status`,
-  `approved_pdf_generation_error` — tutti nullable/default, nessun impatto
-  sulle revisioni storiche.
-- Nuovo modello `accounts.UserSignature` (righe immutabili, `is_active`).
-- `ApprovalDecision.signature_used` (FK `UserSignature`, nullable) +
-  `signature_display_name` (stringa congelata).
-
-#### File coinvolti
-
-- `documents/models.py`, `documents/migrations/000X_*.py`
-- `accounts/models.py`, `accounts/migrations/000X_*.py`
-- `approvals/models.py`, `approvals/migrations/000X_*.py`
-
-#### Acceptance criteria
-
-- [ ] `makemigrations --check --dry-run` pulito dopo le modifiche.
-- [ ] Nessuna revisione/documento/decisione esistente modificata dalla
-      migrazione (solo default/null).
-- [ ] Admin registrato per `UserSignature` (coerenza con lo stile esistente).
-
-#### Test richiesti
-
-- Test di modello minimi (creazione, default, unique/constraint su
-  `UserSignature.is_active` se applicabile).
-
-#### Guardrail
-
-- No push, no merge, nessuna migrazione distruttiva.
-
----
-
-### TASK-033 — Firma visiva utente: upload/gestione — Claude Code
-
-#### Obiettivo
-
-Permettere a ogni utente di caricare/sostituire/rimuovere una firma PNG
-opzionale, mantenendo sempre disponibile la firma testuale (nome utente).
-
-#### Scope
-
-- Form + vista di gestione firma (probabilmente in `accounts` o come
-  sezione del profilo esistente — verificare se esiste già una pagina
-  "profilo").
-- Validazione PNG con Pillow: formato reale (non solo estensione),
-  dimensione massima ragionevole, gestione trasparenza.
-- Storage privato (stesso pattern `upload_to` privato già in uso, nessun
-  URL pubblico diretto: download sempre mediato da una vista con
-  permesso).
-
-#### File coinvolti
-
-- `accounts/forms.py` (nuovo), `accounts/views.py`, `accounts/urls.py`,
-  `templates/accounts/*`
-- `requirements.txt` (Pillow)
-
-#### Acceptance criteria
-
-- [ ] Upload, sostituzione e rimozione funzionano; rimozione disattiva
-      (non elimina) per non rompere `ApprovalDecision.signature_used`
-      storici.
-- [ ] PNG non valido rifiutato con messaggio chiaro.
-- [ ] Nessun URL pubblico della firma.
-
-#### Test richiesti
-
-- PNG valido con/senza trasparenza, file non-PNG rinominato `.png`, file
-  oltre il limite dimensionale, rimozione, sostituzione.
-
-#### Guardrail
-
-- No push, no merge.
-
----
-
-### TASK-034 — Bozza: analisi sorgente, conversione, upload manuale, conferma — Claude Code
-
-#### Obiettivo
-
-Implementare il ciclo di vita del PDF di rappresentazione durante la bozza,
-senza mai bloccare la creazione iniziale.
-
-#### Scope
-
-- Alla creazione/modifica di una bozza: calcolo strategia (TASK-031),
-  tentativo di conversione automatica quando la strategia lo consente,
-  upload manuale sempre disponibile, conferma esplicita dell'autore quando
-  richiesta.
-- Invalidazione automatica di `representation_pdf`/conferma quando il
-  sorgente (`version.file`) cambia.
-- Stati UI distinti in bozza (non preparato / conversione riuscita /
-  caricato manualmente / da confermare / confermato / fallita / non
-  aggiornato).
-
-#### File coinvolti
-
-- `documents/services.py`, `documents/pdf_rendition.py` (nuovo, wrapper
-  reportlab per `AUTO_RELIABLE` + `soffice` per `AUTO_UNCERTAIN`),
-  `documents/views.py`, `documents/forms.py`,
-  `templates/documents/new_document.html`, `new_revision.html`,
-  `edit_version` template.
-- `requirements.txt` (reportlab).
-
-#### Acceptance criteria
-
-- [ ] Bozza creabile/salvabile senza alcun PDF.
-- [ ] Cambio sorgente invalida rappresentazione e conferma esistenti.
-- [ ] Autore può sempre sostituire una conversione automatica con un PDF
-      caricato a mano.
-
-#### Test richiesti
-
-- Fake converter iniettato nei test (nessuna dipendenza da `soffice` reale
-  in CI) per coprire successo/fallimento conversione.
-- Invalidazione dopo sostituzione sorgente.
-
-#### Guardrail
-
-- No push, no merge. Nessun tentativo di conversione reale nei test di CI.
-
----
-
-### TASK-035 — Gate invio in approvazione + congelamento — Claude Code
-
-#### Obiettivo
-
-Rendere obbligatorio un PDF di rappresentazione valido e confermato (quando
-richiesto) prima dell'invio, e congelare sorgente+PDF+checksum all'invio.
-Sostituisce il campo `signature_template_file`/`ApprovalRequestAttachment
-(SIGNATURE_TEMPLATE)` esistente in `submit_for_approval`, che diventa
-ridondante rispetto al nuovo `representation_pdf` tipizzato.
-
-#### Scope
-
-- `submit_version_for_approval` (`documents/services.py`): blocco esplicito
-  con messaggio chiaro per PDF mancante/obsoleto/non confermato.
-- Rimozione del campo `signature_template_file` da `SubmitForApprovalForm`
-  e del relativo passaggio in `documents/views.py:submit_for_approval`
-  (il "modello da firmare" generico è sostituito dal PDF di rappresentazione
-  tipizzato e già presente prima dell'invio).
-- Congelamento: nessuna sostituzione silenziosa di sorgente/PDF dopo
-  l'invio (stato `IN_APPROVAL` non più modificabile lato bozza — già vero
-  oggi per `version.file` via `can_edit_version`, va esteso esplicitamente
-  al PDF).
-
-#### File coinvolti
-
-- `documents/services.py`, `documents/views.py`, `documents/forms.py`
-- `templates/documents/submit_for_approval.html`
-- `approvals/models.py` (valutare deprecazione `SIGNATURE_TEMPLATE`, non
-  rimuovere dati storici esistenti)
-
-#### Acceptance criteria
-
-- [ ] Invio bloccato senza PDF valido/confermato, messaggio motivato.
-- [ ] Invio consentito con PDF valido.
-- [ ] Nessuna via per sostituire sorgente/PDF durante `IN_APPROVAL`.
-
-#### Test richiesti
-
-- Matrice: PDF mancante, obsoleto (sorgente cambiato dopo generazione),
-  non confermato quando richiesto, valido → invio consentito.
-
-#### Guardrail
-
-- No push, no merge. Non toccare dati storici di
-  `ApprovalRequestAttachment` già esistenti (solo il nuovo flusso).
-
----
-
-### TASK-036 — Generazione PDF approvato + registro firme — Claude Code
-
-#### Obiettivo
-
-Al raggiungimento di `APPROVED`, generare un PDF separato: PDF di
-rappresentazione congelato + pagina finale con registro delle approvazioni
-e firme visive, senza mai modificare il PDF sottoposto agli approvatori.
-
-#### Scope
-
-- `documents/approved_pdf.py` (nuovo): usa `pypdf` per unire il PDF di
-  rappresentazione congelato con una pagina finale generata via
-  `reportlab` (stato APPROVATO, codice, titolo, revisione, policy, data,
-  approvatori/ruolo/decisione/timestamp/firma PNG se presente, nota
-  assenza firma digitale).
-- Hook in `approvals/services.py:_finalize_approval`/`approve_version`:
-  generazione **dopo** il commit della transazione di approvazione,
-  idempotente (stato `approved_pdf_generation_status`), un errore di
-  generazione non deve invalidare l'approvazione già registrata.
-- Snapshot firma per decisione (`ApprovalDecision.signature_used`,
-  `signature_display_name`) popolato al momento di ogni
-  `approve_version`/`reject_version` (solo per decisioni di approvazione
-  compaiono nel registro finale; i rifiuti non generano PDF approvato).
-- Meccanismo di rigenerazione manuale in caso di fallimento (vista/azione
-  admin, non pubblica).
-
-#### File coinvolti
-
-- `documents/approved_pdf.py` (nuovo)
-- `approvals/services.py`
-- `documents/models.py` (nessun campo aggiuntivo oltre TASK-032)
-
-#### Acceptance criteria
-
-- [ ] PDF approvato mai generato per richieste rifiutate.
-- [ ] Rispetta ANY/ALL/SEQUENTIAL (solo decisioni realmente registrate).
-- [ ] Rieseguibile senza duplicare artefatti; fallimento non tocca lo
-      stato di approvazione già commesso.
-
-#### Test richiesti
-
-- Un caso per policy (ANY/ALL/SEQUENTIAL), rifiuto (nessun PDF), fallimento
-  generazione + retry, idempotenza su doppia chiamata.
-
-#### Guardrail
-
-- No push, no merge. `requirements.txt` (pypdf, reportlab se non già
-  aggiunto in TASK-034).
-
----
-
-### TASK-037 — UI pagina approvazione: PDF + sorgenti — Claude Code
-
-#### Obiettivo
-
-L'approvatore deve vedere/scaricare il PDF sottoposto e i sorgenti
-autorizzati, oltre a codice/revisione/stato/autore già presenti.
-
-#### Scope
-
-- `templates/approvals/approval_detail.html`: link/anteprima
-  `representation_pdf`, download sorgenti secondo permessi esistenti
-  (`can_download_version_file`).
-
-#### File coinvolti
-
-- `approvals/views.py`, `templates/approvals/approval_detail.html`
-
-#### Acceptance criteria
-
-- [ ] PDF da approvare sempre visibile/scaricabile per l'approvatore
-      assegnato.
-- [ ] Sorgenti visibili solo se già autorizzati oggi (nessuna estensione
-      di permesso non richiesta).
-
-#### Test richiesti
-
-- Visualizzazione/permesso per approvatore assegnato vs. utente non
-  autorizzato.
-
-#### Guardrail
-
-- No push, no merge.
-
----
-
-### TASK-038 — UI documento: PDF approvato come principale — Claude Code
-
-#### Obiettivo
-
-Per una revisione approvata, il PDF approvato diventa il documento
-principale mostrato; i sorgenti restano disponibili in sezione secondaria;
-`SUPERSEDED` conserva il proprio PDF approvato storico.
-
-#### Scope
-
-- `templates/documents/document_detail.html`, `version_detail.html`
-  (o equivalenti): comando "Scarica PDF approvato" evidente, sezione
-  secondaria per sorgenti, errori di generazione visibili chiaramente.
-
-#### File coinvolti
-
-- `documents/views.py`, template documento/versione coinvolti.
-
-#### Acceptance criteria
-
-- [ ] Versione approvata corrente: PDF approvato è il documento
-      principale.
-- [ ] Versione superseded: PDF approvato storico ancora accessibile,
-      con indicazione che esiste una revisione corrente successiva.
-
-#### Test richiesti
-
-- Rendering per versione APPROVED corrente, SUPERSEDED, e caso
-  generazione fallita (messaggio d'errore visibile).
-
-#### Guardrail
-
-- No push, no merge.
-
----
-
-### TASK-039 — Audit trail eventi PDF/firma — Claude Code
-
-#### Obiettivo
-
-Integrare `create_audit_log` per gli eventi del ciclo PDF, applicato
-incrementalmente nei task 032-036 e verificato qui in modo trasversale.
-
-#### Scope
-
-- Eventi minimi: strategia determinata, conversione iniziata/riuscita/
-  fallita, PDF manuale richiesto/caricato/confermato/invalidato, invio con
-  file congelati, generazione PDF approvato riuscita/fallita/rigenerata.
-
-#### File coinvolti
-
-- `documents/services.py`, `documents/pdf_rendition.py`,
-  `documents/approved_pdf.py`, `approvals/services.py`.
-
-#### Acceptance criteria
-
-- [ ] Ogni transizione di stato del PDF ha una riga di audit coerente
-      con lo stile esistente (`action`, `document`, `document_version`).
-- [ ] Nessun contenuto binario o segreto nei log.
-
-#### Test richiesti
-
-- Verifica presenza/azione corretta di `AuditLog` per ciascun evento
-  della lista.
-
-#### Guardrail
-
-- No push, no merge.
-
----
-
-### TASK-040 — Suite completa, demo, chiusura documentazione — Claude Code
-
-#### Obiettivo
-
-Chiudere la feature: suite Django completa verde, verifica demo a video,
-`docs/ai/REVIEW_LOG.md`/`RUN_LOG.md` aggiornati, stop prima di merge/push.
-
-#### Scope
-
-- Eseguire l'intera suite (`manage.py test`), non solo le app toccate.
-- Aggiornare `PROJECT_HANDOFF.md` se necessario.
-- Verifica manuale a video del flusso end-to-end (bozza senza PDF →
-  conversione/upload → conferma → invio → approvazione multi-policy →
-  PDF approvato scaricabile).
-
-#### File coinvolti
-
-- `docs/ai/REVIEW_LOG.md`, `docs/ai/RUN_LOG.md`, `docs/ai/TASKS.md`.
-
-#### Acceptance criteria
-
-- [ ] Suite completa verde.
-- [ ] Nessun merge, nessun push eseguito.
-- [ ] Working tree riportato in stato pulito/commesso localmente.
-
-#### Test richiesti
-
-- `manage.py test` (suite completa).
-
-#### Guardrail
-
-- No push, no merge, no reset --hard.
+- `documents/tests.py`: nuovi test su `determine_pdf_strategy` con
+  `office_converter_available=True` (estensioni Office-like →
+  `AUTO_EXTERNAL`/`OFFICE_LIBREOFFICE`/`requires_confirmation=True`) e
+  riconferma esplicita che il default resta `MANUAL_REQUIRED` quando il
+  parametro non è passato.
+- `documents/pdf_converters_external.py`: test di
+  `is_libreoffice_available()` con `override_settings` sulle due
+  variabili (4 combinazioni: entrambe vere/false/miste), senza mai
+  invocare realmente il binario in questi casi (mock su
+  `shutil.which`).
+- **Test di integrazione reale** (non mockato), `@override_settings(LIBREOFFICE_CONVERSION_ENABLED=True)`,
+  `unittest.skipUnless(shutil.which('soffice'), ...)`: genera un
+  `.docx` minimo ma realmente valido (zip OOXML scritto a mano nel
+  test, nessuna nuova dipendenza `python-docx`), lo converte con
+  `render_office_to_pdf_bytes` e verifica che l'output inizi con
+  `%PDF-` — **eseguito realmente in questa sessione** (LibreOffice è
+  installato sulla macchina), non solo scritto e mai lanciato.
+- Stesso gating, test end-to-end su
+  `sync_representation_pdf_for_new_source` con sorgente `.docx` reale:
+  stato finale `READY`, `requires_confirmation=True`. Test separato con
+  bytes non validi (pattern `b'finto office'` già usato altrove nella
+  suite) sotto lo stesso `override_settings`: conferma che una
+  conversione reale fallita produce `CONVERSION_FAILED` con
+  `error_message` popolato, non un'eccezione non gestita.
+- **Nessuna modifica ai test esistenti**: tutti i test precedenti che
+  usano sorgenti `.docx` con bytes finti (decine, in tutta
+  `documents/tests.py`) continuano a girare con
+  `LIBREOFFICE_CONVERSION_ENABLED=False` (default di
+  `config/test_settings.py`), quindi restano `MANUAL_UPLOAD_REQUIRED`
+  esattamente come prima — verificato eseguendo l'intera suite
+  `documents` dopo il cambio.
+
+#### Verifiche eseguite
+
+`python manage.py check` pulito. Suite `documents` completa eseguita
+con la venv reale del progetto (non solo letta): risultato riportato
+nel commit. Nessuna migrazione di modelli (nessun campo nuovo,
+`RepresentationPDF.Status.CONVERSION_FAILED`/`READY` già esistenti).
+`grep` mirato per confermare che nessun altro punto del codice
+(`views.py`, template, `admin.py`) assume un insieme chiuso di sole 3
+strategie: nessun consumatore trovato fuori da `pdf_strategy.py`,
+`pdf_pipeline.py` e `tests.py`.
+
+### TASK-045 — UI dettaglio documento: card unica + menu "Azioni" — Claude Code
+
+Richiesto verbalmente dall'operatore in questa sessione (mai discusso
+prima): nella pagina `document_detail` troppe informazioni erano
+sparse tra l'header e la card "Versione corrente", e le azioni
+disponibili (richiesta ECN, storico, modifica metadati, nuova
+revisione, dettaglio versione, download) erano distribuite in più
+bottoni separati. Obiettivo: interfaccia più minimale, senza perdere
+alcun dato o funzione già esposta prima.
+
+#### Modifiche
+
+- `templates/documents/document_detail.html`: header (codice, badge
+  tipo/stato, titolo, descrizione) e la card "Versione corrente" ex
+  separata uniti in un'unica `.card`, con un solo `detail-grid`
+  etichettato per tutti i campi (tipo documento, categoria,
+  proprietario, cartella progetto, modalità revisione, PDF approvato,
+  ECN semplice, revisione corrente, autore versione, data
+  approvazione, file, sommario modifiche). Testo dei badge esistenti
+  invariato byte-per-byte dove già coperto da test (vedi sotto).
+- Nuovo menu a tendina "Azioni" nell'header della card (bottone +
+  pannello, vanilla JS inline, nessuna libreria nuova): raccoglie + Nuova
+  revisione (diretta/via ECN secondo policy esistente), + Crea ECN
+  semplice, + Richiedi ECN standard, Modifica metadati, Vedi storico
+  completo, Dettaglio versione, Scarica file — stessa logica
+  condizionale (permessi/stato) di prima, solo riposizionata. Il
+  bottone non viene renderizzato se nessuna azione è disponibile.
+  Rimosso il pulsante duplicato "+ Richiedi variante" nella card
+  "Ultimo ECN / Variante" (stessa identica azione/URL già nel menu).
+- `src/css/main.css`: nuovo componente `.dropdown`/`.dropdown-menu`/
+  `.dropdown-item`/`.dropdown-divider`, stesso pattern
+  `var(--panel-bg)`/`var(--border-soft)`/`var(--shadow-soft)` già
+  usato da `.card` — theme-aware automaticamente, nessun override
+  `.dark` dedicato necessario (confermato visivamente, non solo per
+  lettura del codice, vedi sotto). `npm run build` eseguito,
+  `static/css/tailwind.css` rigenerato.
+
+#### Regressione trovata e corretta durante il primo giro di test
+
+3 test esistenti fallivano per un mismatch di maiuscole/testo dei
+badge dopo il refactor (`approvazione diretta senza ECN` diventato
+`Approvazione diretta senza ECN`; `Solo ECN standard (flusso semplice
+non consentito)` riscritto come `Non consentito (solo ECN standard)`)
+— corretto ripristinando il testo esatto atteso dai test
+(`test_document_detail_shows_policy_badge_when_disallowed`,
+`test_detail_shows_direct_approval_label`,
+`test_legacy_document_keeps_direct_revision_path`), non modificando i
+test: il testo originale era già corretto, non c'era motivo di
+cambiarlo.
+
+#### Verifiche eseguite
+
+`manage.py check` pulito. Suite `documents` completa: **525/525
+PASS** (0 nuovi test — refactor di template/CSS, la copertura
+esistente su testo/permessi/condizionali dei bottoni è bastata a
+guidare il fix della regressione sopra). Smoke test via `curl` (login
+reale) su documenti con combinazioni diverse di permessi/flag/assenza
+di versione corrente: tutti 200, nessun errore server.
+
+**Verifica visiva reale in Chrome** (non solo HTTP/DOM — lezione di
+TASK-043 applicata): menu "Azioni" testato aperto/chiuso, click su
+voce, chiusura al click esterno, chiusura con `Esc`, sia in tema
+chiaro sia scuro, sia su un documento completo (PDF approvato, ECN,
+approvazione con tabella approvatori) sia su una bozza senza versione
+corrente (menu correttamente ridotto alle sole azioni pertinenti,
+niente "Dettaglio versione"/"Scarica file" quando non applicabili).
+Tutto conforme, nessun problema visivo trovato.
 
 ---
 

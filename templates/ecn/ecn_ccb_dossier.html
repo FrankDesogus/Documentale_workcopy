@@ -67,23 +67,23 @@
       <span class="detail-value whitespace-pre-wrap">{{ ecn.description }}</span>
     </div>
     {% endif %}
+    {% if approvers %}
+    <div class="detail-item md:col-span-2">
+      <span class="detail-label">Componenti CCB ({{ approvers|length }})</span>
+      <span class="detail-value">
+        <ul class="space-y-1">
+          {% for app in approvers %}
+          <li class="flex items-center gap-2">
+            <span class="w-6 text-center text-gray-400 font-mono">{{ app.order }}.</span>
+            <span>{{ app.user.get_full_name|default:app.user.username }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </span>
+    </div>
+    {% endif %}
   </div>
 </div>
-
-<!-- Componenti CCB (sola lettura) -->
-{% if approvers %}
-<div class="form-section">
-  <div class="form-section-title">Componenti CCB ({{ approvers|length }})</div>
-  <ul class="space-y-1">
-    {% for app in approvers %}
-    <li class="flex items-center gap-2 text-sm text-gray-700">
-      <span class="w-6 text-center text-gray-400 font-mono">{{ app.order }}.</span>
-      <span>{{ app.user.get_full_name|default:app.user.username }}</span>
-    </li>
-    {% endfor %}
-  </ul>
-</div>
-{% endif %}
 
 {% if not dossier_editable %}
 <div class="alert-warning mb-4">
@@ -147,18 +147,6 @@
         {{ form.ccb_other_impact }}
         {% if form.ccb_other_impact.errors %}<p class="form-error">{{ form.ccb_other_impact.errors.as_text }}</p>{% endif %}
       </div>
-      <div class="form-group mb-0">
-        <label class="form-label">{{ form.ccb_constructed_impact.label }}</label>
-        {{ form.ccb_constructed_impact }}
-        {% if form.ccb_constructed_impact.help_text %}<p class="form-help">{{ form.ccb_constructed_impact.help_text }}</p>{% endif %}
-        {% if form.ccb_constructed_impact.errors %}<p class="form-error">{{ form.ccb_constructed_impact.errors.as_text }}</p>{% endif %}
-      </div>
-      <div class="form-group mb-0">
-        <label class="form-label">{{ form.ccb_applicability.label }}</label>
-        {{ form.ccb_applicability }}
-        {% if form.ccb_applicability.help_text %}<p class="form-help">{{ form.ccb_applicability.help_text }}</p>{% endif %}
-        {% if form.ccb_applicability.errors %}<p class="form-error">{{ form.ccb_applicability.errors.as_text }}</p>{% endif %}
-      </div>
     </div>
 
     <div class="form-group mb-0 mt-4">
@@ -166,6 +154,12 @@
       {{ form.ccb_notes }}
       {% if form.ccb_notes.errors %}<p class="form-error">{{ form.ccb_notes.errors.as_text }}</p>{% endif %}
     </div>
+  </div>
+
+  <!-- Applicabilità -->
+  <div class="form-section">
+    <div class="form-section-title">Applicabilità <span class="text-red-500">*</span></div>
+    {% include "ecn/_applicability_fields.html" %}
   </div>
 
   {% include "auditlog/sanatoria_fields.html" %}
@@ -191,6 +185,15 @@
 <div class="form-section">
   <div class="form-section-title">Contenuto dossier</div>
   <div class="dl-grid">
+    {% if ecn.applicability_category %}
+    <dt>Applicabilità</dt>
+    <dd>
+      <span class="{{ ecn.applicability_badge_class }}">{{ ecn.applicability_display }}</span>
+      {% if ecn.applicability_detail %}
+      <span class="block mt-1 whitespace-pre-wrap">{{ ecn.applicability_detail }}</span>
+      {% endif %}
+    </dd>
+    {% endif %}
     {% if ecn.ccb_class %}
     <dt>Classificazione</dt>   <dd>{{ ecn.get_ccb_class_display }}</dd>
     {% endif %}
@@ -211,12 +214,6 @@
     {% endif %}
     {% if ecn.ccb_other_impact %}
     <dt>Impatto altri doc.</dt><dd class="whitespace-pre-wrap">{{ ecn.ccb_other_impact }}</dd>
-    {% endif %}
-    {% if ecn.ccb_constructed_impact %}
-    <dt>Impatto sul costruito</dt><dd class="whitespace-pre-wrap">{{ ecn.ccb_constructed_impact }}</dd>
-    {% endif %}
-    {% if ecn.ccb_applicability %}
-    <dt>Applicabilità</dt>    <dd class="whitespace-pre-wrap">{{ ecn.ccb_applicability }}</dd>
     {% endif %}
     {% if ecn.ccb_notes %}
     <dt>Note CCB</dt>          <dd class="whitespace-pre-wrap">{{ ecn.ccb_notes }}</dd>

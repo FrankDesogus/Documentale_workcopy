@@ -7,8 +7,10 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 
 from auditlog.historical_forms import should_send_notifications
+from auditlog.locking import acquire_lock, lock_holder, release_lock
 from auditlog.models import HistoricalRecord
 from auditlog.permissions import can_use_sanatoria
 
@@ -196,6 +198,23 @@ def ecn_detail(request, ecn_id):
             ).select_related('recorded_by').order_by('-historical_date')
         )
 
+    # AREA 3 (verifica manuale 2026-07-27): il pulsante "Chiudi ECN" non deve
+    # comparire come azione pronta se il backend la bloccherebbe comunque —
+    # stessa fonte di verità di ecn_close (get_close_readiness).
+    from ecn.services import get_close_readiness
+    ready_to_close, not_ready_reason = get_close_readiness(ecn)
+
+    # Requisito 2026-07-28: distingue chiusura automatica (di sistema, esito
+    # ordinario) da chiusura manuale (ecn_close, ora un percorso eccezionale)
+    # riusando l'AuditLog già scritto — nessun nuovo campo sul modello.
+    closed_automatically = False
+    if ecn.status == ChangeNotice.Status.CLOSED:
+        from auditlog.models import AuditLog
+        closed_automatically = AuditLog.objects.filter(
+            app_label='ecn', model_name='changenotice',
+            object_id=str(ecn.pk), action='ECN_CLOSED_AUTO',
+        ).exists()
+
     return render(request, 'ecn/ecn_detail.html', {
         'ecn': ecn,
         'attachments': attachments,
@@ -206,6 +225,9 @@ def ecn_detail(request, ecn_id):
         'has_ccb_configured': has_ccb_configured,
         'can_review': can_review_ecn(request.user, ecn),
         'can_close': can_close_ecn(request.user, ecn),
+        'ready_to_close': ready_to_close,
+        'not_ready_reason': not_ready_reason,
+        'closed_automatically': closed_automatically,
         'can_attach': can_add_ecn_attachment(request.user, ecn),
         'can_create_rev_from_ecn': can_create_rev_from_ecn,
         'can_edit': can_edit_ecn(request.user, ecn),
@@ -323,10 +345,11 @@ def ecn_create_simple(request):
     if not can_create_ecn(request.user, document):
         raise PermissionDenied
 
-    if not document.allows_simple_ecn:
+    if not document.allow_simple_ecn:
         messages.error(
             request,
-            f'{document.code}: non consente ECN semplici. Usa l\'ECN standard con istruttoria CCB.',
+            'Il flusso ECN semplice non è consentito per questo documento. '
+            'Usa l\'ECN standard (con istruttoria e votazione CCB).',
         )
         return redirect('document_detail', document_id=document.pk)
 
@@ -492,6 +515,17 @@ def ecn_ccb_dossier(request, ecn_id):
 
     dossier_editable = can_compile_dossier(request.user, ecn)
 
+    if dossier_editable:
+        holder = lock_holder(ecn)
+        if holder is not None and holder.pk != request.user.pk:
+            messages.warning(
+                request,
+                f"Dossier in lavorazione da {holder.get_full_name() or holder.username} "
+                f"dalle {timezone.localtime(ecn.locked_at).strftime('%d/%m/%Y %H:%M')}. Riprova più tardi.",
+            )
+            return redirect('ecn:ecn_detail', ecn_id=ecn_id)
+        acquire_lock(ecn, request.user)
+
     if request.method == 'POST':
         if not dossier_editable:
             raise PermissionDenied
@@ -515,6 +549,8 @@ def ecn_ccb_dossier(request, ecn_id):
                     update_ccb_dossier(
                         ecn,
                         actor=request.user,
+                        applicability_category=d.get('applicability_category') or None,
+                        applicability_detail=d.get('applicability_detail', ''),
                         ccb_class=d.get('ccb_class') or None,
                         ccb_requirements=d.get('ccb_requirements', ''),
                         ccb_technical_impact=d.get('ccb_technical_impact', ''),
@@ -522,8 +558,6 @@ def ecn_ccb_dossier(request, ecn_id):
                         ccb_time_impact=d.get('ccb_time_impact', ''),
                         ccb_quality_impact=d.get('ccb_quality_impact', ''),
                         ccb_other_impact=d.get('ccb_other_impact', ''),
-                        ccb_constructed_impact=d.get('ccb_constructed_impact', ''),
-                        ccb_applicability=d.get('ccb_applicability', ''),
                         ccb_notes=d.get('ccb_notes', ''),
                     )
                     form.maybe_create_historical_record(
@@ -538,6 +572,7 @@ def ecn_ccb_dossier(request, ecn_id):
                             request.user,
                             send_notifications=should_send_notifications(sanatoria=form.is_sanatoria),
                         )
+                        release_lock(ecn, request.user)
                         messages.success(
                             request,
                             f'{ecn.code}: dossier inviato alla CCB. La votazione è avviata.',
@@ -555,6 +590,8 @@ def ecn_ccb_dossier(request, ecn_id):
         # Pre-popola con i dati esistenti
         form = ChangeNoticeDossierForm(
             initial={
+                'applicability_category': ecn.applicability_category or '',
+                'applicability_detail':   ecn.applicability_detail,
                 'ccb_class':           ecn.ccb_class or '',
                 'ccb_requirements':    ecn.ccb_requirements,
                 'ccb_technical_impact': ecn.ccb_technical_impact,
@@ -562,8 +599,6 @@ def ecn_ccb_dossier(request, ecn_id):
                 'ccb_time_impact':     ecn.ccb_time_impact,
                 'ccb_quality_impact':  ecn.ccb_quality_impact,
                 'ccb_other_impact':    ecn.ccb_other_impact,
-                'ccb_constructed_impact': ecn.ccb_constructed_impact,
-                'ccb_applicability':      ecn.ccb_applicability,
                 'ccb_notes':           ecn.ccb_notes,
             },
             current_user=request.user,
@@ -634,9 +669,19 @@ def ecn_review(request, ecn_id):
     if ecn.status != ChangeNotice.Status.UNDER_REVIEW:
         messages.error(
             request,
-            f'L\'ECN non è in revisione CCB (stato: {ecn.get_status_display()}).',
+            f'L\'ECN non è in valutazione CCB (stato: {ecn.get_status_display()}).',
         )
         return redirect('ecn:ecn_detail', ecn_id=ecn_id)
+
+    holder = lock_holder(ecn)
+    if holder is not None and holder.pk != request.user.pk:
+        messages.warning(
+            request,
+            f"Decisione CCB in lavorazione da {holder.get_full_name() or holder.username} "
+            f"dalle {timezone.localtime(ecn.locked_at).strftime('%d/%m/%Y %H:%M')}. Riprova più tardi.",
+        )
+        return redirect('ecn:ecn_detail', ecn_id=ecn_id)
+    acquire_lock(ecn, request.user)
 
     if request.method == 'POST':
         form = ChangeNoticeReviewForm(request.POST, current_user=request.user)
@@ -680,6 +725,7 @@ def ecn_review(request, ecn_id):
                         recorded_by=request.user,
                     )
                     messages.success(request, f'{ecn.code} rifiutato dalla CCB.')
+                release_lock(ecn, request.user)
                 return redirect('ecn:ecn_detail', ecn_id=ecn_id)
             except (PermissionDenied, ValidationError) as exc:
                 if isinstance(exc, PermissionDenied):
@@ -708,7 +754,7 @@ def ecn_review(request, ecn_id):
 def ecn_close(request, ecn_id):
     """APPROVED → CLOSED."""
     from ecn.forms import ChangeNoticeCloseForm
-    from ecn.services import close_change_notice
+    from ecn.services import close_change_notice, get_close_readiness
 
     ecn = get_object_or_404(
         ChangeNotice.objects.select_related('document', 'document_version', 'executed_version'),
@@ -725,14 +771,17 @@ def ecn_close(request, ecn_id):
         )
         return redirect('ecn:ecn_detail', ecn_id=ecn_id)
 
-    # Avvisi se il service bloccherebbe la chiusura (TASK-025)
-    warn_no_version = ecn.executed_version is None
-    warn_revision_not_approved = False
-    if ecn.executed_version is not None:
-        from documents.models import DocumentVersion
-        warn_revision_not_approved = ecn.executed_version.status != DocumentVersion.Status.APPROVED
+    # Unica fonte di verità (ecn/services.py:get_close_readiness): la stessa
+    # regola che il service applicherà in POST — mai un messaggio diverso
+    # tra "puoi provare" e "il backend blocca comunque" (AREA 3).
+    ready_to_close, not_ready_reason = get_close_readiness(ecn)
 
-    if request.method == 'POST':
+    if request.method == 'POST' and not ready_to_close:
+        # Stessa regola della UI e del service: se non è pronto, il form non
+        # viene nemmeno processato — nessun messaggio contraddittorio.
+        messages.error(request, not_ready_reason)
+        form = ChangeNoticeCloseForm(current_user=request.user)
+    elif request.method == 'POST':
         form = ChangeNoticeCloseForm(request.POST, current_user=request.user)
         if form.is_valid():
             d = form.cleaned_data
@@ -762,8 +811,8 @@ def ecn_close(request, ecn_id):
     return render(request, 'ecn/ecn_close_form.html', {
         'form': form,
         'ecn': ecn,
-        'warn_no_version': warn_no_version,
-        'warn_revision_not_approved': warn_revision_not_approved,
+        'ready_to_close': ready_to_close,
+        'not_ready_reason': not_ready_reason,
         'sanatoria_available': can_use_sanatoria(request.user),
     })
 
@@ -978,7 +1027,7 @@ def ecn_dashboard(request):
     draft_no_ccb = [e for e in all_draft if not e.approvers.exists()]
     draft_ccb_ready = [e for e in all_draft if e.approvers.exists()]
 
-    # 3: IN REVISIONE CCB — con progresso approvatori
+    # 3: IN VALUTAZIONE CCB — con progresso approvatori
     under_review_raw = (
         ChangeNotice.objects
         .filter(status=ChangeNotice.Status.UNDER_REVIEW)

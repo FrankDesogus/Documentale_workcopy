@@ -3,9 +3,7 @@
 
 {% block content %}
 <nav class="breadcrumb">
-  <a href="{% url 'archive_project_list' %}">Archivio progetti</a>
-  <span class="breadcrumb-sep">›</span>
-  <a href="{% url 'archive_project_detail' project.pk %}">{{ project.code }} – {{ project.name }}</a>
+  <a href="{% url 'project_detail' project.pk %}">{{ project.code }} – {{ project.name }}</a>
   <span class="breadcrumb-sep">›</span>
   <span>Salva {{ type_label }}</span>
 </nav>
@@ -70,7 +68,7 @@
 
   <div class="form-actions">
     <button type="submit" class="btn-primary">Salva {{ type_label }}</button>
-    <a href="{% url 'archive_project_detail' project.pk %}" class="btn-secondary">Annulla</a>
+    <a href="{% url 'project_detail' project.pk %}" class="btn-secondary">Annulla</a>
   </div>
 </form>
 {% endblock %}

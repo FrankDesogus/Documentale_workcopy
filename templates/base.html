@@ -107,16 +107,6 @@
         <span class="flex items-center gap-2.5"><span>📝</span> Mie bozze</span>
         {% if sb_n_drafts %}<span class="sidebar-count sidebar-count-warn">{{ sb_n_drafts }}</span>{% endif %}
       </a>
-
-      <a href="{% url 'my_revisions' %}"
-         class="sidebar-link {% if p == '/my-revisions/' %}sidebar-link-active{% endif %}">
-        <span>🕓</span> Mie revisioni
-      </a>
-
-      <a href="{% url 'my_documents' %}"
-         class="sidebar-link {% if p == '/my-documents/' %}sidebar-link-active{% endif %}">
-        <span>🗎</span> Miei documenti
-      </a>
       </div>
 
       {% if sb_can_quality %}
@@ -145,19 +135,19 @@
       </div>
       {% endif %}
 
-      {% if sb_can_archive %}
       <div class="sidebar-section border-t border-white/[0.06] pt-4">
         <div class="sidebar-section-title">Storico</div>
+        {% if sb_can_archive %}
         <a href="{% url 'archive_document_list' %}"
-           class="sidebar-link {% if p|slice:':10' == '/archivio/' %}sidebar-link-active{% endif %}">
+           class="sidebar-link {% if p|slice:':9' == '/archivio' %}sidebar-link-active{% endif %}">
           <span>📦</span> Archivio documenti
         </a>
         <a href="{% url 'archive_project_list' %}"
-           class="sidebar-link {% if p|slice:':19' == '/archivio-progetti/' %}sidebar-link-active{% endif %}">
-          <span>🗃️</span> Archivio progetti
+           class="sidebar-link {% if p|slice:':17' == '/archivio-progett' %}sidebar-link-active{% endif %}">
+          <span>🗂️</span> Archivio progetti
         </a>
+        {% endif %}
       </div>
-      {% endif %}
 
     </nav>
     {% endwith %}
@@ -165,7 +155,7 @@
     <!-- Footer utente -->
     <div class="px-4 py-3 border-t border-white/10 text-xs text-slate-400 bg-black/10">
       <div class="font-medium text-white truncate">{{ user.get_full_name|default:user.username }}</div>
-      <a href="{% url 'signature_manage' %}" class="mt-1 block text-elt-cyan-300 hover:text-white transition-colors text-xs">La mia firma visiva</a>
+      <a href="{% url 'signature_settings' %}" class="mt-1 block text-elt-cyan-300 hover:text-white transition-colors">✍️ Firma visiva</a>
       <form method="post" action="{% url 'logout' %}" class="inline m-0">
         {% csrf_token %}
         <button type="submit" class="mt-1 text-elt-cyan-300 hover:text-white transition-colors bg-transparent border-0 cursor-pointer p-0 text-xs">Esci →</button>

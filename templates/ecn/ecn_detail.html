@@ -19,7 +19,7 @@
     {% elif ecn.status == 'ccb_preparation' %}
     <span class="badge-ecn-ccb_prep">Istruttoria CCB</span>
     {% elif ecn.status == 'under_review' %}
-    <span class="badge-ecn-under_review">In revisione CCB</span>
+    <span class="badge-ecn-under_review">In Valutazione CCB</span>
     {% elif ecn.status == 'approved' %}
     <span class="badge-ecn-approved">Approvata</span>
     {% elif ecn.status == 'rejected' %}
@@ -82,27 +82,22 @@
   </div>
   {% else %}
   <div class="alert-info mb-4">
-    <strong>In revisione:</strong> L'ECN è in corso di revisione da parte della CCB.
+    <strong>In Valutazione:</strong> L'ECN è in corso di valutazione da parte della CCB.
   </div>
   {% endif %}
 {% elif ecn.status == 'approved' %}
   {% if ecn.executed_version %}
-    {% if ecn.executed_version.status == 'approved' %}
-    <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-      <div class="text-sm font-semibold text-green-900 mb-1">Prossima azione</div>
-      <p class="text-sm text-green-800">
-        {% if can_close %}Revisione documento approvata (Rev. {{ ecn.executed_version.revision_label }}). Procedi con la chiusura formale dell'ECN.
-        {% else %}Revisione documento approvata (Rev. {{ ecn.executed_version.revision_label }}). Il Responsabile Qualità procederà con la chiusura.{% endif %}
-      </p>
-    </div>
-    {% else %}
-    <div class="alert-info mb-4">
-      <strong>In attesa di completamento.</strong>
-      La revisione collegata (Rev. {{ ecn.executed_version.revision_label }}) risulta
-      <em>{{ ecn.executed_version.get_status_display }}</em>: l'ECN potrà essere chiuso
-      solo dopo che questa revisione sarà stata approvata.
-    </div>
-    {% endif %}
+  <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+    <div class="text-sm font-semibold text-amber-900 mb-1">Caso eccezionale</div>
+    <p class="text-sm text-amber-800">
+      La revisione di esecuzione è approvata: normalmente il sistema chiude
+      automaticamente questo ECN nello stesso momento.
+      {% if ready_to_close %}
+        Non risulta ancora chiuso — se necessario,
+        {% if can_close %}puoi chiuderlo manualmente qui sotto.{% else %}un Responsabile Qualità può chiuderlo manualmente.{% endif %}
+      {% endif %}
+    </p>
+  </div>
   {% else %}
   <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
     <div class="text-sm font-semibold text-green-900 mb-1">Prossima azione</div>
@@ -114,7 +109,13 @@
   {% endif %}
 {% elif ecn.status == 'closed' %}
 <div class="alert-info mb-4">
-  <strong>Completato:</strong> ECN chiuso il {{ ecn.closed_at|date:"d/m/Y" }}.
+  {% if closed_automatically %}
+    <strong>Completato:</strong> Chiuso automaticamente dopo l'approvazione della
+    revisione {% if ecn.executed_version %}Rev. {{ ecn.executed_version.revision_label }}{% endif %}
+    il {{ ecn.closed_at|date:"d/m/Y H:i" }}.
+  {% else %}
+    <strong>Completato:</strong> ECN chiuso il {{ ecn.closed_at|date:"d/m/Y" }}.
+  {% endif %}
 </div>
 {% elif ecn.status == 'rejected' %}
 <div class="alert-danger mb-4">
@@ -181,8 +182,8 @@
   <a href="{% url 'ecn:ecn_review' ecn.pk %}" class="btn-primary">Decisione CCB</a>
   {% endif %}
 
-  {% if ecn.status == 'approved' and can_close and ecn.executed_version.status == 'approved' %}
-  <a href="{% url 'ecn:ecn_close' ecn.pk %}" class="btn-success">Chiudi ECN</a>
+  {% if ecn.status == 'approved' and can_close and ready_to_close %}
+  <a href="{% url 'ecn:ecn_close' ecn.pk %}" class="btn-success">Chiudi ECN manualmente (caso eccezionale)</a>
   {% endif %}
 
   {% if can_attach %}
@@ -237,6 +238,9 @@
   </dl>
 </div>
 
+{# ── Applicabilità ── #}
+{% include "ecn/_applicability_box.html" %}
+
 {# ── Valutazione CCB ── #}
 {% if ecn.status == 'approved' or ecn.status == 'rejected' or ecn.status == 'closed' or ecn.ccb_reviewed_by %}
 <div class="card">
@@ -268,12 +272,6 @@
     {% endif %}
     {% if ecn.ccb_other_impact %}
     <dt>Impatto altri doc.</dt><dd class="whitespace-pre-wrap">{{ ecn.ccb_other_impact }}</dd>
-    {% endif %}
-    {% if ecn.ccb_constructed_impact %}
-    <dt>Impatto sul costruito</dt><dd class="whitespace-pre-wrap">{{ ecn.ccb_constructed_impact }}</dd>
-    {% endif %}
-    {% if ecn.ccb_applicability %}
-    <dt>Applicabilità</dt> <dd class="whitespace-pre-wrap">{{ ecn.ccb_applicability }}</dd>
     {% endif %}
     {% if ecn.ccb_notes %}
     <dt>Note CCB</dt>       <dd class="whitespace-pre-wrap">{{ ecn.ccb_notes }}</dd>
@@ -344,6 +342,13 @@
       — <span class="badge-status-{{ ecn.executed_version.status }}">{{ ecn.executed_version.get_status_display }}</span>
     </dd>
   </dl>
+  {% if ecn.status == 'approved' %}
+    {% if ready_to_close %}
+    <p class="text-green-700 text-sm mt-2">ECN pronto per la chiusura.</p>
+    {% else %}
+    <p class="text-amber-700 text-sm mt-2">{{ not_ready_reason }}</p>
+    {% endif %}
+  {% endif %}
   {% else %}
   <p class="text-amber-700 text-sm">
     Nessuna revisione di esecuzione collegata. La nuova revisione del documento verrà collegata a questo ECN nel passo successivo.
@@ -356,6 +361,12 @@
 {% if ecn.status == 'closed' %}
 <div class="card">
   <h2 class="text-base font-semibold text-brand-900 mb-3 card-header">Chiusura</h2>
+  {% if closed_automatically %}
+  <p class="text-sm text-green-800 bg-green-50 border border-green-200 rounded-lg p-3 mb-3">
+    Chiuso automaticamente dopo l'approvazione della revisione
+    {% if ecn.executed_version %}Rev. {{ ecn.executed_version.revision_label }}{% endif %}.
+  </p>
+  {% endif %}
   <dl class="dl-grid">
     {% if ecn.closed_by %}
     <dt>Chiuso da</dt>    <dd>{{ ecn.closed_by.get_full_name|default:ecn.closed_by.username }}</dd>

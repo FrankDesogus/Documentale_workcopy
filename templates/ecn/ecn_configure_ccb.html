@@ -15,13 +15,14 @@
   <h1>Configura CCB — {{ ecn.code }}</h1>
   <p class="page-header-sub">
     Documento: <strong>{{ ecn.document.code }} — {{ ecn.document.title }}</strong> ·
-    Proposto da: {{ ecn.proposed_by.get_full_name|default:ecn.proposed_by.username }}
+    Proposto da: {{ ecn.proposed_by.get_full_name|default:ecn.proposed_by.username }} ·
+    Applicabilità: {% include "ecn/_applicability_badge.html" %}
   </p>
 </div>
 
 {% if is_under_review %}
 <div class="alert-warning mb-4">
-  <strong>Attenzione:</strong> L'ECN è in revisione. Puoi modificare solo se non ci sono decisioni espresse.
+  <strong>Attenzione:</strong> L'ECN è in valutazione. Puoi modificare solo se non ci sono decisioni espresse.
 </div>
 {% endif %}
 

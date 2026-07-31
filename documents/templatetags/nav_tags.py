@@ -25,7 +25,7 @@ _STATUS_LABELS = {
     'archived': 'Archiviato',
     # ECN
     'ccb_preparation': 'Istruttoria CCB',
-    'under_review': 'In revisione CCB',
+    'under_review': 'In Valutazione CCB',
     'closed': 'Chiusa',
     # Approvatori
     'pending': 'In attesa',
@@ -245,12 +245,7 @@ def nav_ecn_to_review(user):
 
 @register.simple_tag
 def nav_ecn_to_close(user):
-    """
-    ECN approvati con revisione eseguita e APPROVATA, davvero pronti per la
-    chiusura (solo Quality Manager). TASK-025: la sola creazione della
-    bozza di revisione non basta più — close_change_notice ora richiede
-    che la revisione collegata sia stata approvata.
-    """
+    """ECN approvati con revisione eseguita, da chiudere (solo Quality Manager)."""
     if not user or not user.is_authenticated:
         return 0
     try:
@@ -258,11 +253,10 @@ def nav_ecn_to_close(user):
             from documents.permissions import is_quality_manager
             if not is_quality_manager(user):
                 return 0
-        from documents.models import DocumentVersion
         from ecn.models import ChangeNotice
         return ChangeNotice.objects.filter(
             status=ChangeNotice.Status.APPROVED,
-            executed_version__status=DocumentVersion.Status.APPROVED,
+            executed_version__isnull=False,
         ).count()
     except Exception:
         return 0

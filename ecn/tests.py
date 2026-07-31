@@ -1,3 +1,5 @@
+import datetime
+
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError
@@ -23,6 +25,7 @@ from ecn.services import (
     reject_change_notice,
     set_change_notice_approvers,
     submit_change_notice,
+    update_change_notice,
 )
 from projects.models import FolderPermissionGrant, ProjectFolder, ProjectFolderMembership
 
@@ -72,6 +75,7 @@ def _make_ecn(document, version, proposed_by, code='ECN-001', **kwargs):
         title='Variante di test',
         description='Descrizione variante',
         motivation=ChangeNotice.Motivation.IMPROVEMENT,
+        applicability_category=ChangeNotice.Applicability.GENERAL,
         proposed_by=proposed_by,
         created_by=proposed_by,
     )
@@ -119,6 +123,18 @@ class ChangeNoticeModelTests(TestCase):
         self.assertIn('approved', valid)
         self.assertIn('rejected', valid)
         self.assertIn('closed', valid)
+
+    def test_under_review_label_is_in_valutazione_ccb(self):
+        """
+        Etichetta 2026-07-28: solo il testo mostrato cambia ("In Revisione
+        CCB" → "In Valutazione CCB"), il valore tecnico persistito
+        ('under_review') resta invariato.
+        """
+        ecn = _make_ecn(self.document, self.version, self.user, code='ECN-LABEL-001')
+        ecn.status = ChangeNotice.Status.UNDER_REVIEW
+        ecn.save(update_fields=['status'])
+        self.assertEqual(ecn.status, 'under_review')
+        self.assertEqual(ecn.get_status_display(), 'In Valutazione CCB')
 
     def test_all_motivation_choices_valid(self):
         valid = {m.value for m in ChangeNotice.Motivation}
@@ -469,6 +485,138 @@ class ChangeNoticeDecisionModelTests(TestCase):
         self.assertEqual(ChangeNoticeDecision._meta.verbose_name, 'Decisione CCB')
 
 
+class ApplicabilityValidationTests(TestCase):
+    """TASK-036-4 Parte A: validazione e proprietà applicabilità ECN."""
+
+    def setUp(self):
+        self.user = _make_user('appl_model_user')
+        self.folder = _make_folder(self.user, code='APPL-MODEL-FOLD')
+        self.document = _make_document(self.user, self.folder, code='APPL-MODEL-DOC')
+        self.version = _make_version(self.document, self.user)
+
+    def test_validate_accepts_general_future_limited_and_strips_detail(self):
+        self.assertEqual(
+            ChangeNotice.validate_applicability(ChangeNotice.Applicability.GENERAL, ''),
+            (ChangeNotice.Applicability.GENERAL, ''),
+        )
+        self.assertEqual(
+            ChangeNotice.validate_applicability(ChangeNotice.Applicability.FUTURE, ''),
+            (ChangeNotice.Applicability.FUTURE, ''),
+        )
+        self.assertEqual(
+            ChangeNotice.validate_applicability(ChangeNotice.Applicability.LIMITED, '  commessa 12345  '),
+            (ChangeNotice.Applicability.LIMITED, 'commessa 12345'),
+        )
+
+    def test_validate_rejects_limited_missing_blank_or_too_short_detail(self):
+        for detail in ['', '   ', 'corto']:
+            with self.subTest(detail=repr(detail)):
+                with self.assertRaises(ValidationError) as cm:
+                    ChangeNotice.validate_applicability(ChangeNotice.Applicability.LIMITED, detail)
+                self.assertIn('applicability_detail', cm.exception.error_dict)
+
+    def test_validate_rejects_invalid_or_missing_category(self):
+        for category in ['non_esiste', None]:
+            with self.subTest(category=category):
+                with self.assertRaises(ValidationError) as cm:
+                    ChangeNotice.validate_applicability(category, '')
+                self.assertIn('applicability_category', cm.exception.error_dict)
+
+    def test_general_accepts_optional_detail_without_length_constraint(self):
+        self.assertEqual(
+            ChangeNotice.validate_applicability(ChangeNotice.Applicability.GENERAL, 'qualunque testo'),
+            (ChangeNotice.Applicability.GENERAL, 'qualunque testo'),
+        )
+
+    def test_historical_ecn_without_applicability_remains_readable(self):
+        ecn = _make_ecn(
+            self.document, self.version, self.user,
+            code='APPL-HIST-001',
+            applicability_category=None,
+        )
+        self.assertEqual(ecn.applicability_display, 'Applicabilità non specificata')
+        self.assertEqual(ecn.applicability_badge_class, 'badge-applicability-unset')
+        self.assertEqual(ecn.applicability_short_description, '')
+        self.assertFalse(ecn.applicability_shows_scope_notice)
+        self.assertFalse(ecn.applicability_is_registered)
+
+    def test_valid_categories_expose_expected_display_badge_and_scope_notice(self):
+        expected_classes = {
+            ChangeNotice.Applicability.GENERAL: 'badge-applicability-general',
+            ChangeNotice.Applicability.FUTURE: 'badge-applicability-future',
+            ChangeNotice.Applicability.LIMITED: 'badge-applicability-limited',
+        }
+        for category, expected_class in expected_classes.items():
+            with self.subTest(category=category):
+                ecn = _make_ecn(
+                    self.document, self.version, self.user,
+                    code=f'APPL-PROP-{category}',
+                    applicability_category=category,
+                    applicability_detail='Dettaglio valido' if category == ChangeNotice.Applicability.LIMITED else '',
+                )
+                self.assertEqual(ecn.applicability_display, ecn.get_applicability_category_display())
+                self.assertEqual(ecn.applicability_badge_class, expected_class)
+                self.assertTrue(ecn.applicability_short_description)
+                self.assertEqual(
+                    ecn.applicability_shows_scope_notice,
+                    category in (ChangeNotice.Applicability.FUTURE, ChangeNotice.Applicability.LIMITED),
+                )
+
+
+class ApplicabilityFormTests(TestCase):
+    """
+    TASK-037: l'applicabilità vive nel dossier istruttorio CCB
+    (ChangeNoticeDossierForm), non nelle form di creazione/modifica ECN
+    (ChangeNoticeForm/ChangeNoticeEditForm/SimpleEcnForm non hanno più
+    questi campi — corretto rispetto all'impostazione iniziale TASK-036).
+    Opzionale al salvataggio bozza, obbligatoria solo prima dell'invio al
+    voto (validate_for_submit), stesso trattamento di ccb_class/
+    ccb_requirements/ccb_technical_impact.
+    """
+
+    def _valid_dossier_data(self, **overrides):
+        data = {
+            'applicability_category': ChangeNotice.Applicability.GENERAL,
+            'applicability_detail': '',
+            'ccb_class': ChangeNotice.CCBClass.CLASS1,
+            'ccb_requirements': 'Verificato.',
+            'ccb_technical_impact': 'Nessuno.',
+        }
+        data.update(overrides)
+        return data
+
+    def test_dossier_form_valid_without_applicability_but_submit_requires_it(self):
+        from ecn.forms import ChangeNoticeDossierForm
+
+        form = ChangeNoticeDossierForm(data=self._valid_dossier_data(applicability_category=''))
+        self.assertTrue(form.is_valid(), form.errors)
+        with self.assertRaises(ValidationError) as cm:
+            form.validate_for_submit()
+        self.assertIn('applicability_category', cm.exception.message_dict)
+
+    def test_dossier_form_submit_requires_detail_for_limited(self):
+        from ecn.forms import ChangeNoticeDossierForm
+
+        form = ChangeNoticeDossierForm(data=self._valid_dossier_data(
+            applicability_category=ChangeNotice.Applicability.LIMITED,
+            applicability_detail='',
+        ))
+        self.assertTrue(form.is_valid(), form.errors)
+        with self.assertRaises(ValidationError) as cm:
+            form.validate_for_submit()
+        self.assertIn('applicability_detail', cm.exception.message_dict)
+
+    def test_dossier_form_submit_passes_with_valid_limited_detail(self):
+        from ecn.forms import ChangeNoticeDossierForm
+
+        form = ChangeNoticeDossierForm(data=self._valid_dossier_data(
+            applicability_category=ChangeNotice.Applicability.LIMITED,
+            applicability_detail='Solo commessa ABC-2026, non le altre linee.',
+        ))
+        self.assertTrue(form.is_valid(), form.errors)
+        form.validate_for_submit()  # non deve sollevare
+
+
 # ===========================================================================
 # Helper per ECN-A2: utenti con ruoli
 # ===========================================================================
@@ -502,14 +650,17 @@ def _make_executed_version(ecn, created_by, status=DocumentVersion.Status.APPROV
     """
     Crea una DocumentVersion e la collega come executed_version dell'ECN.
 
-    Default APPROVED (TASK-025: close_change_notice richiede che la
-    revisione collegata sia stata approvata, non solo creata). Passare
-    status=DRAFT/IN_APPROVAL/REJECTED per testare i casi bloccati.
+    Default status=APPROVED (AREA 3, verifica manuale 2026-07-27):
+    get_close_readiness/close_change_notice richiedono che la revisione di
+    esecuzione sia realmente approvata, non solo collegata — passare
+    status=DRAFT/IN_APPROVAL/REJECTED esplicitamente per i test che
+    verificano il blocco della chiusura in quei casi.
     """
+    revision_number = DocumentVersion.objects.filter(document=ecn.document).count()
     new_ver = DocumentVersion.objects.create(
         document=ecn.document,
-        revision_label='01',
-        revision_number=1,
+        revision_label=f'{revision_number:02d}',
+        revision_number=revision_number,
         status=status,
         is_current=False,
         created_by=created_by,
@@ -1405,6 +1556,33 @@ class ECNServiceWorkflowTests(TestCase):
             close_change_notice(ecn, self.manager)
         self.assertIn('nessuna revisione', str(ctx.exception).lower())
 
+    def test_close_fails_when_executed_version_not_yet_approved(self):
+        """
+        AREA 3 (verifica manuale 2026-07-27): una revisione collegata ma
+        ancora in bozza/in approvazione/rifiutata non deve permettere la
+        chiusura — l'autoapprovazione dell'ECN autorizza la modifica, non
+        significa che la modifica sia stata completata.
+        """
+        for status in (
+            DocumentVersion.Status.DRAFT,
+            DocumentVersion.Status.IN_APPROVAL,
+            DocumentVersion.Status.REJECTED,
+        ):
+            with self.subTest(status=status):
+                ecn = self._to_approved(f'ECN-WF-CLOSE-NOTYET-{status}')
+                _make_executed_version(ecn, self.proposer, status=status)
+                with self.assertRaises(ValidationError) as ctx:
+                    close_change_notice(ecn, self.manager)
+                self.assertIn('non è ancora approvata', str(ctx.exception))
+
+    def test_close_succeeds_when_executed_version_approved(self):
+        ecn = self._to_approved('ECN-WF-CLOSE-APPROVED-EXEC')
+        _make_executed_version(ecn, self.proposer, status=DocumentVersion.Status.APPROVED)
+        close_change_notice(ecn, self.manager)
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.CLOSED)
+
+
     def test_close_fails_if_not_approved(self):
         ecn = self._to_under_review('ECN-WF-CLOSE-STATE')
         with self.assertRaises(ValidationError):
@@ -1414,33 +1592,6 @@ class ECNServiceWorkflowTests(TestCase):
         ecn = self._create_draft('ECN-WF-CLOSE-DRAFT')
         with self.assertRaises(ValidationError):
             close_change_notice(ecn, self.manager)
-
-    def test_close_fails_if_executed_version_still_draft(self):
-        """TASK-025: la sola creazione della bozza di revisione non basta
-        più — deve essere stata approvata prima di poter chiudere l'ECN."""
-        ecn = self._to_approved('ECN-WF-CLOSE-REV-DRAFT')
-        _make_executed_version(ecn, self.proposer, status=DocumentVersion.Status.DRAFT)
-        with self.assertRaises(ValidationError) as ctx:
-            close_change_notice(ecn, self.manager)
-        self.assertIn('non è ancora', str(ctx.exception).lower())
-        ecn.refresh_from_db()
-        self.assertEqual(ecn.status, ChangeNotice.Status.APPROVED)
-
-    def test_close_fails_if_executed_version_in_approval(self):
-        ecn = self._to_approved('ECN-WF-CLOSE-REV-INAPPR')
-        _make_executed_version(ecn, self.proposer, status=DocumentVersion.Status.IN_APPROVAL)
-        with self.assertRaises(ValidationError):
-            close_change_notice(ecn, self.manager)
-
-    def test_close_fails_if_executed_version_rejected(self):
-        """Se la revisione collegata viene rifiutata, l'ECN resta APPROVED
-        (non chiudibile) — nulla lo riapre né lo richiude automaticamente."""
-        ecn = self._to_approved('ECN-WF-CLOSE-REV-REJ')
-        _make_executed_version(ecn, self.proposer, status=DocumentVersion.Status.REJECTED)
-        with self.assertRaises(ValidationError):
-            close_change_notice(ecn, self.manager)
-        ecn.refresh_from_db()
-        self.assertEqual(ecn.status, ChangeNotice.Status.APPROVED)
 
     def test_close_fails_for_non_manager(self):
         ecn = self._to_approved_with_exec_version('ECN-WF-CLOSE-PERM')
@@ -1530,6 +1681,59 @@ class ECNServiceWorkflowTests(TestCase):
         self.assertIn('ECN_SUBMITTED', actions)
         self.assertIn('ECN_APPROVED', actions)
         self.assertIn('ECN_CLOSED', actions)
+
+
+class GetCloseReadinessTests(TestCase):
+    """AREA 3 — get_close_readiness: unica fonte di verità, usata da UI e service."""
+
+    def setUp(self):
+        self.proposer = _make_user('readiness_proposer')
+        self.manager = _make_user_in_groups('readiness_manager', GROUP_MANAGERS)
+        self.folder = _make_folder(self.proposer, code='READINESS-FOLD')
+        self.document, self.version = _make_approved_document(self.proposer, self.folder, code='READINESS-DOC')
+
+    def _make_ecn_approved(self, code='ECN-READY-001'):
+        from ecn.services import create_change_notice
+        ecn = create_change_notice(
+            document=self.document, proposed_by=self.proposer,
+            title='ECN readiness test', motivation=ChangeNotice.Motivation.IMPROVEMENT,
+            code=code, send_notifications=False,
+        )
+        ecn.status = ChangeNotice.Status.APPROVED
+        ecn.save(update_fields=['status'])
+        return ecn
+
+    def test_not_ready_when_not_approved(self):
+        from ecn.services import get_close_readiness
+        ecn = self._make_ecn_approved('ECN-READY-002')
+        ecn.status = ChangeNotice.Status.DRAFT
+        ecn.save(update_fields=['status'])
+        ready, reason = get_close_readiness(ecn)
+        self.assertFalse(ready)
+        self.assertIn('non è nello stato approvato', reason)
+
+    def test_not_ready_when_no_executed_version(self):
+        from ecn.services import get_close_readiness
+        ecn = self._make_ecn_approved()
+        ready, reason = get_close_readiness(ecn)
+        self.assertFalse(ready)
+        self.assertIn('Nessuna revisione', reason)
+
+    def test_not_ready_when_executed_version_draft(self):
+        from ecn.services import get_close_readiness
+        ecn = self._make_ecn_approved('ECN-READY-003')
+        _make_executed_version(ecn, self.proposer, status=DocumentVersion.Status.DRAFT)
+        ready, reason = get_close_readiness(ecn)
+        self.assertFalse(ready)
+        self.assertIn('non è ancora approvata', reason)
+
+    def test_ready_when_executed_version_approved(self):
+        from ecn.services import get_close_readiness
+        ecn = self._make_ecn_approved('ECN-READY-004')
+        _make_executed_version(ecn, self.proposer, status=DocumentVersion.Status.APPROVED)
+        ready, reason = get_close_readiness(ecn)
+        self.assertTrue(ready)
+        self.assertEqual(reason, '')
 
 
 # ---------------------------------------------------------------------------
@@ -1655,6 +1859,15 @@ class ECNViewTests(TestCase):
         r = self.client.get(f'/ecn/{self.ecn.pk}/')
         # STEP I: il pulsante si chiama "Decisione CCB"
         self.assertContains(r, 'Decisione CCB')
+
+    def test_ecn_detail_shows_in_valutazione_ccb_label(self):
+        """Etichetta 2026-07-28: il badge mostra 'In Valutazione CCB', non più 'In Revisione CCB'."""
+        self.ecn.status = ChangeNotice.Status.UNDER_REVIEW
+        self.ecn.save(update_fields=['status'])
+        self.client.force_login(self.manager)
+        r = self.client.get(f'/ecn/{self.ecn.pk}/')
+        self.assertContains(r, 'In Valutazione CCB')
+        self.assertNotContains(r, 'In Revisione CCB')
 
     def test_ecn_detail_shows_approvers_section(self):
         """ECN-E: la sezione Componenti CCB mostra l'approvatore."""
@@ -1848,31 +2061,52 @@ class ECNViewTests(TestCase):
         self.client.force_login(self.manager)
         r = self.client.get(f'/ecn/{self.ecn.pk}/close/')
         self.assertEqual(r.status_code, 200)
-        # Nessun avviso perché executed_version è impostata
-        self.assertNotContains(r, 'Attenzione')
+        # Nessun blocco perché executed_version è impostata ED è approvata
+        self.assertNotContains(r, 'Non è ancora possibile chiudere')
 
     def test_ecn_close_manager_sees_warning_without_exec_version(self):
-        """Il form di chiusura avvisa se executed_version non è impostata."""
+        """
+        AREA 3 (verifica manuale 2026-07-27): il form di chiusura mostra un
+        blocco chiaro (mai un "puoi procedere comunque" contraddittorio) se
+        executed_version non è impostata — stesso motivo che il service
+        userebbe per rifiutare la chiusura.
+        """
         self.ecn.status = ChangeNotice.Status.APPROVED
         self.ecn.ccb_class = ChangeNotice.CCBClass.CLASS1
         self.ecn.save(update_fields=['status', 'ccb_class'])
         self.client.force_login(self.manager)
         r = self.client.get(f'/ecn/{self.ecn.pk}/close/')
         self.assertEqual(r.status_code, 200)
-        self.assertContains(r, 'Chiusura non possibile')
+        self.assertContains(r, 'Non è ancora possibile chiudere')
+        self.assertContains(r, 'Crea revisione da questo ECN')
+        # Il form di chiusura non deve essere mostrato quando non è pronto.
+        self.assertNotContains(r, 'Conferma chiusura ECN')
 
-    def test_ecn_close_manager_sees_warning_when_exec_version_not_approved(self):
-        """TASK-025: avviso specifico se la revisione collegata esiste ma
-        non è ancora approvata (es. ancora in bozza)."""
+    def test_ecn_close_blocked_when_executed_version_not_yet_approved(self):
+        """Revisione collegata ma ancora in bozza: chiusura bloccata con motivo specifico."""
         self.ecn.status = ChangeNotice.Status.APPROVED
         self.ecn.ccb_class = ChangeNotice.CCBClass.CLASS1
         self.ecn.save(update_fields=['status', 'ccb_class'])
         _make_executed_version(self.ecn, self.proposer, status=DocumentVersion.Status.DRAFT)
         self.client.force_login(self.manager)
         r = self.client.get(f'/ecn/{self.ecn.pk}/close/')
-        self.assertEqual(r.status_code, 200)
-        self.assertContains(r, 'Chiusura non possibile')
         self.assertContains(r, 'non è ancora approvata')
+        self.assertNotContains(r, 'Conferma chiusura ECN')
+
+    def test_ecn_detail_close_button_hidden_when_not_ready(self):
+        """Il pulsante 'Chiudi ECN' non deve comparire se il backend bloccherebbe comunque."""
+        self.ecn.status = ChangeNotice.Status.APPROVED
+        self.ecn.ccb_class = ChangeNotice.CCBClass.CLASS1
+        self.ecn.save(update_fields=['status', 'ccb_class'])
+        self.client.force_login(self.manager)
+        r = self.client.get(f'/ecn/{self.ecn.pk}/')
+        self.assertNotContains(r, 'Chiudi ECN manualmente')
+
+    def test_ecn_detail_close_button_shown_when_ready(self):
+        self._put_ecn_approved_with_exec_version()
+        self.client.force_login(self.manager)
+        r = self.client.get(f'/ecn/{self.ecn.pk}/')
+        self.assertContains(r, 'Chiudi ECN manualmente')
 
     def test_ecn_close_post_closes_ecn(self):
         self._put_ecn_approved_with_exec_version()
@@ -2938,6 +3172,7 @@ class CCBDossierTests(TestCase):
         from ecn.services import update_ccb_dossier
         actor = actor or self.qm
         defaults = {
+            'applicability_category': ChangeNotice.Applicability.GENERAL,
             'ccb_class': 'class1',
             'ccb_requirements': 'Conforme.',
             'ccb_technical_impact': 'Minore.',
@@ -2983,6 +3218,7 @@ class CCBDossierTests(TestCase):
         from ecn.services import update_ccb_dossier, submit_change_notice
         update_ccb_dossier(
             self.ecn, actor=self.qm,
+            applicability_category=ChangeNotice.Applicability.GENERAL,
             ccb_requirements='Conforme.', ccb_technical_impact='Minore.',
         )
         with self.assertRaises(ValidationError):
@@ -3015,77 +3251,6 @@ class CCBDossierTests(TestCase):
         log = AuditLog.objects.filter(action='CCB_DOSSIER_UPDATED').first()
         self.assertIsNotNone(log)
 
-    # 9. Impatto sul costruito e applicabilità (TASK-028) persistiti dal service
-    def test_service_persists_constructed_impact_and_applicability(self):
-        self._update_dossier(
-            ccb_constructed_impact='Nessun impatto su unità già installate.',
-            ccb_applicability='Applicabile a tutti i lotti dal 2026 in poi.',
-        )
-        self.ecn.refresh_from_db()
-        self.assertEqual(
-            self.ecn.ccb_constructed_impact,
-            'Nessun impatto su unità già installate.',
-        )
-        self.assertEqual(
-            self.ecn.ccb_applicability,
-            'Applicabile a tutti i lotti dal 2026 in poi.',
-        )
-
-    # 10. Impatto sul costruito e applicabilità restano opzionali per l'invio
-    def test_submit_without_constructed_impact_and_applicability_succeeds(self):
-        from ecn.services import submit_change_notice
-        self._update_dossier()  # non passa i due nuovi campi
-        submit_change_notice(self.ecn, self.qm)
-        self.ecn.refresh_from_db()
-        self.assertEqual(self.ecn.status, ChangeNotice.Status.UNDER_REVIEW)
-
-    # 11. La view /ccb-dossier/ salva i due nuovi campi e li mostra nel dettaglio
-    def test_view_saves_and_displays_constructed_impact_and_applicability(self):
-        self.client.force_login(self.qm)
-        r = self.client.post(f'/ecn/{self.ecn.pk}/ccb-dossier/', {
-            'dossier_action': 'save',
-            'ccb_class': 'class1',
-            'ccb_requirements': 'Conforme.',
-            'ccb_technical_impact': 'Minore.',
-            'ccb_constructed_impact': 'Impatto nullo sul costruito esistente.',
-            'ccb_applicability': 'Solo unità prodotte dopo rev. 02.',
-        })
-        self.assertRedirects(r, f'/ecn/{self.ecn.pk}/', fetch_redirect_response=False)
-        self.ecn.refresh_from_db()
-        self.assertEqual(
-            self.ecn.ccb_constructed_impact, 'Impatto nullo sul costruito esistente.',
-        )
-        self.assertEqual(
-            self.ecn.ccb_applicability, 'Solo unità prodotte dopo rev. 02.',
-        )
-
-        # Il dossier è ancora in CCB_PREPARATION (editabile): il form si
-        # ripresenta con i valori salvati pre-popolati.
-        dossier = self.client.get(f'/ecn/{self.ecn.pk}/ccb-dossier/')
-        self.assertContains(dossier, 'Impatto sul costruito')
-        self.assertContains(dossier, 'Impatto nullo sul costruito esistente.')
-        self.assertContains(dossier, 'Applicabilità')
-        self.assertContains(dossier, 'Solo unità prodotte dopo rev. 02.')
-
-    # 12. Dopo l'approvazione CCB, il dettaglio ECN mostra i due campi in sola lettura
-    def test_ecn_detail_shows_constructed_impact_and_applicability_after_approval(self):
-        from ecn.services import submit_change_notice, approve_change_notice
-        self._update_dossier(
-            ccb_constructed_impact='Impatto nullo sul costruito esistente.',
-            ccb_applicability='Solo unità prodotte dopo rev. 02.',
-        )
-        submit_change_notice(self.ecn, self.qm)
-        approve_change_notice(self.ecn, self.ccb1, comment='OK', send_notifications=False)
-        self.ecn.refresh_from_db()
-        self.assertEqual(self.ecn.status, ChangeNotice.Status.APPROVED)
-
-        self.client.force_login(self.qm)
-        detail = self.client.get(f'/ecn/{self.ecn.pk}/')
-        self.assertContains(detail, 'Impatto sul costruito')
-        self.assertContains(detail, 'Impatto nullo sul costruito esistente.')
-        self.assertContains(detail, 'Applicabilità')
-        self.assertContains(detail, 'Solo unità prodotte dopo rev. 02.')
-
 
 # ---------------------------------------------------------------------------
 # Voto membro CCB
@@ -3114,6 +3279,7 @@ class CCBVoteTests(TestCase):
                       policy='all', coordinator=self.qm)
         update_ccb_dossier(
             self.ecn, actor=self.qm,
+            applicability_category=ChangeNotice.Applicability.GENERAL,
             ccb_class='class1', ccb_requirements='OK', ccb_technical_impact='Minore',
         )
         submit_change_notice(self.ecn, self.qm)
@@ -3220,6 +3386,7 @@ class CCBPolicyTests(TestCase):
                       policy=policy, coordinator=self.qm)
         update_ccb_dossier(
             ecn, actor=self.qm,
+            applicability_category=ChangeNotice.Applicability.GENERAL,
             ccb_class='class1', ccb_requirements='OK', ccb_technical_impact='OK',
         )
         submit_change_notice(ecn, self.qm)
@@ -3313,7 +3480,9 @@ class CCBEmailNotificationTests(TestCase):
         )
         configure_ccb(ecn, actor=self.qm, users=[self.ccb1, self.ccb2],
                       policy=policy, coordinator=self.qm)
-        update_ccb_dossier(ecn, actor=self.qm, ccb_class='class1',
+        update_ccb_dossier(ecn, actor=self.qm,
+                           applicability_category=ChangeNotice.Applicability.GENERAL,
+                           ccb_class='class1',
                            ccb_requirements='OK', ccb_technical_impact='OK')
         submit_change_notice(ecn, self.qm)
         ecn.refresh_from_db()
@@ -3409,7 +3578,9 @@ class CCBAuditTests(TestCase):
     def test_ecn_submitted_auditlog(self):
         from ecn.services import configure_ccb, update_ccb_dossier, submit_change_notice
         configure_ccb(self.ecn, actor=self.qm, users=[self.ccb1], coordinator=self.qm)
-        update_ccb_dossier(self.ecn, actor=self.qm, ccb_class='class1',
+        update_ccb_dossier(self.ecn, actor=self.qm,
+                           applicability_category=ChangeNotice.Applicability.GENERAL,
+                           ccb_class='class1',
                            ccb_requirements='OK', ccb_technical_impact='OK')
         AuditLog.objects.all().delete()
         submit_change_notice(self.ecn, self.qm)
@@ -3420,7 +3591,9 @@ class CCBAuditTests(TestCase):
     def test_ecn_approved_auditlog(self):
         from ecn.services import configure_ccb, update_ccb_dossier, submit_change_notice
         configure_ccb(self.ecn, actor=self.qm, users=[self.ccb1], coordinator=self.qm)
-        update_ccb_dossier(self.ecn, actor=self.qm, ccb_class='class1',
+        update_ccb_dossier(self.ecn, actor=self.qm,
+                           applicability_category=ChangeNotice.Applicability.GENERAL,
+                           ccb_class='class1',
                            ccb_requirements='OK', ccb_technical_impact='OK')
         submit_change_notice(self.ecn, self.qm)
         AuditLog.objects.all().delete()
@@ -3432,7 +3605,9 @@ class CCBAuditTests(TestCase):
     def test_ecn_rejected_auditlog(self):
         from ecn.services import configure_ccb, update_ccb_dossier, submit_change_notice
         configure_ccb(self.ecn, actor=self.qm, users=[self.ccb1], coordinator=self.qm)
-        update_ccb_dossier(self.ecn, actor=self.qm, ccb_class='class1',
+        update_ccb_dossier(self.ecn, actor=self.qm,
+                           applicability_category=ChangeNotice.Applicability.GENERAL,
+                           ccb_class='class1',
                            ccb_requirements='OK', ccb_technical_impact='OK')
         submit_change_notice(self.ecn, self.qm)
         AuditLog.objects.all().delete()
@@ -3565,6 +3740,287 @@ class ECNCoordinatorViewTests(TestCase):
 # TASK-022 — Flusso ECN semplice (autoapprovato, nessuna CCB)
 # ---------------------------------------------------------------------------
 
+class ApplicabilityServiceLifecycleTests(TestCase):
+    """TASK-036-4 Parte C: service ECN standard e ciclo di vita applicabilità."""
+
+    def setUp(self):
+        self.manager = _make_user('appl_svc_mgr')
+        self.manager.groups.add(Group.objects.get_or_create(name='Quality Manager')[0])
+        self.ccb = _make_user('appl_svc_ccb')
+        self.folder = _make_folder(self.manager, code='APPL-SVC-FOLD')
+        self.document = _make_document(self.manager, self.folder, code='APPL-SVC-DOC')
+        self.version = _make_version(self.document, self.manager)
+        self.document.current_version = self.version
+        self.document.save(update_fields=['current_version'])
+
+    def test_update_ccb_dossier_rejects_non_draft_non_preparation_and_keeps_applicability_unchanged(self):
+        from ecn.services import update_ccb_dossier
+
+        states = [
+            ChangeNotice.Status.UNDER_REVIEW,
+            ChangeNotice.Status.APPROVED,
+            ChangeNotice.Status.REJECTED,
+            ChangeNotice.Status.CLOSED,
+        ]
+        for state in states:
+            with self.subTest(state=state):
+                ecn = _make_ecn(
+                    self.document, self.version, self.manager,
+                    code=f'APPL-IMM-{state}',
+                    applicability_category=ChangeNotice.Applicability.FUTURE,
+                )
+                ecn.status = state
+                ecn.save(update_fields=['status'])
+
+                with self.assertRaises(ValidationError):
+                    update_ccb_dossier(
+                        ecn,
+                        actor=self.manager,
+                        applicability_category=ChangeNotice.Applicability.LIMITED,
+                        applicability_detail='Solo commessa ABC',
+                    )
+
+                ecn.refresh_from_db()
+                self.assertEqual(ecn.applicability_category, ChangeNotice.Applicability.FUTURE)
+                self.assertEqual(ecn.applicability_detail, '')
+
+    def test_submit_change_notice_revalidates_missing_applicability_from_ccb_preparation(self):
+        # Il controllo si applica solo sul percorso moderno (CCB_PREPARATION),
+        # non sul percorso legacy DRAFT→UNDER_REVIEW (stessa eccezione già
+        # in vigore per ccb_class/ccb_requirements/ccb_technical_impact).
+        ecn = _make_ecn(
+            self.document, self.version, self.manager,
+            code='APPL-SUB-HIST',
+            applicability_category=None,
+        )
+        ecn.status = ChangeNotice.Status.CCB_PREPARATION
+        ecn.save(update_fields=['status'])
+        ChangeNoticeApprover.objects.create(change_notice=ecn, user=self.ccb, order=1)
+
+        with self.assertRaises(ValidationError) as cm:
+            submit_change_notice(ecn, self.manager, send_notifications=False)
+
+        self.assertIn('applicability_category', cm.exception.error_dict)
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.CCB_PREPARATION)
+
+    def test_standard_approval_audit_freezes_applicability_metadata(self):
+        from ecn.services import configure_ccb, update_ccb_dossier
+
+        ecn = create_change_notice(
+            document=self.document,
+            proposed_by=self.manager,
+            title='Future applicability',
+            motivation=ChangeNotice.Motivation.IMPROVEMENT,
+            send_notifications=False,
+        )
+        configure_ccb(
+            ecn, actor=self.manager, users=[self.ccb],
+            policy=ChangeNotice.CCBPolicy.ANY, send_notifications=False,
+        )
+        update_ccb_dossier(
+            ecn, actor=self.manager,
+            applicability_category=ChangeNotice.Applicability.FUTURE,
+            ccb_class=ChangeNotice.CCBClass.CLASS1,
+            ccb_requirements='Verificato.',
+            ccb_technical_impact='Nessuno.',
+        )
+        submit_change_notice(ecn, self.manager, send_notifications=False)
+        AuditLog.objects.all().delete()
+
+        approve_change_notice(
+            ecn, self.ccb, ccb_class=ChangeNotice.CCBClass.CLASS1,
+            send_notifications=False,
+        )
+
+        log = AuditLog.objects.get(action='ECN_APPROVED')
+        self.assertEqual(
+            log.changes['metadata']['applicability_category'],
+            ChangeNotice.Applicability.FUTURE,
+        )
+
+    def test_reject_keeps_limited_applicability_unchanged(self):
+        ecn = _make_ecn(
+            self.document, self.version, self.manager,
+            code='APPL-REJ-001',
+            applicability_category=ChangeNotice.Applicability.LIMITED,
+            applicability_detail='Solo commessa ABC',
+            status=ChangeNotice.Status.UNDER_REVIEW,
+        )
+        ChangeNoticeApprover.objects.create(change_notice=ecn, user=self.ccb, order=1)
+
+        reject_change_notice(
+            ecn, self.ccb, reason='Non approvabile', send_notifications=False,
+        )
+
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.REJECTED)
+        self.assertEqual(ecn.applicability_category, ChangeNotice.Applicability.LIMITED)
+        self.assertEqual(ecn.applicability_detail, 'Solo commessa ABC')
+
+    def test_auto_close_keeps_applicability_unchanged(self):
+        from documents.services import create_new_revision
+        from ecn.services import auto_close_executed_ecn_if_ready
+
+        ecn = _make_ecn(
+            self.document, self.version, self.manager,
+            code='APPL-CLOSE-001',
+            applicability_category=ChangeNotice.Applicability.FUTURE,
+            status=ChangeNotice.Status.APPROVED,
+        )
+        new_version = create_new_revision(
+            self.document, self.manager, '01', 1, ecn=ecn,
+            change_summary='Esecuzione ECN',
+        )
+        DocumentVersion.objects.filter(pk=self.version.pk).update(
+            status=DocumentVersion.Status.SUPERSEDED,
+            is_current=False,
+        )
+        new_version.status = DocumentVersion.Status.APPROVED
+        new_version.is_current = True
+        new_version.save(update_fields=['status', 'is_current'])
+        self.document.current_version = new_version
+        self.document.save(update_fields=['current_version'])
+
+        auto_close_executed_ecn_if_ready(new_version, self.manager)
+
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.CLOSED)
+        self.assertEqual(ecn.applicability_category, ChangeNotice.Applicability.FUTURE)
+
+
+class ApplicabilityViewTests(TestCase):
+    """TASK-036-4 Parte E: resa UI e validazione view per applicabilità."""
+
+    def setUp(self):
+        self.manager = _make_user('appl_view_mgr')
+        self.manager.groups.add(
+            Group.objects.get_or_create(name='Document Managers')[0],
+            Group.objects.get_or_create(name='Quality Manager')[0],
+        )
+        self.stranger = _make_user('appl_view_stranger')
+        self.folder = _make_folder(self.manager, code='APPL-VIEW-FOLD')
+        self.document = _make_document(self.manager, self.folder, code='APPL-VIEW-DOC')
+        self.version = _make_version(self.document, self.manager)
+        self.document.current_version = self.version
+        self.document.save(update_fields=['current_version'])
+
+    def _create_payload(self, **overrides):
+        data = {
+            'document': self.document.pk,
+            'title': 'Variante UI applicabilità',
+            'motivation': ChangeNotice.Motivation.IMPROVEMENT,
+            'motivation_detail': '',
+            'description': '',
+            'commessa': '',
+            'applicability_category': ChangeNotice.Applicability.GENERAL,
+            'applicability_detail': '',
+        }
+        data.update(overrides)
+        return data
+
+    def test_ecn_create_post_without_applicability_creates_ecn_normally(self):
+        # TASK-037: la creazione ECN standard non richiede più applicabilità
+        # (è compilata dopo, dalla CCB, nel dossier istruttorio).
+        self.client.force_login(self.manager)
+        before = ChangeNotice.objects.count()
+        response = self.client.post(f'/ecn/new/?document={self.document.pk}', {
+            'document': self.document.pk,
+            'title': 'Variante senza applicabilità in creazione',
+            'motivation': ChangeNotice.Motivation.IMPROVEMENT,
+            'motivation_detail': '',
+            'description': '',
+            'commessa': '',
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(ChangeNotice.objects.count(), before + 1)
+        new_ecn = ChangeNotice.objects.get(title='Variante senza applicabilità in creazione')
+        self.assertIsNone(new_ecn.applicability_category)
+
+    def test_ecn_create_simple_post_without_applicability_creates_and_approves(self):
+        # TASK-037: l'ECN semplice non ha mai applicabilità (nessuna CCB si
+        # riunisce in quel flusso).
+        self.client.force_login(self.manager)
+        before = ChangeNotice.objects.count()
+        response = self.client.post(f'/ecn/new-simple/?document={self.document.pk}', {
+            'document': self.document.pk,
+            'title': 'Semplice senza applicabilità',
+            'description': '',
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(ChangeNotice.objects.count(), before + 1)
+        new_ecn = ChangeNotice.objects.get(title='Semplice senza applicabilità')
+        self.assertEqual(new_ecn.status, ChangeNotice.Status.APPROVED)
+        self.assertIsNone(new_ecn.applicability_category)
+
+    def test_ecn_list_renders_badge_classes_for_all_categories(self):
+        for category in ChangeNotice.Applicability:
+            _make_ecn(
+                self.document, self.version, self.manager,
+                code=f'APPL-LIST-{category.value}',
+                applicability_category=category,
+                applicability_detail='Solo commessa ABC' if category == ChangeNotice.Applicability.LIMITED else '',
+            )
+
+        self.client.force_login(self.manager)
+        response = self.client.get('/ecn/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'badge-applicability-general')
+        self.assertContains(response, 'badge-applicability-future')
+        self.assertContains(response, 'badge-applicability-limited')
+
+    def test_ecn_detail_limited_shows_detail_and_scope_notice_general_does_not(self):
+        limited = _make_ecn(
+            self.document, self.version, self.manager,
+            code='APPL-DETAIL-LIMITED',
+            applicability_category=ChangeNotice.Applicability.LIMITED,
+            applicability_detail='Solo commessa ABC',
+        )
+        general = _make_ecn(
+            self.document, self.version, self.manager,
+            code='APPL-DETAIL-GENERAL',
+            applicability_category=ChangeNotice.Applicability.GENERAL,
+        )
+
+        self.client.force_login(self.manager)
+        limited_response = self.client.get(f'/ecn/{limited.pk}/')
+        self.assertContains(limited_response, 'Solo commessa ABC')
+        self.assertContains(limited_response, 'non assegna automaticamente')
+        self.assertContains(limited_response, 'revisioni differenti')
+
+        general_response = self.client.get(f'/ecn/{general.pk}/')
+        self.assertNotContains(general_response, 'non assegna automaticamente')
+
+    def test_ecn_detail_historical_missing_applicability_does_not_500(self):
+        historical = _make_ecn(
+            self.document, self.version, self.manager,
+            code='APPL-DETAIL-HIST',
+            applicability_category=None,
+        )
+
+        self.client.force_login(self.manager)
+        response = self.client.get(f'/ecn/{historical.pk}/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Applicabilità non specificata')
+
+    def test_applicability_field_does_not_bypass_existing_permissions(self):
+        ecn = _make_ecn(self.document, self.version, self.manager, code='APPL-PERM-001')
+        self.client.force_login(self.stranger)
+
+        edit_response = self.client.post(f'/ecn/{ecn.pk}/edit/', self._create_payload(
+            title='Tentativo non autorizzato',
+            applicability_category=ChangeNotice.Applicability.FUTURE,
+        ))
+        create_response = self.client.post(f'/ecn/new/?document={self.document.pk}', self._create_payload(
+            title='Creazione non autorizzata',
+            applicability_category=ChangeNotice.Applicability.FUTURE,
+        ))
+
+        self.assertEqual(edit_response.status_code, 403)
+        self.assertEqual(create_response.status_code, 403)
+        self.assertFalse(ChangeNotice.objects.filter(title='Creazione non autorizzata').exists())
+
+
 class SimpleEcnServiceTests(TestCase):
     """create_simple_ecn: codice automatico, autoapprovazione, nessuna CCB."""
 
@@ -3583,6 +4039,22 @@ class SimpleEcnServiceTests(TestCase):
             title='Revisione rapida', send_notifications=False,
         )
         self.assertEqual(ecn.flow_type, ChangeNotice.FlowType.SIMPLE)
+
+    def test_simple_ecn_never_has_applicability(self):
+        # TASK-037: l'ECN semplice non ha mai applicabilità — nessuna CCB
+        # si riunisce mai in quel flusso per deciderla.
+        from ecn.services import create_simple_ecn
+
+        ecn = create_simple_ecn(
+            document=self.document,
+            proposed_by=self.author,
+            title='Revisione rapida limitata',
+            send_notifications=False,
+        )
+
+        self.assertEqual(ecn.status, ChangeNotice.Status.APPROVED)
+        self.assertIsNone(ecn.applicability_category)
+        self.assertEqual(ecn.applicability_detail, '')
 
     def test_code_matches_simple_convention(self):
         from datetime import date
@@ -3655,26 +4127,6 @@ class SimpleEcnServiceTests(TestCase):
         self.assertIn('ECN_CREATED', actions)
         self.assertIn('ECN_APPROVED', actions)
 
-    # TASK-029: blocco ECN semplice per documento
-    def test_blocked_when_document_disallows_simple_ecn(self):
-        from ecn.services import create_simple_ecn
-        self.document.allows_simple_ecn = False
-        self.document.save(update_fields=['allows_simple_ecn'])
-        with self.assertRaises(ValidationError):
-            create_simple_ecn(
-                document=self.document, proposed_by=self.author,
-                title='Revisione rapida', send_notifications=False,
-            )
-
-    def test_allowed_by_default(self):
-        from ecn.services import create_simple_ecn
-        self.assertTrue(self.document.allows_simple_ecn)
-        ecn = create_simple_ecn(
-            document=self.document, proposed_by=self.author,
-            title='Revisione rapida', send_notifications=False,
-        )
-        self.assertEqual(ecn.status, ChangeNotice.Status.APPROVED)
-
     def test_enables_document_revision(self):
         """Un ECN semplice approvato soddisfa il gate create_new_revision
         esattamente come un ECN standard — nessuna modifica al service."""
@@ -3693,6 +4145,206 @@ class SimpleEcnServiceTests(TestCase):
         ecn.refresh_from_db()
         self.assertEqual(ecn.executed_version_id, version.pk)
         self.assertIsNotNone(ecn.executed_at)
+
+
+class AutoCloseEcnTests(TestCase):
+    """
+    Requisito aziendale del 2026-07-28: sia l'ECN standard sia l'ECN a
+    flusso semplice si chiudono automaticamente quando la loro revisione
+    di esecuzione viene approvata definitivamente e diventa la versione
+    corrente del documento — mai prima, mai per una revisione diversa da
+    quella collegata, mai due volte.
+    """
+
+    def setUp(self):
+        self.author = _make_user('autoclose_author')
+        self.approver = _make_user('autoclose_approver')
+        self.folder = _make_folder(self.author, code='AUTOCLOSE-FOLD')
+        self.document = _make_document(self.author, self.folder, code='AUTOCLOSE-DOC-001')
+        self.version = _make_version(self.document, self.author)
+        self.document.current_version = self.version
+        self.document.save(update_fields=['current_version'])
+
+    def _approve_and_promote(self, version):
+        """Simula ciò che _finalize_approval fa davvero prima di chiamare l'auto-close."""
+        old_current = self.document.current_version
+        if old_current is not None and old_current.pk != version.pk:
+            DocumentVersion.objects.filter(pk=old_current.pk).update(
+                status=DocumentVersion.Status.SUPERSEDED, is_current=False,
+            )
+        version.status = DocumentVersion.Status.APPROVED
+        version.is_current = True
+        version.save(update_fields=['status', 'is_current'])
+        self.document.current_version = version
+        self.document.save(update_fields=['current_version'])
+        self.document.refresh_from_db()
+
+    def test_simple_ecn_auto_closes_when_execution_approved(self):
+        from documents.services import create_new_revision
+        from ecn.services import auto_close_executed_ecn_if_ready, create_simple_ecn
+
+        ecn = create_simple_ecn(
+            document=self.document, proposed_by=self.author,
+            title='Revisione rapida', send_notifications=False,
+        )
+        new_version = create_new_revision(
+            self.document, self.author, '01', 1, ecn=ecn, change_summary='Via ECN semplice',
+        )
+        self._approve_and_promote(new_version)
+
+        auto_close_executed_ecn_if_ready(new_version, self.approver)
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.CLOSED)
+        self.assertEqual(ecn.closed_by_id, self.approver.pk)
+        self.assertIsNone(ecn.applicability_category)
+
+    def test_standard_ecn_auto_closes_when_execution_approved(self):
+        from documents.services import create_new_revision
+        from ecn.services import auto_close_executed_ecn_if_ready, create_change_notice
+
+        ecn = create_change_notice(
+            document=self.document, proposed_by=self.author,
+            title='ECN standard', motivation=ChangeNotice.Motivation.IMPROVEMENT,
+            send_notifications=False,
+        )
+        ecn.status = ChangeNotice.Status.APPROVED
+        ecn.save(update_fields=['status'])
+        new_version = create_new_revision(
+            self.document, self.author, '01', 1, ecn=ecn, change_summary='Via ECN standard',
+        )
+        self._approve_and_promote(new_version)
+
+        auto_close_executed_ecn_if_ready(new_version, self.approver)
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.CLOSED)
+        self.assertEqual(ecn.closed_by_id, self.approver.pk)
+        self.assertIn('Rev. 01', ecn.close_notes)
+
+    def test_auto_close_writes_distinct_audit_action_with_revision_reference(self):
+        from documents.services import create_new_revision
+        from ecn.services import auto_close_executed_ecn_if_ready, create_simple_ecn
+
+        ecn = create_simple_ecn(
+            document=self.document, proposed_by=self.author,
+            title='Revisione rapida', send_notifications=False,
+        )
+        new_version = create_new_revision(
+            self.document, self.author, '01', 1, ecn=ecn, change_summary='Via ECN semplice',
+        )
+        self._approve_and_promote(new_version)
+
+        AuditLog.objects.all().delete()
+        auto_close_executed_ecn_if_ready(new_version, self.approver)
+        log = AuditLog.objects.filter(action='ECN_CLOSED_AUTO').first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.changes['metadata']['closing_revision_id'], new_version.pk)
+        self.assertEqual(log.changes['metadata']['closing_revision_label'], '01')
+        self.assertEqual(log.changes['metadata']['flow_type'], ChangeNotice.FlowType.SIMPLE)
+
+    def test_no_auto_close_when_no_matching_ecn(self):
+        """Una versione senza alcun ECN collegato non deve sollevare eccezioni."""
+        from ecn.services import auto_close_executed_ecn_if_ready
+        self.version.is_current = True
+        self.version.save(update_fields=['is_current'])
+        auto_close_executed_ecn_if_ready(self.version, self.approver)  # non deve sollevare
+
+    def test_no_auto_close_when_version_not_current(self):
+        """
+        Guardia esplicita: una versione APPROVED ma non ancora promossa a
+        corrente (chiamata anomala/fuori sequenza) non chiude l'ECN.
+        """
+        from documents.services import create_new_revision
+        from ecn.services import auto_close_executed_ecn_if_ready, create_simple_ecn
+
+        ecn = create_simple_ecn(
+            document=self.document, proposed_by=self.author,
+            title='Revisione rapida', send_notifications=False,
+        )
+        new_version = create_new_revision(
+            self.document, self.author, '01', 1, ecn=ecn, change_summary='Via ECN semplice',
+        )
+        new_version.status = DocumentVersion.Status.APPROVED
+        new_version.is_current = False  # mai promossa a corrente
+        new_version.save(update_fields=['status', 'is_current'])
+
+        auto_close_executed_ecn_if_ready(new_version, self.approver)
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.APPROVED)  # non chiuso
+
+    def test_rejected_version_never_triggers_close(self):
+        """Una revisione rifiutata (mai is_current) non deve mai chiudere l'ECN collegato."""
+        from documents.services import create_new_revision
+        from ecn.services import auto_close_executed_ecn_if_ready, create_simple_ecn
+
+        ecn = create_simple_ecn(
+            document=self.document, proposed_by=self.author,
+            title='Revisione rapida', send_notifications=False,
+        )
+        new_version = create_new_revision(
+            self.document, self.author, '01', 1, ecn=ecn, change_summary='Via ECN semplice',
+        )
+        new_version.status = DocumentVersion.Status.REJECTED
+        new_version.save(update_fields=['status'])
+
+        auto_close_executed_ecn_if_ready(new_version, self.approver)
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.APPROVED)  # non chiuso
+
+    def test_unrelated_version_approval_does_not_close_other_ecn(self):
+        """Approvare una revisione NON collegata a un ECN non deve mai chiuderlo."""
+        from documents.services import create_new_revision
+        from ecn.services import auto_close_executed_ecn_if_ready, create_simple_ecn
+
+        ecn = create_simple_ecn(
+            document=self.document, proposed_by=self.author,
+            title='Revisione rapida', send_notifications=False,
+        )
+        # Nessun ecn= collegato a questa seconda revisione.
+        unrelated_version = create_new_revision(
+            self.document, self.author, '02', 2, change_summary='Non collegata a nessun ECN',
+            _bypass_ecn_check=True,
+        )
+        self._approve_and_promote(unrelated_version)
+
+        auto_close_executed_ecn_if_ready(unrelated_version, self.approver)
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.APPROVED)  # invariato
+
+    def test_idempotent_no_double_close_no_double_email(self):
+        """Richiamare la funzione due volte non chiude due volte né invia due email."""
+        from django.core import mail
+        from documents.services import create_new_revision
+        from ecn.services import auto_close_executed_ecn_if_ready, create_simple_ecn
+        from notifications.models import NotificationLog
+
+        ecn = create_simple_ecn(
+            document=self.document, proposed_by=self.author,
+            title='Revisione rapida', send_notifications=False,
+        )
+        new_version = create_new_revision(
+            self.document, self.author, '01', 1, ecn=ecn, change_summary='Via ECN semplice',
+        )
+        self._approve_and_promote(new_version)
+
+        mail.outbox = []
+        auto_close_executed_ecn_if_ready(new_version, self.approver)
+        first_closed_at = ChangeNotice.objects.get(pk=ecn.pk).closed_at
+        n_logs_after_first = NotificationLog.objects.count()
+
+        auto_close_executed_ecn_if_ready(new_version, self.approver)
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.closed_at, first_closed_at)  # invariato: nessuna seconda chiusura
+        self.assertEqual(NotificationLog.objects.count(), n_logs_after_first)  # nessuna email in più
+
+    def test_pdf_regeneration_does_not_reclose_or_renotify(self):
+        """
+        La rigenerazione del PDF approvato non richiama affatto l'auto-chiusura:
+        verifica diretta che regenerate_approved_pdf_view non tocchi l'ECN.
+        """
+        import inspect
+        import documents.views as documents_views
+        source = inspect.getsource(documents_views.regenerate_approved_pdf_view)
+        self.assertNotIn('auto_close', source)
 
 
 class SimpleEcnViewTests(TestCase):
@@ -3757,38 +4409,6 @@ class SimpleEcnViewTests(TestCase):
         r = self.client.get('/ecn/new-simple/')
         self.assertEqual(r.status_code, 404)
 
-    # TASK-029: blocco ECN semplice per documento
-    def test_get_blocked_and_redirected_when_document_disallows(self):
-        self.document.allows_simple_ecn = False
-        self.document.save(update_fields=['allows_simple_ecn'])
-        self.client.login(username='simplev_author', password='pw')
-        r = self.client.get(f'/ecn/new-simple/?document={self.document.pk}')
-        self.assertRedirects(r, f'/documents/{self.document.pk}/')
-
-    def test_post_blocked_when_document_disallows(self):
-        self.document.allows_simple_ecn = False
-        self.document.save(update_fields=['allows_simple_ecn'])
-        self.client.login(username='simplev_author', password='pw')
-        r = self.client.post(f'/ecn/new-simple/?document={self.document.pk}', {
-            'document': self.document.pk,
-            'title': 'Tentativo bloccato',
-        })
-        self.assertRedirects(r, f'/documents/{self.document.pk}/')
-        self.assertFalse(ChangeNotice.objects.filter(document=self.document).exists())
-
-    def test_button_hidden_in_document_detail_when_disallowed(self):
-        self.document.allows_simple_ecn = False
-        self.document.save(update_fields=['allows_simple_ecn'])
-        self.client.login(username='simplev_author', password='pw')
-        r = self.client.get(f'/documents/{self.document.pk}/')
-        self.assertNotContains(r, '+ Crea ECN semplice')
-        self.assertContains(r, '+ Richiedi ECN standard')
-
-    def test_button_visible_in_document_detail_by_default(self):
-        self.client.login(username='simplev_author', password='pw')
-        r = self.client.get(f'/documents/{self.document.pk}/')
-        self.assertContains(r, '+ Crea ECN semplice')
-
 
 class SimpleEcnStandardFlowUnaffectedTests(TestCase):
     """Il flusso ECN standard resta invariato dopo TASK-022."""
@@ -3809,3 +4429,150 @@ class SimpleEcnStandardFlowUnaffectedTests(TestCase):
         )
         self.assertEqual(ecn.flow_type, ChangeNotice.FlowType.STANDARD)
         self.assertEqual(ecn.status, ChangeNotice.Status.DRAFT)
+
+
+# ---------------------------------------------------------------------------
+# TASK-039 — Lock "un utente alla volta" su pagine d'azione ECN
+# ---------------------------------------------------------------------------
+
+class ECNActionPageLockTests(TestCase):
+    """Lock su ecn_ccb_dossier ed ecn_review."""
+
+    def setUp(self):
+        from django.urls import reverse
+        self.reverse = reverse
+
+        self.qm1 = _make_quality_manager('lock_dos_qm1')
+        self.qm2 = _make_quality_manager('lock_dos_qm2')
+        self.ccb1 = _make_user_in_groups('lock_rev_ccb1', GROUP_CCB)
+        self.ccb2 = _make_user_in_groups('lock_rev_ccb2', GROUP_CCB)
+        self.folder = _make_folder(self.qm1, 'FOLD-LOCK')
+        self.document, self.version = _make_approved_document(
+            self.qm1, self.folder, 'DOC-LOCK-001',
+        )
+        self.ecn = create_change_notice(
+            document=self.document, proposed_by=self.qm1,
+            title='ECN lock', motivation=ChangeNotice.Motivation.IMPROVEMENT,
+            code='ECN-LOCK-001',
+        )
+        from ecn.services import configure_ccb
+        configure_ccb(
+            self.ecn, actor=self.qm1, users=[self.ccb1, self.ccb2],
+            policy='all', coordinator=self.qm1,
+        )
+
+    def _dossier_post_data(self, action='save'):
+        return {
+            'applicability_category': ChangeNotice.Applicability.GENERAL,
+            'applicability_detail': '',
+            'ccb_class': ChangeNotice.CCBClass.CLASS1,
+            'ccb_requirements': 'Verificato.',
+            'ccb_technical_impact': 'Nessuno.',
+            'dossier_action': action,
+        }
+
+    def _dossier_url(self):
+        return self.reverse('ecn:ecn_ccb_dossier', args=[self.ecn.pk])
+
+    def _review_url(self):
+        return f'/ecn/{self.ecn.pk}/review/'
+
+    def _put_under_review(self):
+        from ecn.services import update_ccb_dossier, submit_change_notice
+        update_ccb_dossier(
+            self.ecn, actor=self.qm1,
+            applicability_category=ChangeNotice.Applicability.GENERAL,
+            ccb_class='class1', ccb_requirements='OK', ccb_technical_impact='OK',
+        )
+        submit_change_notice(self.ecn, self.qm1)
+        self.ecn.refresh_from_db()
+
+    def test_dossier_second_user_blocked_on_get(self):
+        self.client.force_login(self.qm1)
+        r1 = self.client.get(self._dossier_url())
+        self.assertEqual(r1.status_code, 200)
+        self.client.force_login(self.qm2)
+        r2 = self.client.get(self._dossier_url())
+        self.assertRedirects(r2, self.reverse('ecn:ecn_detail', args=[self.ecn.pk]))
+        from django.contrib.messages import get_messages
+        msgs = [str(m) for m in get_messages(r2.wsgi_request)]
+        self.assertTrue(any('Dossier in lavorazione da' in m for m in msgs))
+
+    def test_dossier_second_user_blocked_on_post(self):
+        self.client.force_login(self.qm1)
+        self.client.get(self._dossier_url())
+        self.client.force_login(self.qm2)
+        r = self.client.post(self._dossier_url(), self._dossier_post_data())
+        self.assertRedirects(r, self.reverse('ecn:ecn_detail', args=[self.ecn.pk]))
+
+    def test_dossier_lock_released_after_submit(self):
+        self.client.force_login(self.qm1)
+        r = self.client.post(
+            self._dossier_url(),
+            self._dossier_post_data(action='submit'),
+        )
+        self.assertRedirects(r, self.reverse('ecn:ecn_detail', args=[self.ecn.pk]))
+        self.ecn.refresh_from_db()
+        self.assertIsNone(self.ecn.locked_by)
+        self.assertIsNone(self.ecn.locked_at)
+
+    def test_dossier_lock_not_released_after_save_draft(self):
+        self.client.force_login(self.qm1)
+        r = self.client.post(
+            self._dossier_url(),
+            self._dossier_post_data(action='save'),
+        )
+        self.assertRedirects(r, self.reverse('ecn:ecn_detail', args=[self.ecn.pk]))
+        self.ecn.refresh_from_db()
+        self.assertEqual(self.ecn.locked_by, self.qm1)
+        self.assertIsNotNone(self.ecn.locked_at)
+
+    def test_dossier_expired_lock_does_not_block(self):
+        from auditlog.locking import LOCK_TIMEOUT
+        from django.utils import timezone
+        self.ecn.locked_by = self.qm1
+        self.ecn.locked_at = timezone.now() - LOCK_TIMEOUT - datetime.timedelta(seconds=1)
+        self.ecn.save(update_fields=['locked_by', 'locked_at'])
+        self.client.force_login(self.qm2)
+        r = self.client.get(self._dossier_url())
+        self.assertEqual(r.status_code, 200)
+        self.ecn.refresh_from_db()
+        self.assertEqual(self.ecn.locked_by, self.qm2)
+
+    def test_review_second_user_blocked_on_get(self):
+        self._put_under_review()
+        self.client.force_login(self.ccb1)
+        r1 = self.client.get(self._review_url())
+        self.assertEqual(r1.status_code, 200)
+        self.client.force_login(self.ccb2)
+        r2 = self.client.get(self._review_url())
+        self.assertRedirects(r2, f'/ecn/{self.ecn.pk}/')
+        from django.contrib.messages import get_messages
+        msgs = [str(m) for m in get_messages(r2.wsgi_request)]
+        self.assertTrue(any('Decisione CCB in lavorazione da' in m for m in msgs))
+
+    def test_review_lock_released_after_successful_vote(self):
+        self._put_under_review()
+        self.client.force_login(self.ccb1)
+        r = self.client.post(self._review_url(), {
+            'action': 'approve',
+            'comment': '',
+            'ccb_notes': '',
+        })
+        self.assertRedirects(r, f'/ecn/{self.ecn.pk}/', fetch_redirect_response=False)
+        self.ecn.refresh_from_db()
+        self.assertIsNone(self.ecn.locked_by)
+        self.assertIsNone(self.ecn.locked_at)
+
+    def test_review_expired_lock_does_not_block(self):
+        from auditlog.locking import LOCK_TIMEOUT
+        from django.utils import timezone
+        self._put_under_review()
+        self.ecn.locked_by = self.ccb1
+        self.ecn.locked_at = timezone.now() - LOCK_TIMEOUT - datetime.timedelta(seconds=1)
+        self.ecn.save(update_fields=['locked_by', 'locked_at'])
+        self.client.force_login(self.ccb2)
+        r = self.client.get(self._review_url())
+        self.assertEqual(r.status_code, 200)
+        self.ecn.refresh_from_db()
+        self.assertEqual(self.ecn.locked_by, self.ccb2)

@@ -583,6 +583,8 @@ def version_detail(request, version_id):
             ).select_related('recorded_by', 'import_batch').order_by('-historical_date')
         )
 
+    from documents.permissions import can_regenerate_approved_pdf
+
     return render(request, 'documents/version_detail.html', {
         'version': version,
         'document': doc,
@@ -592,48 +594,8 @@ def version_detail(request, version_id):
         'show_history': can_view_audit(request.user, folder=doc.project_folder),
         'show_edit': can_edit_version(request.user, version),
         'show_submit': can_submit_for_approval(request.user, version),
+        'can_regenerate_approved_pdf': can_regenerate_approved_pdf(request.user, version),
     })
-
-
-@login_required
-def upload_representation_pdf(request, version_id):
-    from documents.pdf_rendition import upload_manual_representation_pdf
-
-    version = get_object_or_404(DocumentVersion, pk=version_id)
-    if not can_edit_version(request.user, version):
-        raise PermissionDenied
-
-    uploaded = request.FILES.get('representation_pdf_file')
-    if not uploaded:
-        messages.error(request, 'Nessun file selezionato.')
-        return redirect('version_detail', version_id=version.pk)
-
-    try:
-        upload_manual_representation_pdf(version, uploaded, request.user)
-        messages.success(request, 'PDF di rappresentazione caricato correttamente.')
-    except ValidationError as exc:
-        for msg in exc.messages:
-            messages.error(request, msg)
-
-    return redirect('version_detail', version_id=version.pk)
-
-
-@login_required
-def confirm_representation_pdf_view(request, version_id):
-    from documents.pdf_rendition import confirm_representation_pdf
-
-    version = get_object_or_404(DocumentVersion, pk=version_id)
-    if not can_edit_version(request.user, version):
-        raise PermissionDenied
-
-    try:
-        confirm_representation_pdf(version, request.user)
-        messages.success(request, 'PDF di rappresentazione confermato.')
-    except ValidationError as exc:
-        for msg in exc.messages:
-            messages.error(request, msg)
-
-    return redirect('version_detail', version_id=version.pk)
 
 
 @login_required
@@ -643,35 +605,6 @@ def my_drafts(request):
         status__in=[DocumentVersion.Status.DRAFT, DocumentVersion.Status.REJECTED],
     ).select_related('document').order_by('-created_at')
     return render(request, 'documents/my_drafts.html', {'versions': versions})
-
-
-@login_required
-def my_revisions(request):
-    """Storico personale: tutte le revisioni create dall'utente, in ogni stato."""
-    versions = DocumentVersion.objects.filter(
-        created_by=request.user,
-    ).select_related('document').order_by('-created_at')
-    return render(request, 'documents/my_revisions.html', {'versions': versions})
-
-
-@login_required
-def my_documents(request):
-    """
-    Documenti di cui l'utente è autore, con l'ULTIMA versione creata da lui.
-
-    Diverso da 'current_version' (la versione pubblica/approvata visibile
-    a tutti in 'Documenti'): se l'autore ha già creato una revisione più
-    recente non ancora approvata, qui deve vedere quella, non quella
-    pubblica corrente.
-    """
-    documents = Document.objects.filter(
-        created_by=request.user,
-    ).select_related('current_version', 'owner', 'project_folder').order_by('code')
-    for doc in documents:
-        doc.my_latest_version = DocumentVersion.objects.filter(
-            document=doc, created_by=request.user,
-        ).order_by('-revision_number').first()
-    return render(request, 'documents/my_documents.html', {'documents': documents})
 
 
 @login_required
@@ -715,7 +648,8 @@ def new_document(request):
                         project_folder=d['project_folder'],
                         revision_scheme=d.get('revision_scheme', 'numeric'),
                         requires_ecn_for_revision=not d.get('ecn_exemption', False),
-                        allows_simple_ecn=not d.get('block_simple_ecn', False),
+                        allow_simple_ecn=d.get('allow_simple_ecn', True),
+                        requires_approved_pdf=d.get('requires_approved_pdf', False),
                         owner=request.user,
                         created_by=request.user,
                     )
@@ -728,7 +662,8 @@ def new_document(request):
                             'code': doc.code,
                             'category': doc.category,
                             'requires_ecn_for_revision': doc.requires_ecn_for_revision,
-                            'allows_simple_ecn': doc.allows_simple_ecn,
+                            'allow_simple_ecn': doc.allow_simple_ecn,
+                            'requires_approved_pdf': doc.requires_approved_pdf,
                         },
                         document=doc,
                     )
@@ -955,6 +890,10 @@ def submit_for_approval(request, version_id):
                     approval_policy=d['approval_policy'],
                     send_notifications=should_send_notifications(sanatoria=form.is_sanatoria),
                 )
+                sig_file = d.get('signature_template_file')
+                if sig_file:
+                    from approvals.services import create_approval_request_attachment
+                    create_approval_request_attachment(approval_request, sig_file, request.user)
                 # Sanatoria: registra evento storico
                 from auditlog.models import HistoricalRecord
                 form.maybe_create_historical_record(
@@ -978,11 +917,26 @@ def submit_for_approval(request, version_id):
             prefix='approver', initial=[{}], current_user=request.user
         )
 
+    # AREA B (verifica manuale 2026-07-28): il gate bloccava correttamente
+    # l'invio ma la pagina non offriva alcun modo di caricare il PDF
+    # mancante — stessa fonte di verità del gate (get_pdf_submission_status),
+    # così la UI e il blocco server-side non possono mai divergere.
+    from documents.pdf_gate import get_pdf_submission_status
+    pdf_ready, pdf_reason, representation_pdf = get_pdf_submission_status(version)
+
     return render(request, 'documents/submit_for_approval.html', {
         'form': form,
         'approver_formset': approver_formset,
         'version': version,
         'document': version.document,
+        'pdf_ready': pdf_ready,
+        'pdf_reason': pdf_reason,
+        'representation_pdf': representation_pdf,
+        # Chi può inviare (Manager via cartella) non sempre coincide con chi
+        # può modificare/caricare il PDF della bozza (solo l'autore/superuser
+        # — can_edit_version, stessa regola di version_detail): mostrare le
+        # azioni di caricamento solo a chi può davvero usarle.
+        'can_edit_pdf': can_edit_version(request.user, version),
     })
 
 
@@ -1048,18 +1002,69 @@ def edit_document_metadata(request, document_id):
         raise PermissionDenied
 
     if request.method == 'POST':
+        # Catturato PRIMA di form.is_valid(): ModelForm._post_clean() popola
+        # già l'istanza legata (stesso oggetto `doc`) come effetto collaterale
+        # della validazione, quindi leggere il valore dopo is_valid() darebbe
+        # già il nuovo valore.
+        old_requires_approved_pdf = doc.requires_approved_pdf
+        old_allow_simple_ecn = doc.allow_simple_ecn
         form = DocumentMetadataEditForm(request.POST, instance=doc, current_user=request.user)
         if form.is_valid():
             try:
                 instance = form.save(commit=False)
-                if 'allows_simple_ecn' in form.fields:
-                    instance.allows_simple_ecn = form.cleaned_data['allows_simple_ecn']
+                # allow_simple_ecn non è più un campo Meta (solo superuser/
+                # supervisor_demo lo vedono nel form, vedi can_edit_simple_ecn_flag):
+                # va applicato manualmente solo se presente nel form di questo
+                # utente. Un tentativo di POST grezzo da chi non è autorizzato
+                # non ha alcun effetto, perché il campo non esiste affatto qui.
+                if 'allow_simple_ecn' in form.fields:
+                    instance.allow_simple_ecn = form.cleaned_data['allow_simple_ecn']
                 instance.full_clean()
                 instance.save()
-                messages.success(
-                    request,
-                    f'Metadati di {doc.code} aggiornati.',
-                )
+
+                changed_notes = []
+
+                if 'allow_simple_ecn' in form.fields and instance.allow_simple_ecn != old_allow_simple_ecn:
+                    from auditlog.services import create_audit_log as _cal
+                    _cal(
+                        user=request.user,
+                        action='ECN_SIMPLE_POLICY_CHANGED',
+                        instance=instance,
+                        old_values={'allow_simple_ecn': old_allow_simple_ecn},
+                        new_values={'allow_simple_ecn': instance.allow_simple_ecn},
+                        document=instance,
+                    )
+                    changed_notes.append(
+                        'La modifica al flusso ECN semplice vale solo per i prossimi ECN non '
+                        'ancora creati: gli ECN già esistenti e i workflow già in corso non cambiano.'
+                    )
+
+                if instance.requires_approved_pdf != old_requires_approved_pdf:
+                    from auditlog.services import create_audit_log as _cal
+                    _cal(
+                        user=request.user,
+                        action='PDF_POLICY_CHANGED',
+                        instance=instance,
+                        old_values={'requires_approved_pdf': old_requires_approved_pdf},
+                        new_values={'requires_approved_pdf': instance.requires_approved_pdf},
+                        document=instance,
+                    )
+                    changed_notes.append(
+                        'La modifica al PDF approvato vale solo per le revisioni non ancora '
+                        'inviate in approvazione: le revisioni storiche e i workflow già in '
+                        'corso non cambiano.'
+                    )
+
+                if changed_notes:
+                    messages.success(
+                        request,
+                        f'Metadati di {doc.code} aggiornati. ' + ' '.join(changed_notes),
+                    )
+                else:
+                    messages.success(
+                        request,
+                        f'Metadati di {doc.code} aggiornati.',
+                    )
                 return redirect('document_detail', document_id=doc.pk)
             except ValidationError as exc:
                 for field, errs in (exc.message_dict.items() if hasattr(exc, 'message_dict') else {None: exc.messages}.items()):
@@ -1104,39 +1109,165 @@ def download_version_file(request, version_id):
 
 @login_required
 def download_representation_pdf(request, version_id):
-    """PDF sottoposto agli approvatori (TASK-037): stessa visibilità del sorgente."""
-    from documents.permissions import can_download_version_file
+    from documents.permissions import can_download_representation_pdf
 
     version = get_object_or_404(DocumentVersion, pk=version_id)
-    if not version.representation_pdf:
+    rep = version.representation_pdf
+
+    if rep is None or not rep.file:
         raise Http404
-    if not can_download_version_file(request.user, version):
+
+    if not can_download_representation_pdf(request.user, version):
         raise PermissionDenied
 
-    file_path = version.representation_pdf.file.path
+    file_path = rep.file.path
     if not os.path.exists(file_path):
         raise Http404
 
     return FileResponse(
-        open(file_path, 'rb'), content_type='application/pdf',
-        as_attachment=True, filename=version.representation_pdf.original_filename,
+        open(file_path, 'rb'),
+        content_type='application/pdf',
+        as_attachment=True,
+        filename=os.path.basename(rep.file.name),
+    )
+
+
+@login_required
+def view_representation_pdf_inline(request, version_id):
+    """
+    Come download_representation_pdf, ma senza forzare il download: serve
+    per il rendering client-side (pdf.js) nel posizionamento libero della
+    firma. Stessa identica autorizzazione della vista di download.
+    """
+    from documents.permissions import can_download_representation_pdf
+
+    version = get_object_or_404(DocumentVersion, pk=version_id)
+    rep = version.representation_pdf
+
+    if rep is None or not rep.file:
+        raise Http404
+
+    if not can_download_representation_pdf(request.user, version):
+        raise PermissionDenied
+
+    file_path = rep.file.path
+    if not os.path.exists(file_path):
+        raise Http404
+
+    return FileResponse(
+        open(file_path, 'rb'),
+        content_type='application/pdf',
     )
 
 
 @login_required
 def download_approved_pdf(request, version_id):
-    """PDF approvato (TASK-038): stessa visibilità della pagina di dettaglio versione."""
+    from documents.permissions import can_download_approved_pdf
+
     version = get_object_or_404(DocumentVersion, pk=version_id)
-    if not version.approved_pdf:
+    artifact = version.approved_pdf
+
+    if artifact is None or not artifact.file:
         raise Http404
-    if not can_view_version(request.user, version):
+
+    if not can_download_approved_pdf(request.user, version):
         raise PermissionDenied
 
-    file_path = version.approved_pdf.file.path
+    file_path = artifact.file.path
     if not os.path.exists(file_path):
         raise Http404
 
     return FileResponse(
-        open(file_path, 'rb'), content_type='application/pdf',
-        as_attachment=True, filename=version.approved_pdf.original_filename,
+        open(file_path, 'rb'),
+        content_type='application/pdf',
+        as_attachment=True,
+        filename=os.path.basename(artifact.file.name),
     )
+
+
+@login_required
+def regenerate_approved_pdf_view(request, version_id):
+    from documents.permissions import can_regenerate_approved_pdf
+
+    version = get_object_or_404(DocumentVersion, pk=version_id)
+
+    if not can_regenerate_approved_pdf(request.user, version):
+        raise PermissionDenied
+
+    if request.method != 'POST':
+        raise Http404
+
+    if version.status != DocumentVersion.Status.APPROVED:
+        messages.error(request, "Il PDF approvato si rigenera solo per revisioni approvate.")
+        return redirect('version_detail', version_id=version.pk)
+
+    from documents.pdf_generation import generate_approved_pdf
+    try:
+        generate_approved_pdf(version, actor=request.user, force=True)
+        messages.success(request, "PDF approvato rigenerato.")
+    except Exception as exc:
+        messages.error(request, f"Errore nella rigenerazione del PDF approvato: {exc}")
+
+    return redirect('version_detail', version_id=version.pk)
+
+
+def _pdf_redirect_target(request, version):
+    """
+    Le azioni di upload/conferma del PDF di rappresentazione possono partire
+    sia da version_detail sia dalla pagina di invio in approvazione (AREA B,
+    2026-07-28) — tornano da dove sono state invocate, whitelist esplicita
+    (mai un redirect a URL arbitrario fornito dal client).
+    """
+    if request.POST.get('next') == 'version_submit':
+        return redirect('version_submit', version_id=version.pk)
+    return redirect('version_detail', version_id=version.pk)
+
+
+@login_required
+def upload_representation_pdf_view(request, version_id):
+    version = get_object_or_404(DocumentVersion, pk=version_id)
+
+    if not can_edit_version(request.user, version):
+        raise PermissionDenied
+
+    if request.method != 'POST':
+        raise Http404
+
+    uploaded = request.FILES.get('representation_pdf')
+    if not uploaded:
+        messages.error(request, "Nessun file PDF selezionato.")
+        return _pdf_redirect_target(request, version)
+
+    from documents.pdf_pipeline import upload_manual_representation_pdf
+    try:
+        upload_manual_representation_pdf(version, uploaded, request.user)
+        messages.warning(
+            request,
+            "PDF caricato. Manca ancora un passaggio: clicca sul pulsante "
+            "«Confermo che il PDF rappresenta correttamente il sorgente» "
+            "qui sotto per poter inviare in approvazione.",
+        )
+    except ValidationError as e:
+        messages.error(request, str(e))
+
+    return _pdf_redirect_target(request, version)
+
+
+@login_required
+def confirm_representation_pdf_view(request, version_id):
+    version = get_object_or_404(DocumentVersion, pk=version_id)
+
+    if not can_edit_version(request.user, version):
+        raise PermissionDenied
+
+    if request.method != 'POST':
+        raise Http404
+
+    from documents.pdf_pipeline import confirm_representation_pdf
+    try:
+        confirm_representation_pdf(version, request.user)
+        messages.success(request, "PDF di rappresentazione confermato.")
+    except ValidationError as e:
+        messages.error(request, str(e))
+
+    return _pdf_redirect_target(request, version)

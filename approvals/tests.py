@@ -1,26 +1,30 @@
 import datetime
+import shutil
+import tempfile
 
 from django.contrib.auth.models import User
 from django.core import mail
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from approvals.models import ApprovalRequest
 from approvals.services import approve_version, reject_version
 from documents.models import Document, DocumentVersion
-from documents.services import create_new_revision, submit_version_for_approval
+from documents.services import create_document_file, create_new_revision, submit_version_for_approval
 
 LOCMEM = 'django.core.mail.backends.locmem.EmailBackend'
 
 
-def make_document(code='DOC-001', owner=None):
+def make_document(code='DOC-001', owner=None, requires_approved_pdf=False):
     return Document.objects.create(
         code=code,
         title='Documento di test',
         category=Document.Category.QUALITY,
         owner=owner,
         created_by=owner,
+        requires_approved_pdf=requires_approved_pdf,
     )
 
 
@@ -95,6 +99,559 @@ class ApproveVersionTests(TestCase):
         version = create_new_revision(self.document, self.author, 'D', 4)
         req = submit_version_for_approval(version, self.author, [self.approver])
         self.assertIsNone(req.due_date)
+
+
+class ApprovalDecisionSnapshotTests(TestCase):
+    """TASK-029 — snapshot congelato su ApprovalDecision al momento della decisione."""
+
+    def setUp(self):
+        self.author = User.objects.create_user('snap-author', password='pw')
+        self.approver = User.objects.create_user(
+            'snap-approver', password='pw', first_name='Maria', last_name='Bianchi',
+        )
+        self.document = make_document(code='SNAP-001', owner=self.author)
+
+    def _make_in_approval(self, label='A', number=1, approvers=None, policy='all'):
+        version = create_new_revision(self.document, self.author, label, number, _bypass_ecn_check=True)
+        req = submit_version_for_approval(version, self.author, approvers or [self.approver], approval_policy=policy)
+        return version, req
+
+    def test_snapshot_display_name_and_order_captured_on_approve(self):
+        _, req = self._make_in_approval()
+        approve_version(req, self.approver)
+        decision = req.decisions.get(approver=self.approver)
+        self.assertEqual(decision.snapshot_approver_display_name, 'Maria Bianchi')
+        self.assertEqual(decision.snapshot_approver_order, 1)
+
+    def test_snapshot_text_only_when_no_signature_profile(self):
+        from approvals.models import ApprovalDecision
+        _, req = self._make_in_approval()
+        approve_version(req, self.approver)
+        decision = req.decisions.get(approver=self.approver)
+        self.assertEqual(decision.snapshot_signature_mode, ApprovalDecision.SignatureMode.TEXT_ONLY)
+        self.assertFalse(decision.snapshot_signature_image)
+
+    def test_snapshot_includes_image_when_signature_profile_has_one(self):
+        import io
+        from accounts.models import UserSignature
+        from approvals.models import ApprovalDecision
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        buf = io.BytesIO()
+        Image.new('RGBA', (10, 10), (0, 0, 255, 255)).save(buf, format='PNG')
+        sig = UserSignature.objects.create(user=self.approver)
+        sig.image.save('firma.png', SimpleUploadedFile('firma.png', buf.getvalue()), save=True)
+
+        _, req = self._make_in_approval()
+        approve_version(req, self.approver)
+        decision = req.decisions.get(approver=self.approver)
+        self.assertEqual(decision.snapshot_signature_mode, ApprovalDecision.SignatureMode.TEXT_AND_IMAGE)
+        self.assertTrue(decision.snapshot_signature_image)
+
+    def test_snapshot_unaffected_by_later_profile_change(self):
+        """Se l'utente cambia nome o firma dopo la decisione, lo storico non cambia."""
+        import io
+        from accounts.models import UserSignature
+        from approvals.models import ApprovalDecision
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        buf = io.BytesIO()
+        Image.new('RGBA', (10, 10), (0, 255, 0, 255)).save(buf, format='PNG')
+        sig = UserSignature.objects.create(user=self.approver)
+        sig.image.save('vecchia.png', SimpleUploadedFile('vecchia.png', buf.getvalue()), save=True)
+
+        _, req = self._make_in_approval()
+        approve_version(req, self.approver)
+        decision = req.decisions.get(approver=self.approver)
+        old_display_name = decision.snapshot_approver_display_name
+        old_signature_name = decision.snapshot_signature_image.name
+
+        # L'utente cambia nome e rimuove la firma dopo la decisione.
+        self.approver.first_name = 'Cambiato'
+        self.approver.last_name = 'Dopo'
+        self.approver.save()
+        sig.image.delete(save=False)
+        sig.image = None
+        sig.save(update_fields=['image'])
+
+        decision.refresh_from_db()
+        self.assertEqual(decision.snapshot_approver_display_name, old_display_name)
+        self.assertEqual(decision.snapshot_signature_image.name, old_signature_name)
+        self.assertEqual(decision.snapshot_signature_mode, ApprovalDecision.SignatureMode.TEXT_AND_IMAGE)
+
+    def test_snapshot_order_none_for_unassigned_superuser_override(self):
+        superuser = User.objects.create_superuser('snap-admin', password='pw')
+        _, req = self._make_in_approval()
+        approve_version(req, superuser)
+        decision = req.decisions.get(approver=superuser)
+        self.assertIsNone(decision.snapshot_approver_order)
+
+    def test_snapshot_captured_on_reject_too(self):
+        _, req = self._make_in_approval()
+        reject_version(req, self.approver, rejection_reason='Non conforme')
+        decision = req.decisions.get(approver=self.approver)
+        self.assertEqual(decision.snapshot_approver_display_name, 'Maria Bianchi')
+        self.assertEqual(decision.snapshot_approver_order, 1)
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class ApprovedPDFAutoGenerationTests(TestCase):
+    """TASK-030 — generazione automatica del PDF approvato via approve_version/reject_version."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.temp_media = tempfile.mkdtemp()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.temp_media, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.author = User.objects.create_user('pdfgen-author', password='pw')
+        self.approver1 = User.objects.create_user('pdfgen-approver1', password='pw', first_name='Anna', last_name='Verdi')
+        self.approver2 = User.objects.create_user('pdfgen-approver2', password='pw', first_name='Marco', last_name='Neri')
+        self.document = make_document(code='PDFGEN-001', owner=self.author, requires_approved_pdf=True)
+
+    @staticmethod
+    def _real_pdf_bytes(text='Contenuto di prova'):
+        import io
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+
+        buf = io.BytesIO()
+        pdf = canvas.Canvas(buf, pagesize=A4)
+        pdf.drawString(50, 800, text)
+        pdf.showPage()
+        pdf.save()
+        return buf.getvalue()
+
+    def _make_pending(self, approvers, policy='all', label='A', number=1):
+        upload = SimpleUploadedFile(f'{label}.pdf', self._real_pdf_bytes(), content_type='application/pdf')
+        source = create_document_file(upload, self.author)
+        version = create_new_revision(self.document, self.author, label, number, file=source, _bypass_ecn_check=True)
+        req = submit_version_for_approval(version, self.author, approvers, approval_policy=policy)
+        return version, req
+
+    def test_approved_pdf_generated_on_final_approval_any_policy(self):
+        from documents.models import ApprovedPDFArtifact
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            version, req = self._make_pending([self.approver1, self.approver2], policy='any')
+            approve_version(req, self.approver1)
+        version.refresh_from_db()
+        self.assertIsNotNone(version.approved_pdf)
+        self.assertEqual(version.approved_pdf.status, ApprovedPDFArtifact.Status.GENERATED)
+        self.assertTrue(version.approved_pdf.file)
+
+    def test_approved_pdf_content_includes_minimum_fields_any_policy(self):
+        """Con policy ANY, solo la decisione effettivamente registrata compare nel registro."""
+        from pypdf import PdfReader
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            version, req = self._make_pending([self.approver1, self.approver2], policy='any')
+            approve_version(req, self.approver1)
+            version.refresh_from_db()
+            text = "\n".join(page.extract_text() for page in PdfReader(version.approved_pdf.file.path).pages)
+        self.assertIn('APPROVATO', text)
+        self.assertIn(self.document.code, text)
+        self.assertIn(version.revision_label, text)
+        self.assertIn('Anna Verdi', text)
+        self.assertNotIn('Marco Neri', text)  # non ha mai deciso: non deve comparire
+        self.assertIn('firma digitale', text.lower())
+
+    def test_approved_pdf_content_lists_all_approvers_for_all_policy(self):
+        from pypdf import PdfReader
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            version, req = self._make_pending([self.approver1, self.approver2], policy='all')
+            approve_version(req, self.approver1)
+            approve_version(req, self.approver2)
+            version.refresh_from_db()
+            text = "\n".join(page.extract_text() for page in PdfReader(version.approved_pdf.file.path).pages)
+        self.assertIn('Anna Verdi', text)
+        self.assertIn('Marco Neri', text)
+
+    def test_approved_pdf_content_respects_sequential_order(self):
+        from pypdf import PdfReader
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            version, req = self._make_pending([self.approver1, self.approver2], policy='sequential')
+            approve_version(req, self.approver1)
+            approve_version(req, self.approver2)
+            version.refresh_from_db()
+            decisions = list(req.decisions.filter(decision='APPROVED').order_by('snapshot_approver_order'))
+        self.assertEqual([d.approver_id for d in decisions], [self.approver1.pk, self.approver2.pk])
+
+    def test_no_approved_pdf_generated_on_rejection(self):
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            version, req = self._make_pending([self.approver1], policy='all')
+            reject_version(req, self.approver1, rejection_reason='Non conforme')
+        version.refresh_from_db()
+        self.assertIsNone(version.approved_pdf)
+
+    def test_no_approved_pdf_generated_on_partial_approval(self):
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            version, req = self._make_pending([self.approver1, self.approver2], policy='all')
+            approve_version(req, self.approver1)
+        version.refresh_from_db()
+        self.assertIsNone(version.approved_pdf)
+
+    def test_regeneration_is_idempotent_no_duplicate_artifact(self):
+        from documents.pdf_generation import generate_approved_pdf
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            version, req = self._make_pending([self.approver1], policy='all')
+            approve_version(req, self.approver1)
+            version.refresh_from_db()
+            first_artifact_id = version.approved_pdf_id
+            second_artifact = generate_approved_pdf(version)
+        self.assertEqual(second_artifact.pk, first_artifact_id)
+
+    def test_generation_failure_is_recorded_and_retryable(self):
+        from documents.models import ApprovedPDFArtifact
+        from documents.pdf_generation import generate_approved_pdf
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            version, req = self._make_pending([self.approver1], policy='all')
+            approve_version(req, self.approver1)
+            version.refresh_from_db()
+
+            # Rompe deliberatamente il file di rappresentazione per indurre un fallimento.
+            rep = version.representation_pdf
+            rep.file.delete(save=False)
+            rep.save(update_fields=['file'])
+            version.refresh_from_db()
+
+            artifact = generate_approved_pdf(version, force=True)
+            self.assertEqual(artifact.status, ApprovedPDFArtifact.Status.FAILED)
+            self.assertTrue(artifact.error_message)
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class ApprovedPDFFooterPlacementTests(TestCase):
+    """
+    Verifica manuale del 2026-07-27 (AREA 2): il registro delle approvazioni
+    deve comparire realmente "in calce" all'ultima pagina di contenuto
+    quando è tecnicamente sicuro, senza mai sovrapporsi al contenuto
+    esistente — con una pagina finale dedicata come fallback per i casi in
+    cui il registro sarebbe troppo alto per un footer ragionevole.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.temp_media = tempfile.mkdtemp()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.temp_media, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.author = User.objects.create_user('footer-author', password='pw')
+        self.document = make_document(code='FOOTER-001', owner=self.author, requires_approved_pdf=True)
+
+    @staticmethod
+    def _content_pdf_bytes(n_pages=1, fill_bottom=False):
+        import io
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+        buf = io.BytesIO()
+        pdf = canvas.Canvas(buf, pagesize=A4)
+        width, height = A4
+        for _ in range(n_pages):
+            pdf.setFont('Helvetica', 11)
+            y = height - 30
+            floor = 10 if fill_bottom else 150
+            while y > floor:
+                pdf.drawString(30, y, "Riga di contenuto reale del documento sorgente")
+                y -= 14
+            pdf.showPage()
+        pdf.save()
+        return buf.getvalue()
+
+    @staticmethod
+    def _signature_png_bytes():
+        import io
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new('RGBA', (300, 100), (0, 100, 200, 255)).save(buf, format='PNG')
+        return buf.getvalue()
+
+    def _approvers_with_signatures(self, n, signed=True):
+        from accounts.models import UserSignature
+        users = []
+        for i in range(n):
+            u = User.objects.create_user(f'footer-approver{i}', password='pw', first_name=f'Nome{i}', last_name='Cognome')
+            if signed:
+                sig = UserSignature.objects.create(user=u)
+                sig.image.save(f'firma{i}.png', SimpleUploadedFile(f'firma{i}.png', self._signature_png_bytes()), save=True)
+            users.append(u)
+        return users
+
+    def test_footer_used_for_single_approver_no_extra_page(self):
+        from pypdf import PdfReader
+        from approvals.services import approve_version
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            approvers = self._approvers_with_signatures(1)
+            source = create_document_file(
+                SimpleUploadedFile('a.pdf', self._content_pdf_bytes(n_pages=1), content_type='application/pdf'),
+                self.author,
+            )
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            req = submit_version_for_approval(version, self.author, approvers, approval_policy='all')
+            approve_version(req, approvers[0])
+            version.refresh_from_db()
+
+            self.assertEqual(version.approved_pdf.status, 'generated')
+            reader = PdfReader(version.approved_pdf.file.path)
+            self.assertEqual(len(reader.pages), 1)  # footer in calce: nessuna pagina aggiunta
+            text = reader.pages[0].extract_text()
+        self.assertIn('REGISTRO DI APPROVAZIONE', text)
+        self.assertIn('Riga di contenuto reale', text)  # contenuto originale ancora presente
+
+    def test_no_overlap_when_last_page_completely_full(self):
+        """Caso peggiore: pagina piena fino in fondo, nessuno spazio libero
+        preesistente — la generazione deve comunque riuscire senza sovrapporsi."""
+        from pypdf import PdfReader
+        from approvals.services import approve_version
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            approvers = self._approvers_with_signatures(2)
+            source = create_document_file(
+                SimpleUploadedFile('a.pdf', self._content_pdf_bytes(n_pages=2, fill_bottom=True), content_type='application/pdf'),
+                self.author,
+            )
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            req = submit_version_for_approval(version, self.author, approvers, approval_policy='all')
+            approve_version(req, approvers[0])
+            approve_version(req, approvers[1])
+            version.refresh_from_db()
+
+            self.assertEqual(version.approved_pdf.status, 'generated')
+            reader = PdfReader(version.approved_pdf.file.path)
+            # Pagina estesa (footer in calce), non una pagina aggiuntiva.
+            self.assertEqual(len(reader.pages), 2)
+
+    def test_falls_back_to_dedicated_page_when_registry_too_tall(self):
+        """Molti approvatori con firma -> il footer supererebbe l'altezza
+        massima ragionevole: deve ricadere sulla pagina finale dedicata."""
+        from pypdf import PdfReader
+        from approvals.services import approve_version
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            approvers = self._approvers_with_signatures(10)
+            source = create_document_file(
+                SimpleUploadedFile('a.pdf', self._content_pdf_bytes(n_pages=1), content_type='application/pdf'),
+                self.author,
+            )
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            req = submit_version_for_approval(version, self.author, approvers, approval_policy='all')
+            for u in approvers:
+                approve_version(req, u)
+            version.refresh_from_db()
+
+            self.assertEqual(version.approved_pdf.status, 'generated')
+            reader = PdfReader(version.approved_pdf.file.path)
+            self.assertEqual(len(reader.pages), 2)  # pagina di contenuto + pagina registro dedicata
+            registry_text = reader.pages[1].extract_text()
+        self.assertIn('REGISTRO DI APPROVAZIONE', registry_text)
+        for u in approvers:
+            self.assertIn(u.get_full_name(), registry_text)
+
+    def test_disclaimer_present_in_footer_variant(self):
+        from pypdf import PdfReader
+        from approvals.services import approve_version
+        approvers = self._approvers_with_signatures(1, signed=False)
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = create_document_file(
+                SimpleUploadedFile('a.pdf', self._content_pdf_bytes(n_pages=1), content_type='application/pdf'),
+                self.author,
+            )
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            req = submit_version_for_approval(version, self.author, approvers, approval_policy='all')
+            approve_version(req, approvers[0])
+            version.refresh_from_db()
+            text = PdfReader(version.approved_pdf.file.path).pages[0].extract_text()
+        self.assertIn('non costituiscono firma digitale', text)
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class ApprovedPDFManualSignaturePlacementTests(TestCase):
+    """
+    TASK-040 Fase 3 — le coordinate di posizionamento libero salvate su
+    ApprovalDecision (Fase 1/2) vengono usate davvero per disegnare la firma
+    nel punto scelto sul PDF approvato finale, al posto della riga con
+    immagine nel registro "in calce"/pagina dedicata per quella decisione.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.temp_media = tempfile.mkdtemp()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.temp_media, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.author = User.objects.create_user('sigplace-author', password='pw')
+        self.document = make_document(code='SIGPLACE-001', owner=self.author, requires_approved_pdf=True)
+
+    @staticmethod
+    def _content_pdf_bytes(n_pages=1):
+        import io
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+        buf = io.BytesIO()
+        pdf = canvas.Canvas(buf, pagesize=A4)
+        for _ in range(n_pages):
+            pdf.setFont('Helvetica', 11)
+            pdf.drawString(30, 700, "Contenuto reale della pagina di prova")
+            pdf.showPage()
+        pdf.save()
+        return buf.getvalue()
+
+    @staticmethod
+    def _signature_png_bytes():
+        import io
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new('RGBA', (300, 100), (0, 100, 200, 255)).save(buf, format='PNG')
+        return buf.getvalue()
+
+    def _approvers_with_signatures(self, n):
+        from accounts.models import UserSignature
+        users = []
+        for i in range(n):
+            u = User.objects.create_user(f'sigplace-approver{i}', password='pw', first_name=f'Nome{i}', last_name='Cognome')
+            sig = UserSignature.objects.create(user=u)
+            sig.image.save(f'firma{i}.png', SimpleUploadedFile(f'firma{i}.png', self._signature_png_bytes()), save=True)
+            users.append(u)
+        return users
+
+    def test_manual_placement_draws_on_page_and_not_duplicated_in_footer(self):
+        from pypdf import PdfReader
+        from approvals.services import approve_version
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            approvers = self._approvers_with_signatures(2)
+            source = create_document_file(
+                SimpleUploadedFile('a.pdf', self._content_pdf_bytes(n_pages=1), content_type='application/pdf'),
+                self.author,
+            )
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            req = submit_version_for_approval(version, self.author, approvers, approval_policy='all')
+            approve_version(req, approvers[0])  # automatico, nessun posizionamento
+            approve_version(req, approvers[1], signature_page=1, signature_x=0.5, signature_y=0.5)
+            version.refresh_from_db()
+
+            reader = PdfReader(version.approved_pdf.file.path)
+            self.assertEqual(len(reader.pages), 1)  # ancora "in calce", nessuna pagina aggiunta
+            page = reader.pages[0]
+            text = page.extract_text()
+            n_images = len(list(page.images))
+
+        self.assertIn(approvers[0].get_full_name(), text)
+        self.assertIn(approvers[1].get_full_name(), text)
+        self.assertIn('(firma apposta a pag. 1)', text)
+        # Un'immagine per l'approvatore automatico (nel registro) + una per
+        # quello con posizionamento libero (disegnata sulla pagina) — mai
+        # duplicata anche nel registro.
+        self.assertEqual(n_images, 2)
+
+    def test_invalid_page_falls_back_to_automatic_footer_image(self):
+        """Pagina fuori range: la decisione ricade sul comportamento
+        automatico, nessuna firma persa, nessun errore di generazione."""
+        from pypdf import PdfReader
+        from approvals.services import approve_version
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            approvers = self._approvers_with_signatures(1)
+            source = create_document_file(
+                SimpleUploadedFile('a.pdf', self._content_pdf_bytes(n_pages=1), content_type='application/pdf'),
+                self.author,
+            )
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            req = submit_version_for_approval(version, self.author, approvers, approval_policy='all')
+            approve_version(req, approvers[0], signature_page=5, signature_x=0.5, signature_y=0.5)
+            version.refresh_from_db()
+
+            self.assertEqual(version.approved_pdf.status, 'generated')
+            reader = PdfReader(version.approved_pdf.file.path)
+            page = reader.pages[0]
+            text = page.extract_text()
+            n_images = len(list(page.images))
+
+        self.assertNotIn('firma apposta a pag.', text)
+        self.assertEqual(n_images, 1)  # solo la miniatura automatica nel registro
+
+    def test_manual_placement_on_non_last_page_uses_no_footer_offset(self):
+        """Il posizionamento su una pagina diversa dall'ultima (che riceve
+        l'estensione per il footer 'in calce') non deve subire alcuna
+        traslazione verticale indebita."""
+        from pypdf import PdfReader
+        from approvals.services import approve_version
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            approvers = self._approvers_with_signatures(1)
+            source = create_document_file(
+                SimpleUploadedFile('a.pdf', self._content_pdf_bytes(n_pages=2), content_type='application/pdf'),
+                self.author,
+            )
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            req = submit_version_for_approval(version, self.author, approvers, approval_policy='all')
+            approve_version(req, approvers[0], signature_page=1, signature_x=0.5, signature_y=0.5)
+            version.refresh_from_db()
+
+            reader = PdfReader(version.approved_pdf.file.path)
+            self.assertEqual(len(reader.pages), 2)  # footer in calce sull'ultima, nessuna pagina extra
+            n_images_page1 = len(list(reader.pages[0].images))
+            n_images_page2 = len(list(reader.pages[1].images))
+            footer_text = reader.pages[1].extract_text()
+
+        self.assertEqual(n_images_page1, 1)  # la firma disegnata liberamente
+        self.assertEqual(n_images_page2, 0)  # registro sull'ultima pagina: solo testo per questa decisione
+        self.assertIn('(firma apposta a pag. 1)', footer_text)
+
+    def test_manual_placement_respected_in_dedicated_page_fallback(self):
+        """Con molti approvatori il registro ricade sulla pagina dedicata
+        (comportamento preesistente): il posizionamento libero deve restare
+        rispettato anche in questo percorso."""
+        from pypdf import PdfReader
+        from approvals.services import approve_version
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            approvers = self._approvers_with_signatures(10)
+            source = create_document_file(
+                SimpleUploadedFile('a.pdf', self._content_pdf_bytes(n_pages=1), content_type='application/pdf'),
+                self.author,
+            )
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            req = submit_version_for_approval(version, self.author, approvers, approval_policy='all')
+            approve_version(req, approvers[0], signature_page=1, signature_x=0.2, signature_y=0.8)
+            for u in approvers[1:]:
+                approve_version(req, u)
+            version.refresh_from_db()
+
+            reader = PdfReader(version.approved_pdf.file.path)
+            self.assertEqual(len(reader.pages), 2)  # contenuto + pagina registro dedicata
+            n_images_content = len(list(reader.pages[0].images))
+            registry_text = reader.pages[1].extract_text()
+
+        self.assertEqual(n_images_content, 1)
+        self.assertIn('(firma apposta a pag. 1)', registry_text)
+        self.assertIn(approvers[0].get_full_name(), registry_text)
+
+    def test_extreme_coordinates_do_not_crash_generation(self):
+        """Coordinate ai bordi (0.0/1.0): il clamping deve evitare firme
+        fuori pagina senza mai far fallire la generazione."""
+        from approvals.services import approve_version
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            approvers = self._approvers_with_signatures(1)
+            source = create_document_file(
+                SimpleUploadedFile('a.pdf', self._content_pdf_bytes(n_pages=1), content_type='application/pdf'),
+                self.author,
+            )
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            req = submit_version_for_approval(version, self.author, approvers, approval_policy='all')
+            approve_version(req, approvers[0], signature_page=1, signature_x=0.0, signature_y=0.0)
+            version.refresh_from_db()
+
+        self.assertEqual(version.approved_pdf.status, 'generated')
 
 
 @override_settings(EMAIL_BACKEND=LOCMEM)
@@ -264,35 +821,56 @@ class ApprovalViewTests(TestCase):
         req.refresh_from_db()
         self.assertEqual(req.status, ApprovalRequest.Status.REJECTED)
 
-    def test_approval_detail_shows_ecn_origin(self):
-        """TASK-024: la revisione scaturita da un ECN deve mostrare i dati
-        dell'ECN nella pagina di esame della richiesta di approvazione,
-        non solo in version_detail."""
-        from ecn.services import create_simple_ecn
 
-        v00 = create_new_revision(self.document, self.author, '00', 0)
-        req00 = submit_version_for_approval(v00, self.author, [self.approver])
-        approve_version(req00, self.approver)
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class RepresentationPDFApproverViewTests(TestCase):
+    """TASK-027 — l'approvatore vede/scarica il PDF di rappresentazione, distinto dal sorgente."""
 
-        ecn = create_simple_ecn(
-            self.document, self.approver, 'Aggiornamento urgente',
-            send_notifications=False,
-        )
-        v01 = create_new_revision(self.document, self.author, '01', 1, ecn=ecn)
-        req01 = submit_version_for_approval(v01, self.author, [self.approver])
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        import tempfile
+        cls.temp_media = tempfile.mkdtemp()
 
-        self.client.login(username='approver', password='pw')
-        response = self.client.get(reverse('approval_detail', args=[req01.pk]))
-        self.assertContains(response, '<h2 class="section-title mb-0">ECN di origine</h2>')
-        self.assertContains(response, ecn.code)
-        self.assertContains(response, ecn.title)
+    @classmethod
+    def tearDownClass(cls):
+        import shutil
+        shutil.rmtree(cls.temp_media, ignore_errors=True)
+        super().tearDownClass()
 
-    def test_approval_detail_no_ecn_section_when_not_from_ecn(self):
-        """Revisione senza ECN di origine: la sezione non deve comparire."""
-        _, req = self._make_pending()
-        self.client.login(username='approver', password='pw')
-        response = self.client.get(reverse('approval_detail', args=[req.pk]))
-        self.assertNotContains(response, '<h2 class="section-title mb-0">ECN di origine</h2>')
+    def setUp(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from documents.services import create_document_file
+
+        mail.outbox = []
+        self.author = User.objects.create_user('reppdf-author', email='a@t.com', password='pw')
+        self.approver = User.objects.create_user('reppdf-approver', email='ap@t.com', password='pw')
+        self.other = User.objects.create_user('reppdf-other', email='o@t.com', password='pw')
+        self.document = make_document(code='REPPDF-001', owner=self.author, requires_approved_pdf=True)
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            upload = SimpleUploadedFile('sorgente.pdf', b'%PDF-1.4 vero', content_type='application/pdf')
+            source = create_document_file(upload, self.author)
+            self.version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            self.req = submit_version_for_approval(self.version, self.author, [self.approver])
+
+    def test_approval_detail_shows_representation_pdf_distinct_from_source(self):
+        self.client.login(username='reppdf-approver', password='pw')
+        response = self.client.get(reverse('approval_detail', args=[self.req.pk]))
+        self.assertContains(response, 'PDF di rappresentazione')
+        self.assertContains(response, 'File sorgente')
+
+    def test_assigned_approver_can_download_representation_pdf(self):
+        self.client.login(username='reppdf-approver', password='pw')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            response = self.client.get(reverse('version_representation_pdf_download', args=[self.version.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+
+    def test_unassigned_user_cannot_download_representation_pdf(self):
+        self.client.login(username='reppdf-other', password='pw')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            response = self.client.get(reverse('version_representation_pdf_download', args=[self.version.pk]))
+        self.assertEqual(response.status_code, 403)
 
 
 # ---------------------------------------------------------------------------
@@ -612,7 +1190,8 @@ class ApprovalAttachmentTests(TestCase):
     def _make_draft(self):
         return create_new_revision(self.doc, self.author, '01', 1)
 
-    def _post_submit(self, version):
+    def _post_submit(self, version, sig_file=None):
+        from django.core.files.uploadedfile import SimpleUploadedFile
         data = {
             'approver-TOTAL_FORMS': '1',
             'approver-INITIAL_FORMS': '0',
@@ -621,53 +1200,93 @@ class ApprovalAttachmentTests(TestCase):
             'approver-0-approver': str(self.approver.pk),
             'approval_policy': 'all',
         }
+        files = {}
+        if sig_file is not None:
+            files['signature_template_file'] = sig_file
         self.client.login(username='at_author', password='pw')
-        return self.client.post(reverse('version_submit', args=[version.pk]), data)
+        return self.client.post(reverse('version_submit', args=[version.pk]), {**data, **files})
 
     def test_submit_without_attachment_works(self):
         draft = self._make_draft()
         response = self._post_submit(draft)
         self.assertEqual(response.status_code, 302)
-        from approvals.models import ApprovalRequest
+        from approvals.models import ApprovalRequest, ApprovalRequestAttachment
         ar = ApprovalRequest.objects.get(document_version=draft)
         self.assertEqual(ar.attachments.count(), 0)
 
-    def _make_request_with_attachment(self):
-        """
-        TASK-035: l'upload di un "modello da firmare" al momento dell'invio è
-        stato sostituito dal PDF di rappresentazione tipizzato (TASK-031..034).
-        `ApprovalRequestAttachment`/`create_approval_request_attachment`
-        restano nel codice per non alterare dati storici già esistenti: qui
-        si verifica che allegati storici (creati per altra via, non più dal
-        form di invio) restino scaricabili/visibili con gli stessi permessi.
-        """
+    def test_submit_with_signature_template_creates_attachment(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
-
-        from approvals.models import ApprovalRequest
-        from approvals.services import create_approval_request_attachment
-
         draft = self._make_draft()
-        response = self._post_submit(draft)
-        self.assertEqual(response.status_code, 302)
-        ar = ApprovalRequest.objects.get(document_version=draft)
         sig_file = SimpleUploadedFile('modello.pdf', b'%PDF dummy', content_type='application/pdf')
-        attachment = create_approval_request_attachment(ar, sig_file, self.author)
-        return ar, attachment
+        response = self._post_submit(draft, sig_file=sig_file)
+        self.assertEqual(response.status_code, 302)
+        from approvals.models import ApprovalRequest, ApprovalRequestAttachment
+        ar = ApprovalRequest.objects.get(document_version=draft)
+        self.assertEqual(ar.attachments.count(), 1)
+        att = ar.attachments.first()
+        self.assertEqual(att.attachment_type, ApprovalRequestAttachment.AttachmentType.SIGNATURE_TEMPLATE)
+        self.assertEqual(att.original_filename, 'modello.pdf')
+
+    def test_attachment_does_not_replace_version_file(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from documents.services import create_document_file
+        op_file = SimpleUploadedFile('operativo.pdf', b'%PDF op', content_type='application/pdf')
+        doc_file = create_document_file(op_file, self.author)
+        draft = create_new_revision(self.doc, self.author, '01', 1, file=doc_file)
+        sig_file = SimpleUploadedFile('modello.pdf', b'%PDF sig', content_type='application/pdf')
+        self._post_submit(draft, sig_file=sig_file)
+        draft.refresh_from_db()
+        self.assertIsNotNone(draft.file)
+        self.assertEqual(draft.file.pk, doc_file.pk)
+
+    def test_attachment_metadata_set(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        import hashlib
+        content = b'%PDF-1.4 test content'
+        expected_hash = hashlib.sha256(content).hexdigest()
+        draft = self._make_draft()
+        sig_file = SimpleUploadedFile('firma.pdf', content, content_type='application/pdf')
+        self._post_submit(draft, sig_file=sig_file)
+        from approvals.models import ApprovalRequest
+        ar = ApprovalRequest.objects.get(document_version=draft)
+        att = ar.attachments.first()
+        self.assertEqual(att.original_filename, 'firma.pdf')
+        self.assertEqual(att.sha256_hash, expected_hash)
+        self.assertEqual(att.size, len(content))
+        self.assertEqual(att.extension, 'pdf')
 
     def test_assigned_approver_can_download_attachment(self):
-        ar, att = self._make_request_with_attachment()
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        draft = self._make_draft()
+        sig_file = SimpleUploadedFile('modello.pdf', b'%PDF dummy', content_type='application/pdf')
+        self._post_submit(draft, sig_file=sig_file)
+        from approvals.models import ApprovalRequest
+        ar = ApprovalRequest.objects.get(document_version=draft)
+        att = ar.attachments.first()
         self.client.login(username='at_approver', password='pw')
         response = self.client.get(reverse('approval_attachment_download', args=[att.pk]))
         self.assertEqual(response.status_code, 200)
 
     def test_unassigned_user_cannot_download_attachment(self):
-        ar, att = self._make_request_with_attachment()
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        draft = self._make_draft()
+        sig_file = SimpleUploadedFile('modello.pdf', b'%PDF dummy', content_type='application/pdf')
+        self._post_submit(draft, sig_file=sig_file)
+        from approvals.models import ApprovalRequest
+        ar = ApprovalRequest.objects.get(document_version=draft)
+        att = ar.attachments.first()
         self.client.login(username='at_outsider', password='pw')
         response = self.client.get(reverse('approval_attachment_download', args=[att.pk]))
         self.assertEqual(response.status_code, 403)
 
     def test_approval_detail_shows_attachment_link(self):
-        ar, att = self._make_request_with_attachment()
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        draft = self._make_draft()
+        sig_file = SimpleUploadedFile('modello.pdf', b'%PDF dummy', content_type='application/pdf')
+        self._post_submit(draft, sig_file=sig_file)
+        from approvals.models import ApprovalRequest
+        ar = ApprovalRequest.objects.get(document_version=draft)
+        att = ar.attachments.first()
         self.client.login(username='at_approver', password='pw')
         response = self.client.get(reverse('approval_detail', args=[ar.pk]))
         self.assertEqual(response.status_code, 200)
@@ -675,8 +1294,14 @@ class ApprovalAttachmentTests(TestCase):
         self.assertContains(response, 'modello.pdf')
 
     def test_document_detail_shows_attachment_link_in_approval_section(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
         from approvals.services import approve_version as do_approve
-        ar, att = self._make_request_with_attachment()
+        draft = self._make_draft()
+        sig_file = SimpleUploadedFile('modello.pdf', b'%PDF dummy', content_type='application/pdf')
+        self._post_submit(draft, sig_file=sig_file)
+        from approvals.models import ApprovalRequest
+        ar = ApprovalRequest.objects.get(document_version=draft)
+        att = ar.attachments.first()
         do_approve(ar, self.approver)
         self.client.login(username='at_approver', password='pw')
         response = self.client.get(reverse('document_detail', args=[self.doc.pk]))
@@ -685,49 +1310,529 @@ class ApprovalAttachmentTests(TestCase):
         self.assertContains(response, 'modello.pdf')
 
 
-class ApprovalDecisionSignatureSnapshotFieldsTests(TestCase):
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class PDFPolicyInFlightWorkflowTests(TestCase):
     """
-    TASK-032 introduce i campi; TASK-036 li popola automaticamente dentro
-    approve_version (vedi anche documents.tests_approved_pdf per la
-    copertura end-to-end del PDF approvato che li usa).
+    TASK-035 — workflow in corso: cambiare Document.requires_approved_pdf
+    mentre una richiesta è già in approvazione non deve cambiare le regole
+    applicate a quella specifica richiesta (self-freezing via
+    representation_pdf_id, non tramite rilettura del flag al momento
+    dell'approvazione — vedi approvals/services.py).
+    """
+
+    @staticmethod
+    def _real_pdf_bytes(text='Contenuto'):
+        import io
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+        buf = io.BytesIO()
+        pdf = canvas.Canvas(buf, pagesize=A4)
+        pdf.drawString(50, 800, text)
+        pdf.showPage()
+        pdf.save()
+        return buf.getvalue()
+
+    def setUp(self):
+        self.author = User.objects.create_user('inflight-author', password='pw')
+        self.approver1 = User.objects.create_user('inflight-approver1', password='pw')
+        self.approver2 = User.objects.create_user('inflight-approver2', password='pw')
+
+    def test_flag_disabled_mid_approval_does_not_stop_generation_started_when_enabled(self):
+        import shutil
+        import tempfile
+        temp_media = tempfile.mkdtemp()
+        try:
+            with self.settings(MEDIA_ROOT=temp_media):
+                document = make_document(code='INFLIGHT-001', owner=self.author, requires_approved_pdf=True)
+                upload = SimpleUploadedFile('a.pdf', self._real_pdf_bytes(), content_type='application/pdf')
+                source = create_document_file(upload, self.author)
+                version = create_new_revision(document, self.author, 'A', 1, file=source)
+                req = submit_version_for_approval(version, self.author, [self.approver1], approval_policy='all')
+
+                # La policy viene disattivata mentre la richiesta è già IN_APPROVAL.
+                document.requires_approved_pdf = False
+                document.save(update_fields=['requires_approved_pdf'])
+
+                approve_version(req, self.approver1)
+                version.refresh_from_db()
+        finally:
+            shutil.rmtree(temp_media, ignore_errors=True)
+
+        self.assertIsNotNone(version.approved_pdf)
+        self.assertEqual(version.approved_pdf.status, 'generated')
+
+    def test_flag_enabled_mid_approval_does_not_trigger_generation_for_request_started_without_it(self):
+        document = make_document(code='INFLIGHT-002', owner=self.author, requires_approved_pdf=False)
+        version = create_new_revision(document, self.author, 'A', 1)
+        req = submit_version_for_approval(version, self.author, [self.approver1], approval_policy='all')
+
+        # La policy viene attivata mentre la richiesta è già IN_APPROVAL, senza
+        # alcun PDF di rappresentazione collegato a questa specifica revisione.
+        document.requires_approved_pdf = True
+        document.save(update_fields=['requires_approved_pdf'])
+
+        approve_version(req, self.approver1)
+        version.refresh_from_db()
+        self.assertIsNone(version.approved_pdf)
+
+    def test_flag_toggle_mid_approval_consistent_after_rejection(self):
+        document = make_document(code='INFLIGHT-003', owner=self.author, requires_approved_pdf=True)
+        version = create_new_revision(document, self.author, 'A', 1, _bypass_ecn_check=True)
+        # Nessun file sorgente: il gate non si applica (fuori scope), invio consentito.
+        req = submit_version_for_approval(version, self.author, [self.approver1])
+
+        document.requires_approved_pdf = False
+        document.save(update_fields=['requires_approved_pdf'])
+
+        reject_version(req, self.approver1, rejection_reason='Non conforme')
+        version.refresh_from_db()
+        self.assertIsNone(version.approved_pdf)
+        self.assertEqual(version.status, DocumentVersion.Status.REJECTED)
+
+    def test_self_freezing_holds_for_any_policy(self):
+        import shutil
+        import tempfile
+        temp_media = tempfile.mkdtemp()
+        try:
+            with self.settings(MEDIA_ROOT=temp_media):
+                document = make_document(code='INFLIGHT-004', owner=self.author, requires_approved_pdf=True)
+                upload = SimpleUploadedFile('a.pdf', self._real_pdf_bytes(), content_type='application/pdf')
+                source = create_document_file(upload, self.author)
+                version = create_new_revision(document, self.author, 'A', 1, file=source)
+                req = submit_version_for_approval(
+                    version, self.author, [self.approver1, self.approver2], approval_policy='any',
+                )
+
+                document.requires_approved_pdf = False
+                document.save(update_fields=['requires_approved_pdf'])
+
+                approve_version(req, self.approver1)
+                version.refresh_from_db()
+        finally:
+            shutil.rmtree(temp_media, ignore_errors=True)
+
+        self.assertIsNotNone(version.approved_pdf)
+        self.assertEqual(version.approved_pdf.status, 'generated')
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class SimpleEcnAutoCloseEndToEndTests(TestCase):
+    """
+    Prova end-to-end (approve_version reale, non il service ECN diretto)
+    che la chiusura automatica dell'ECN collegato — standard o semplice
+    (requisito aziendale 2026-07-28, generalizza AREA 3) — è indipendente
+    dalla policy PDF del documento.
     """
 
     def setUp(self):
-        self.author = User.objects.create_user('snap_author', password='pw')
-        self.approver = User.objects.create_user('snap_approver', password='pw')
-        self.doc = make_document(code='SNAP-DOC', owner=self.author)
+        self.author = User.objects.create_user('e2e-author', password='pw')
+        self.approver = User.objects.create_user('e2e-approver', password='pw')
 
-    def test_decision_gets_display_name_snapshot_without_signature_image(self):
-        version = create_new_revision(self.doc, self.author, '01', 1)
-        submit_version_for_approval(
-            version=version, requested_by=self.author,
-            approvers=[self.approver], approval_policy='any',
+    def _document_with_current_version(self, code, requires_approved_pdf):
+        doc = make_document(code=code, owner=self.author, requires_approved_pdf=requires_approved_pdf)
+        first_version = create_new_revision(doc, self.author, '00', 0, _bypass_ecn_check=True)
+        req = submit_version_for_approval(first_version, self.author, [self.approver])
+        approve_version(req, self.approver, send_notifications=False)
+        doc.refresh_from_db()
+        return doc
+
+    def test_simple_ecn_closes_automatically_after_real_approval_pdf_disabled(self):
+        from ecn.models import ChangeNotice
+        from ecn.services import create_simple_ecn
+
+        doc = self._document_with_current_version('E2E-ECN-001', requires_approved_pdf=False)
+        ecn = create_simple_ecn(
+            document=doc, proposed_by=self.author, title='Revisione rapida', send_notifications=False,
         )
-        approve_version(ApprovalRequest.objects.get(document_version=version), self.approver)
-        decision = ApprovalRequest.objects.get(document_version=version).decisions.get()
-        # Nessuna UserSignature attiva per l'approvatore: nome congelato,
-        # nessuna immagine (firma solo testuale).
-        self.assertEqual(decision.signature_display_name, 'snap_approver')
-        self.assertIsNone(decision.signature_used_id)
+        version = create_new_revision(doc, self.author, '01', 1, ecn=ecn, change_summary='Via ECN semplice')
+        req = submit_version_for_approval(version, self.author, [self.approver])
+        approve_version(req, self.approver, send_notifications=False)
 
-    def test_decision_snapshots_active_signature_at_decision_time(self):
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.CLOSED)
+
+    def test_simple_ecn_closes_automatically_after_real_approval_pdf_enabled(self):
+        """Stessa prova con il workflow PDF attivo sul documento: le due dimensioni restano indipendenti."""
+        from ecn.models import ChangeNotice
+        from ecn.services import create_simple_ecn
+
+        doc = self._document_with_current_version('E2E-ECN-002', requires_approved_pdf=True)
+        ecn = create_simple_ecn(
+            document=doc, proposed_by=self.author, title='Revisione rapida', send_notifications=False,
+        )
+        version = create_new_revision(doc, self.author, '01', 1, ecn=ecn, change_summary='Via ECN semplice')
+        req = submit_version_for_approval(version, self.author, [self.approver])
+        # Nessun file sorgente: il gate PDF non si applica (fuori scope), invio consentito comunque.
+        approve_version(req, self.approver, send_notifications=False)
+
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.CLOSED)
+
+    def test_standard_ecn_closes_automatically_after_real_approval(self):
+        from ecn.models import ChangeNotice
+        from ecn.services import create_change_notice
+
+        doc = self._document_with_current_version('E2E-ECN-003', requires_approved_pdf=False)
+        ecn = create_change_notice(
+            document=doc, proposed_by=self.author, title='ECN standard',
+            motivation=ChangeNotice.Motivation.IMPROVEMENT, send_notifications=False,
+        )
+        ecn.status = ChangeNotice.Status.APPROVED
+        ecn.save(update_fields=['status'])
+        version = create_new_revision(doc, self.author, '01', 1, ecn=ecn, change_summary='Via ECN standard')
+        req = submit_version_for_approval(version, self.author, [self.approver])
+        approve_version(req, self.approver, send_notifications=False)
+
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.CLOSED)
+        self.assertIn('Rev. 01', ecn.close_notes)
+
+    def test_standard_ecn_closes_with_all_policy_only_on_final_approval(self):
+        """La chiusura avviene solo quando la richiesta ALL è davvero completa."""
+        from ecn.models import ChangeNotice
+        from ecn.services import create_change_notice
+
+        approver2 = User.objects.create_user('e2e-approver2', password='pw')
+        doc = self._document_with_current_version('E2E-ECN-ALL', requires_approved_pdf=False)
+        ecn = create_change_notice(
+            document=doc, proposed_by=self.author, title='ECN standard ALL',
+            motivation=ChangeNotice.Motivation.IMPROVEMENT, send_notifications=False,
+        )
+        ecn.status = ChangeNotice.Status.APPROVED
+        ecn.save(update_fields=['status'])
+        version = create_new_revision(doc, self.author, '01', 1, ecn=ecn, change_summary='Via ECN standard ALL')
+        req = submit_version_for_approval(
+            version, self.author, [self.approver, approver2], approval_policy='all',
+        )
+
+        approve_version(req, self.approver, send_notifications=False)
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.APPROVED)  # ancora in attesa del secondo voto
+
+        approve_version(req, approver2, send_notifications=False)
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.CLOSED)
+
+    def test_standard_ecn_closes_with_sequential_policy_only_on_final_approval(self):
+        """La chiusura avviene solo quando l'ultimo approvatore SEQUENTIAL ha deciso."""
+        from ecn.models import ChangeNotice
+        from ecn.services import create_change_notice
+
+        approver2 = User.objects.create_user('e2e-approver3', password='pw')
+        doc = self._document_with_current_version('E2E-ECN-SEQ', requires_approved_pdf=False)
+        ecn = create_change_notice(
+            document=doc, proposed_by=self.author, title='ECN standard SEQUENTIAL',
+            motivation=ChangeNotice.Motivation.IMPROVEMENT, send_notifications=False,
+        )
+        ecn.status = ChangeNotice.Status.APPROVED
+        ecn.save(update_fields=['status'])
+        version = create_new_revision(doc, self.author, '01', 1, ecn=ecn, change_summary='Via ECN standard SEQ')
+        req = submit_version_for_approval(
+            version, self.author, [self.approver, approver2], approval_policy='sequential',
+        )
+
+        approve_version(req, self.approver, send_notifications=False)
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.APPROVED)
+
+        approve_version(req, approver2, send_notifications=False)
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.CLOSED)
+
+    def test_standard_ecn_ccb_members_receive_closure_email(self):
+        """
+        Requisito: alla chiusura automatica dello standard, tutti i membri
+        CCB assegnati a QUELLO specifico ECN ricevono l'email di chiusura —
+        non un elenco globale di utenti.
+        """
+        from django.core import mail
+        from ecn.models import ChangeNotice
+        from ecn.services import configure_ccb, create_change_notice
+
+        ccb_member1 = User.objects.create_user(
+            'e2e-ccb1', password='pw', email='ccb1@example.test', first_name='Ccb', last_name='Uno',
+        )
+        ccb_member2 = User.objects.create_user(
+            'e2e-ccb2', password='pw', email='ccb2@example.test', first_name='Ccb', last_name='Due',
+        )
+        # Utente estraneo: non deve mai ricevere l'email di chiusura di questo ECN.
+        stranger = User.objects.create_user('e2e-stranger', password='pw', email='stranger@example.test')
+
+        doc = self._document_with_current_version('E2E-ECN-CCB-MAIL', requires_approved_pdf=False)
+        ecn = create_change_notice(
+            document=doc, proposed_by=self.author, title='ECN standard con CCB',
+            motivation=ChangeNotice.Motivation.IMPROVEMENT, send_notifications=False,
+        )
+        configure_ccb(ecn, actor=self.author, users=[ccb_member1, ccb_member2], policy='any',
+                      send_notifications=False)
+        ecn.status = ChangeNotice.Status.APPROVED
+        ecn.save(update_fields=['status'])
+
+        version = create_new_revision(doc, self.author, '01', 1, ecn=ecn, change_summary='Via ECN standard')
+        req = submit_version_for_approval(version, self.author, [self.approver])
+
+        mail.outbox = []
+        approve_version(req, self.approver, send_notifications=False)
+
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.CLOSED)
+
+        sent_to = {addr for m in mail.outbox for addr in m.to}
+        self.assertIn(ccb_member1.email, sent_to)
+        self.assertIn(ccb_member2.email, sent_to)
+        self.assertNotIn(stranger.email, sent_to)
+
+        closure_emails = [m for m in mail.outbox if m.subject == f'[ECN] Chiuso: {ecn.code}']
+        self.assertTrue(closure_emails)
+        self.assertIn('chiuso automaticamente', closure_emails[0].body.lower())
+        self.assertIn('Rev. 01', closure_emails[0].body)
+
+
+# ---------------------------------------------------------------------------
+# TASK-039 — Lock "un utente alla volta" su approval_detail
+# ---------------------------------------------------------------------------
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class ApprovalDetailLockTests(TestCase):
+    """Lock su approval_detail per richieste PENDING."""
+
+    def setUp(self):
+        mail.outbox = []
+        self.author = User.objects.create_user('lock_ap_author', password='pw')
+        self.approver1 = User.objects.create_user('lock_ap_a1', password='pw')
+        self.approver2 = User.objects.create_user('lock_ap_a2', password='pw')
+        self.document = make_document(code='LOCK-AP-DOC', owner=self.author)
+
+    def _make_pending(self):
+        version = create_new_revision(self.document, self.author, 'A', 1, _bypass_ecn_check=True)
+        req = submit_version_for_approval(
+            version, self.author, [self.approver1, self.approver2], approval_policy='any',
+        )
+        mail.outbox = []
+        return version, req
+
+    def test_second_approver_blocked_on_get(self):
+        _, req = self._make_pending()
+        self.client.login(username='lock_ap_a1', password='pw')
+        r1 = self.client.get(reverse('approval_detail', args=[req.pk]))
+        self.assertEqual(r1.status_code, 200)
+        self.client.login(username='lock_ap_a2', password='pw')
+        r2 = self.client.get(reverse('approval_detail', args=[req.pk]))
+        self.assertRedirects(r2, reverse('approval_queue'))
+        from django.contrib.messages import get_messages
+        msgs = [str(m) for m in get_messages(r2.wsgi_request)]
+        self.assertTrue(any('Decisione in lavorazione da' in m for m in msgs))
+
+    def test_second_approver_blocked_on_post(self):
+        _, req = self._make_pending()
+        self.client.login(username='lock_ap_a1', password='pw')
+        self.client.get(reverse('approval_detail', args=[req.pk]))
+        self.client.login(username='lock_ap_a2', password='pw')
+        r = self.client.post(
+            reverse('approval_detail', args=[req.pk]),
+            {'action': 'approve', 'comment': ''},
+        )
+        self.assertRedirects(r, reverse('approval_queue'))
+
+    def test_lock_released_after_approve(self):
+        _, req = self._make_pending()
+        self.client.login(username='lock_ap_a1', password='pw')
+        r = self.client.post(
+            reverse('approval_detail', args=[req.pk]),
+            {'action': 'approve', 'comment': ''},
+        )
+        self.assertRedirects(r, reverse('approval_queue'))
+        req.refresh_from_db()
+        self.assertIsNone(req.locked_by)
+        self.assertIsNone(req.locked_at)
+
+    def test_lock_released_after_reject(self):
+        _, req = self._make_pending()
+        self.client.login(username='lock_ap_a1', password='pw')
+        r = self.client.post(
+            reverse('approval_detail', args=[req.pk]),
+            {'action': 'reject', 'rejection_reason': 'Incompleto'},
+        )
+        self.assertRedirects(r, reverse('approval_queue'))
+        req.refresh_from_db()
+        self.assertIsNone(req.locked_by)
+        self.assertIsNone(req.locked_at)
+
+    def test_no_lock_when_status_not_pending(self):
+        _, req = self._make_pending()
+        approve_version(req, self.approver1)
+        req.refresh_from_db()
+        self.assertEqual(req.status, ApprovalRequest.Status.APPROVED)
+        self.client.login(username='lock_ap_a2', password='pw')
+        r = self.client.get(reverse('approval_detail', args=[req.pk]))
+        self.assertEqual(r.status_code, 200)
+
+    def test_expired_lock_does_not_block(self):
+        import datetime
+        from auditlog.locking import LOCK_TIMEOUT
+        from django.utils import timezone
+        _, req = self._make_pending()
+        req.locked_by = self.approver1
+        req.locked_at = timezone.now() - LOCK_TIMEOUT - datetime.timedelta(seconds=1)
+        req.save(update_fields=['locked_by', 'locked_at'])
+        self.client.login(username='lock_ap_a2', password='pw')
+        r = self.client.get(reverse('approval_detail', args=[req.pk]))
+        self.assertEqual(r.status_code, 200)
+        req.refresh_from_db()
+        self.assertEqual(req.locked_by, self.approver2)
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class ApproveVersionSignaturePlacementTests(TestCase):
+    """TASK-040 — posizionamento libero firma su approve_version (Fase 1)."""
+
+    def setUp(self):
+        self.author = User.objects.create_user('sigpl-author', password='pw')
+        self.approver = User.objects.create_user('sigpl-approver', password='pw')
+        self.document = make_document(owner=self.author)
+
+    def _make_in_approval(self):
+        version = create_new_revision(
+            self.document, self.author, 'A', 1, _bypass_ecn_check=True,
+        )
+        req = submit_version_for_approval(version, self.author, [self.approver])
+        return version, req
+
+    def test_approve_without_placement_unchanged(self):
+        _, req = self._make_in_approval()
+        approve_version(req, self.approver)
+        from approvals.models import ApprovalDecision
+        decision = ApprovalDecision.objects.get(approval_request=req, approver=self.approver)
+        self.assertIsNone(decision.signature_page)
+        self.assertIsNone(decision.signature_x)
+        self.assertIsNone(decision.signature_y)
+
+    def test_approve_with_valid_placement_saves_fields(self):
+        _, req = self._make_in_approval()
+        approve_version(req, self.approver, signature_page=2, signature_x=0.25, signature_y=0.75)
+        from approvals.models import ApprovalDecision
+        decision = ApprovalDecision.objects.get(approval_request=req, approver=self.approver)
+        self.assertEqual(decision.signature_page, 2)
+        self.assertEqual(decision.signature_x, 0.25)
+        self.assertEqual(decision.signature_y, 0.75)
+
+    def test_partial_placement_raises_validation_error(self):
+        _, req = self._make_in_approval()
+        with self.assertRaises(ValidationError):
+            approve_version(req, self.approver, signature_page=1)
+        with self.assertRaises(ValidationError):
+            approve_version(req, self.approver, signature_page=1, signature_x=0.5)
+        with self.assertRaises(ValidationError):
+            approve_version(req, self.approver, signature_x=0.5, signature_y=0.5)
+
+    def test_invalid_page_raises_validation_error(self):
+        _, req = self._make_in_approval()
+        with self.assertRaises(ValidationError):
+            approve_version(req, self.approver, signature_page=0, signature_x=0.5, signature_y=0.5)
+
+    def test_out_of_range_coordinates_raise_validation_error(self):
+        _, req = self._make_in_approval()
+        with self.assertRaises(ValidationError):
+            approve_version(req, self.approver, signature_page=1, signature_x=-0.1, signature_y=0.5)
+        with self.assertRaises(ValidationError):
+            approve_version(req, self.approver, signature_page=1, signature_x=0.5, signature_y=1.1)
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class ApprovalDetailSignaturePlacementViewTests(TestCase):
+    """TASK-040 (Fase 2) — parsing dei campi di posizionamento firma nella vista approval_detail."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.temp_media = tempfile.mkdtemp()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.temp_media, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
         from accounts.models import UserSignature
-        import io
-        from PIL import Image
-        buf = io.BytesIO()
-        Image.new('RGBA', (5, 5)).save(buf, format='PNG')
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        signature = UserSignature.objects.create(
-            user=self.approver,
-            image=SimpleUploadedFile('f.png', buf.getvalue(), content_type='image/png'),
-            original_filename='f.png',
-        )
-        version = create_new_revision(self.doc, self.author, '01', 1)
-        submit_version_for_approval(
-            version=version, requested_by=self.author,
-            approvers=[self.approver], approval_policy='any',
-        )
-        approve_version(ApprovalRequest.objects.get(document_version=version), self.approver)
-        d = ApprovalRequest.objects.get(document_version=version).decisions.get()
-        self.assertEqual(d.signature_display_name, 'snap_approver')
-        self.assertEqual(d.signature_used_id, signature.pk)
+        from documents.pdf_pipeline import confirm_representation_pdf
+
+        self.author = User.objects.create_user('sigview-author', password='pw')
+        self.approver = User.objects.create_user('sigview-approver', password='pw')
+        self.document = make_document(owner=self.author, requires_approved_pdf=True)
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            UserSignature.objects.create(
+                user=self.approver,
+                image=SimpleUploadedFile('firma.png', b'\x89PNG\r\n\x1a\n' + b'0' * 50, content_type='image/png'),
+            )
+            src = create_document_file(
+                SimpleUploadedFile('sorgente.txt', b'Testo di prova.\n' * 20, content_type='text/plain'),
+                self.author,
+            )
+            self.version = create_new_revision(
+                self.document, self.author, '00', 0, file=src,
+                change_summary='Test firma libera', _bypass_ecn_check=True,
+            )
+            self.version.refresh_from_db()
+            confirm_representation_pdf(self.version, self.author)
+            self.req = submit_version_for_approval(
+                self.version, self.author, [self.approver], send_notifications=False,
+            )
+
+    def test_approve_with_valid_placement_saves_on_decision(self):
+        self.client.login(username='sigview-approver', password='pw')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            response = self.client.post(
+                reverse('approval_detail', args=[self.req.pk]),
+                {'action': 'approve', 'comment': '', 'signature_page': '1', 'signature_x': '0.3', 'signature_y': '0.6'},
+            )
+        self.assertRedirects(response, reverse('approval_queue'))
+        from approvals.models import ApprovalDecision
+        decision = ApprovalDecision.objects.get(approval_request=self.req, approver=self.approver)
+        self.assertEqual(decision.signature_page, 1)
+        self.assertAlmostEqual(decision.signature_x, 0.3)
+        self.assertAlmostEqual(decision.signature_y, 0.6)
+
+    def test_approve_without_placement_fields_is_automatic(self):
+        self.client.login(username='sigview-approver', password='pw')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            response = self.client.post(
+                reverse('approval_detail', args=[self.req.pk]),
+                {'action': 'approve', 'comment': ''},
+            )
+        self.assertRedirects(response, reverse('approval_queue'))
+        from approvals.models import ApprovalDecision
+        decision = ApprovalDecision.objects.get(approval_request=self.req, approver=self.approver)
+        self.assertIsNone(decision.signature_page)
+        self.assertIsNone(decision.signature_x)
+        self.assertIsNone(decision.signature_y)
+
+    def test_approve_with_malformed_placement_falls_back_to_automatic(self):
+        self.client.login(username='sigview-approver', password='pw')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            response = self.client.post(
+                reverse('approval_detail', args=[self.req.pk]),
+                {'action': 'approve', 'comment': '', 'signature_page': 'abc', 'signature_x': '0.3', 'signature_y': '0.6'},
+            )
+        self.assertRedirects(response, reverse('approval_queue'))
+        from approvals.models import ApprovalDecision
+        decision = ApprovalDecision.objects.get(approval_request=self.req, approver=self.approver)
+        self.assertIsNone(decision.signature_page)
+        self.assertIsNone(decision.signature_x)
+        self.assertIsNone(decision.signature_y)
+
+    def test_widget_context_includes_signature_url_and_placements(self):
+        self.client.login(username='sigview-approver', password='pw')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            response = self.client.get(reverse('approval_detail', args=[self.req.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNotNone(response.context['user_signature_url'])
+        self.assertEqual(response.context['existing_signature_placements'], [])
+
+    def test_widget_hidden_without_representation_pdf(self):
+        other_doc = make_document(code='SIGVIEW-NOPDF', owner=self.author)
+        version = create_new_revision(other_doc, self.author, '00', 0, _bypass_ecn_check=True)
+        req = submit_version_for_approval(version, self.author, [self.approver], send_notifications=False)
+        self.client.login(username='sigview-approver', password='pw')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            response = self.client.get(reverse('approval_detail', args=[req.pk]))
+        self.assertNotContains(response, 'id_manual_signature_toggle')

@@ -43,6 +43,20 @@ class ApprovalRequest(models.Model):
     due_date = models.DateField(null=True, blank=True, verbose_name='Scadenza approvazione')
     notes = models.TextField(blank=True, verbose_name='Note')
     completed_at = models.DateTimeField(null=True, blank=True, verbose_name='Completato il')
+    locked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='locked_approval_requests',
+        verbose_name='In lavorazione da',
+        help_text='Utente che sta decidendo questa richiesta in questo momento (lock temporaneo).',
+    )
+    locked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='In lavorazione dal',
+    )
 
     class Meta:
         verbose_name = 'Richiesta di approvazione'
@@ -140,6 +154,10 @@ class ApprovalDecision(models.Model):
         APPROVED = 'APPROVED', 'Approvato'
         REJECTED = 'REJECTED', 'Rifiutato'
 
+    class SignatureMode(models.TextChoices):
+        TEXT_ONLY = 'text_only', 'Solo testo'
+        TEXT_AND_IMAGE = 'text_and_image', 'Testo e immagine'
+
     approval_request = models.ForeignKey(
         ApprovalRequest,
         on_delete=models.CASCADE,
@@ -157,26 +175,50 @@ class ApprovalDecision(models.Model):
     notes = models.TextField(blank=True, verbose_name='Note')
 
     # ------------------------------------------------------------------
-    # Snapshot storico per il registro del PDF approvato (TASK-032/036).
-    # `approver` resta un FK live a User: se nome o firma cambiano in
-    # futuro, il PDF approvato già generato non deve cambiare. Per questo
-    # congeliamo qui il nome mostrato e la firma effettivamente usata.
-    # `signature_used` punta a una riga UserSignature immutabile: anche se
-    # l'utente sostituisce la propria firma, questa riga storica non cambia.
+    # Snapshot (TASK-029): dati congelati al momento della decisione, così
+    # che un cambio successivo di nome/ruolo/firma dell'utente non alteri
+    # lo storico già registrato. Usati per costruire il registro di
+    # approvazione del PDF approvato (TASK-030).
     # ------------------------------------------------------------------
-    signature_display_name = models.CharField(
-        max_length=255,
-        blank=True,
-        verbose_name='Nome mostrato al momento della decisione',
-        help_text='Congelato al momento della decisione (approver.get_full_name() o username).',
+    snapshot_approver_display_name = models.CharField(
+        max_length=200, blank=True, default='', verbose_name='Nome approvatore (storico)',
     )
-    signature_used = models.ForeignKey(
-        'accounts.UserSignature',
-        on_delete=models.SET_NULL,
+    snapshot_approver_order = models.PositiveSmallIntegerField(
+        null=True, blank=True, verbose_name='Ordine fase (storico)',
+    )
+    snapshot_signature_mode = models.CharField(
+        max_length=20,
+        choices=SignatureMode.choices,
+        default=SignatureMode.TEXT_ONLY,
+        verbose_name='Modalità firma (storico)',
+    )
+    snapshot_signature_image = models.ImageField(
+        upload_to='approval_signature_snapshots/%Y/%m/',
         null=True,
         blank=True,
-        related_name='decisions',
-        verbose_name='Firma visiva usata',
+        verbose_name='Immagine firma (storico)',
+    )
+    signature_page = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Pagina firma (posizionamento libero)',
+        help_text=(
+            'Numero di pagina (1-based) dove è stata posizionata '
+            'manualmente la firma. Nullo = firma automatica in calce '
+            '(comportamento invariato).'
+        ),
+    )
+    signature_x = models.FloatField(
+        null=True,
+        blank=True,
+        verbose_name='Posizione firma X',
+        help_text='Coordinata X normalizzata (0.0-1.0, da sinistra) del centro della firma.',
+    )
+    signature_y = models.FloatField(
+        null=True,
+        blank=True,
+        verbose_name='Posizione firma Y',
+        help_text='Coordinata Y normalizzata (0.0-1.0, dall\'alto) del centro della firma.',
     )
 
     class Meta:

@@ -21,6 +21,7 @@
       {% elif document.status == 'obsolete' %}<span class="badge-status-superseded">Obsoleto</span>
       {% elif document.status == 'archived' %}<span class="badge-status-archived">Archiviato</span>
       {% endif %}
+      <span class="text-xs text-slate-600 bg-slate-100 px-2 py-0.5 rounded font-semibold">📜 Storico completo</span>
     </div>
     <h1 class="text-xl font-semibold text-gray-800">{{ document.title }}</h1>
     <div class="flex items-center gap-4 mt-2 text-sm text-gray-500 flex-wrap">
@@ -163,6 +164,7 @@
         <th>Codice</th>
         <th>Titolo</th>
         <th>Stato</th>
+        <th>Applicabilità</th>
         <th>Proponente</th>
         <th>Data</th>
         <th class="w-20"></th>
@@ -175,13 +177,14 @@
           <td>
             {% if ecn.status == 'draft' %}<span class="badge-ecn-draft">Bozza</span>
             {% elif ecn.status == 'ccb_preparation' %}<span class="badge-ecn-ccb_prep">Istruttoria CCB</span>
-            {% elif ecn.status == 'under_review' %}<span class="badge-ecn-under_review">In revisione CCB</span>
+            {% elif ecn.status == 'under_review' %}<span class="badge-ecn-under_review">In Valutazione CCB</span>
             {% elif ecn.status == 'approved' %}<span class="badge-ecn-approved">Approvata</span>
             {% elif ecn.status == 'rejected' %}<span class="badge-ecn-rejected">Rifiutata</span>
             {% elif ecn.status == 'closed' %}<span class="badge-ecn-closed">Chiusa</span>
             {% else %}<span class="badge-ecn-draft">{{ ecn.get_status_display }}</span>
             {% endif %}
           </td>
+          <td>{% include "ecn/_applicability_badge.html" %}</td>
           <td class="meta">{{ ecn.proposed_by.get_full_name|default:ecn.proposed_by.username }}</td>
           <td class="meta whitespace-nowrap">{{ ecn.proposed_at|date:"d/m/Y" }}</td>
           <td><a href="{% url 'ecn:ecn_detail' ecn.pk %}" class="btn-secondary btn-sm">Apri</a></td>

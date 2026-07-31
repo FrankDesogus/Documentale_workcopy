@@ -1,0 +1,33 @@
+{# Riquadro evidente "Applicabilità" per il dettaglio ECN. Richiede `ecn`. #}
+{% with cat=ecn.applicability_category %}
+<div class="applicability-box {% if cat == 'general' %}applicability-box-general{% elif cat == 'future' %}applicability-box-future{% elif cat == 'limited' %}applicability-box-limited{% else %}applicability-box-unset{% endif %}">
+  <div class="flex items-center gap-2 mb-1 flex-wrap">
+    <span class="text-sm font-semibold" style="color: var(--text-primary);">Applicabilità</span>
+    <span class="{{ ecn.applicability_badge_class }}">{{ ecn.applicability_display }}</span>
+  </div>
+  {% if ecn.applicability_short_description %}
+  <p class="text-xs mb-2" style="color: var(--text-secondary);">{{ ecn.applicability_short_description }}</p>
+  {% endif %}
+  {% if ecn.applicability_detail %}
+  <div class="text-sm whitespace-pre-wrap{% if cat == 'limited' %} font-medium{% endif %}" style="color: var(--text-primary);">{{ ecn.applicability_detail }}</div>
+  {% elif not cat %}
+  <p class="text-xs" style="color: var(--text-secondary);">
+    {% if ecn.flow_type == 'simple' %}
+    Gli ECN a flusso semplice non hanno un'applicabilità: nessuna CCB si riunisce
+    per deciderla.
+    {% elif ecn.status == 'draft' or ecn.status == 'ccb_preparation' %}
+    Applicabilità non ancora decisa: sarà definita dalla CCB nel dossier istruttorio
+    prima dell'invio al voto.
+    {% else %}
+    Nessuna applicabilità registrata (ECN storico antecedente a questa funzionalità).
+    {% endif %}
+  </p>
+  {% endif %}
+  {% if ecn.applicability_shows_scope_notice %}
+  <p class="text-xs mt-2 italic" style="color: var(--text-secondary);">
+    Questa classificazione registra l'ambito dell'ECN ma non assegna automaticamente
+    revisioni differenti ai singoli progetti.
+  </p>
+  {% endif %}
+</div>
+{% endwith %}

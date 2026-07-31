@@ -58,6 +58,7 @@
         <th>Titolo</th>
         <th>Documento</th>
         <th>Stato</th>
+        <th>Applicabilità</th>
         <th>Proponente</th>
         <th>Data</th>
       </tr>
@@ -78,7 +79,7 @@
           {% elif ecn.status == 'ccb_preparation' %}
           <span class="badge-ecn-ccb_prep">Istruttoria CCB</span>
           {% elif ecn.status == 'under_review' %}
-          <span class="badge-ecn-under_review">In revisione CCB</span>
+          <span class="badge-ecn-under_review">In Valutazione CCB</span>
           {% elif ecn.status == 'approved' %}
           <span class="badge-ecn-approved">Approvata</span>
           {% elif ecn.status == 'rejected' %}
@@ -89,6 +90,7 @@
           <span class="badge-ecn-draft">{{ ecn.get_status_display }}</span>
           {% endif %}
         </td>
+        <td>{% include "ecn/_applicability_badge.html" %}</td>
         <td class="meta">{{ ecn.proposed_by.get_full_name|default:ecn.proposed_by.username }}</td>
         <td class="meta whitespace-nowrap">{{ ecn.proposed_at|date:"d/m/Y" }}</td>
       </tr>

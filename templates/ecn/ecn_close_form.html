@@ -16,18 +16,25 @@
   <p class="page-header-sub">{{ ecn.title }}</p>
 </div>
 
-{% if warn_no_version %}
-<div class="alert-danger mb-4">
-  <strong>Chiusura non possibile.</strong> Non risulta ancora collegata una revisione di
-  esecuzione a questo ECN. Crea prima la nuova revisione del documento a partire da questo ECN.
+<div class="alert-warning mb-4">
+  <strong>Passo amministrativo eccezionale:</strong> normalmente il sistema chiude
+  automaticamente l'ECN non appena la revisione di esecuzione viene approvata
+  definitivamente — non serve intervenire qui. Questa pagina resta disponibile
+  per ECN storici, sanatoria o correzioni amministrative in casi che il sistema
+  non ha potuto chiudere da solo.
 </div>
-{% elif warn_revision_not_approved %}
+
+{% if not ready_to_close %}
 <div class="alert-danger mb-4">
-  <strong>Chiusura non possibile.</strong> La revisione collegata (Rev.
-  {{ ecn.executed_version.revision_label }}) non è ancora approvata (stato attuale:
-  {{ ecn.executed_version.get_status_display }}). La modifica deve essere completata e
-  approvata prima di poter chiudere formalmente l'ECN.
+  <strong>Non è ancora possibile chiudere questo ECN:</strong> {{ not_ready_reason }}
 </div>
+{% if not ecn.executed_version %}
+<div class="mb-4">
+  <a href="{% url 'document_new_revision' ecn.document_id %}?ecn={{ ecn.pk }}" class="btn-primary">
+    Crea revisione da questo ECN
+  </a>
+</div>
+{% endif %}
 {% endif %}
 
 <!-- Riepilogo ECN -->
@@ -45,10 +52,7 @@
     {% if ecn.executed_version %}
     <div class="detail-item">
       <span class="detail-label">Revisione eseguita</span>
-      <span class="detail-value">
-        Rev. {{ ecn.executed_version.revision_label }} —
-        {{ ecn.executed_version.get_status_display }}
-      </span>
+      <span class="detail-value">Rev. {{ ecn.executed_version.revision_label }}</span>
     </div>
     {% endif %}
     <div class="detail-item">
@@ -59,9 +63,11 @@
         {% endif %}
       </span>
     </div>
+    {% include "ecn/_applicability_summary.html" %}
   </div>
 </div>
 
+{% if ready_to_close %}
 <form method="post">
   {% csrf_token %}
 
@@ -78,8 +84,13 @@
   {% include "auditlog/sanatoria_fields.html" %}
 
   <div class="form-actions">
-    <button type="submit" class="btn-success" {% if warn_no_version or warn_revision_not_approved %}disabled{% endif %}>Conferma chiusura ECN</button>
+    <button type="submit" class="btn-success">Conferma chiusura ECN</button>
     <a href="{% url 'ecn:ecn_detail' ecn.pk %}" class="btn-secondary">Annulla</a>
   </div>
 </form>
+{% else %}
+<div class="form-actions">
+  <a href="{% url 'ecn:ecn_detail' ecn.pk %}" class="btn-secondary">Torna al dettaglio ECN</a>
+</div>
+{% endif %}
 {% endblock %}

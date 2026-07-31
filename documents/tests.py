@@ -1,15 +1,20 @@
+import io
 import shutil
 import tempfile
+import unittest
+import zipfile
+from unittest import mock
 
 from django.contrib.auth.models import User
 from django.core import mail
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from documents.permissions import can_download_version_file
+from ecn.models import ChangeNotice
 from ecn.permissions import GROUP_CCB
 
 from documents.models import Document, DocumentVersion
@@ -18,18 +23,21 @@ from documents.services import (
     create_new_revision,
     reopen_rejected_version_as_draft,
     submit_version_for_approval,
+    update_draft_version,
 )
 
 LOCMEM = 'django.core.mail.backends.locmem.EmailBackend'
 
 
-def make_document(code='DOC-001', owner=None):
+def make_document(code='DOC-001', owner=None, requires_approved_pdf=False, allow_simple_ecn=True):
     return Document.objects.create(
         code=code,
         title='Documento di test',
         category=Document.Category.QUALITY,
         owner=owner,
         created_by=owner,
+        requires_approved_pdf=requires_approved_pdf,
+        allow_simple_ecn=allow_simple_ecn,
     )
 
 
@@ -239,6 +247,18 @@ class DocumentViewTests(TestCase):
         response = self.client.get(reverse('document_detail', args=[self.document.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.document.code)
+
+    def test_document_detail_links_to_current_version_detail(self):
+        """
+        AREA 2 (verifica manuale 2026-07-27): document_detail non collegava
+        affatto alla pagina di dettaglio versione, l'unico punto che mostra
+        il PDF di rappresentazione e il PDF approvato — un utente non aveva
+        modo di raggiungerli dalla pagina principale del documento.
+        """
+        version = self._approve_first_version(self.document)
+        self.client.login(username='viewer', password='pw')
+        response = self.client.get(reverse('document_detail', args=[self.document.pk]))
+        self.assertContains(response, reverse('version_detail', args=[version.pk]))
 
 
 @override_settings(EMAIL_BACKEND=LOCMEM)
@@ -1950,9 +1970,9 @@ class ApprovalAttachmentPrivacyTests(TestCase):
         self.assertFalse(self._can_download(self.stranger, att))
 
 
-# ===========================================================================
+# ====================================================================
 # Step G — Integrazione resolver nei permessi documentali
-# ===========================================================================
+# ====================================================================
 
 def _make_folder(code='GF-001', owner=None):
     from projects.models import ProjectFolder
@@ -2464,9 +2484,9 @@ class StepGPerformanceTests(TestCase):
         )
 
 
-# ===========================================================================
+# ====================================================================
 # Demo Supervisor — test
-# ===========================================================================
+# ====================================================================
 
 @override_settings(EMAIL_BACKEND=LOCMEM)
 class DemoSupervisorTests(TestCase):
@@ -2698,7 +2718,17 @@ class DemoSupervisorTests(TestCase):
         req = submit_version_for_approval(ver01, self.supervisor, [self.supervisor])
         approve_version(req, self.supervisor)
         ecn.refresh_from_db()
-        # Chiude ECN
+        # L'approvazione definitiva di Rev. 01 chiude già l'ECN automaticamente
+        # (requisito 2026-07-28) — nessuna azione manuale necessaria qui.
+        self.assertEqual(ecn.status, ChangeNotice.Status.CLOSED)
+
+        # Simula un caso eccezionale (sanatoria/correzione amministrativa):
+        # supervisor_demo deve comunque poter chiudere manualmente un ECN
+        # che si trovasse di nuovo in stato APPROVED con esecuzione pronta.
+        ecn.status = ChangeNotice.Status.APPROVED
+        ecn.closed_by = None
+        ecn.closed_at = None
+        ecn.save(update_fields=['status', 'closed_by', 'closed_at'])
         close_change_notice(ecn, self.supervisor)
         ecn.refresh_from_db()
         self.assertEqual(ecn.status, ChangeNotice.Status.CLOSED)
@@ -2753,10 +2783,10 @@ class DemoSupervisorTests(TestCase):
         # → il count non è 1 limitato a sé stesso (a meno che sia l'unico nel gruppo)
 
 
-# ===========================================================================
+# ====================================================================
 # STEP H2 — DemoSupervisorEndToEndTests
 # Flusso completo singolo utente supervisor_demo
-# ===========================================================================
+# ====================================================================
 
 @override_settings(
     DOCUMENTALE_DEMO_MODE=True,
@@ -2795,7 +2825,8 @@ class DemoSupervisorEndToEndTests(TestCase):
         """
         supervisor_demo esegue l'intero ciclo di vita documentale da solo:
         crea bozza → approva → crea ECN → configura CCB (solo sé) → invia →
-        approva ECN → crea revisione → approva revisione → chiude ECN.
+        approva ECN → crea revisione → approva revisione → ECN chiuso
+        automaticamente (requisito 2026-07-28).
         """
         from documents.models import Document, DocumentVersion
         from documents.services import create_new_revision, submit_version_for_approval
@@ -2808,7 +2839,6 @@ class DemoSupervisorEndToEndTests(TestCase):
             update_ccb_dossier,
             submit_change_notice,
             approve_change_notice,
-            close_change_notice,
         )
 
         sup = self.supervisor
@@ -2858,6 +2888,7 @@ class DemoSupervisorEndToEndTests(TestCase):
         # 6. Compila il dossier istruttorio
         update_ccb_dossier(
             ecn, actor=sup,
+            applicability_category=ChangeNotice.Applicability.GENERAL,
             ccb_class=ChangeNotice.CCBClass.CLASS2,
             ccb_requirements='Analisi requisiti E2E.',
             ccb_technical_impact='Impatto tecnico minore.',
@@ -2896,9 +2927,9 @@ class DemoSupervisorEndToEndTests(TestCase):
         v00.refresh_from_db()
         doc.refresh_from_db()
 
-        # 12. Chiude ECN (executed_version è stato impostato al passo 9)
-        ecn.refresh_from_db()
-        close_change_notice(ecn, sup, close_notes='ECN chiuso dal test E2E')
+        # 12. L'approvazione definitiva di Rev. 01 (passo 11) ha già chiuso
+        # l'ECN automaticamente (executed_version impostato al passo 9;
+        # requisito 2026-07-28) — nessuna chiusura manuale necessaria.
         ecn.refresh_from_db()
 
         # ── Verifiche finali ──────────────────────────────────────────────
@@ -3012,9 +3043,9 @@ class DemoSupervisorEndToEndTests(TestCase):
         self.assertIn(self.other.pk, pks)
 
 
-# ===========================================================================
+# ====================================================================
 # DemoCompanyReset — test reset robusto del comando demo_company
-# ===========================================================================
+# ====================================================================
 
 @override_settings(
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
@@ -3229,9 +3260,9 @@ class DemoCompanyResetTests(TestCase):
         self.assertTrue(_User.objects.filter(pk=existing.pk).exists())
 
 
-# ===========================================================================
+# ====================================================================
 # Step C — documents/versioning.py utility tests
-# ===========================================================================
+# ====================================================================
 
 class SequenceSchemeNormalizeTests(TestCase):
     """normalize_sequence_value: strip e uppercase."""
@@ -3355,9 +3386,9 @@ class NextAlphabeticValueTests(TestCase):
             next_alphabetic_value('1')
 
 
-# ===========================================================================
+# ====================================================================
 # Step C — Document.revision_scheme field tests
-# ===========================================================================
+# ====================================================================
 
 class DocumentRevisionSchemeTests(TestCase):
     """Document.revision_scheme: default, persistenza, display."""
@@ -3481,9 +3512,9 @@ class DocumentRevisionSchemeTests(TestCase):
         self.assertIn('revisione aperta', errors['revision_scheme'][0])
 
 
-# ===========================================================================
+# ====================================================================
 # FIX-DOCUMENT-FOLDER-FILTER — test filtro cartella ricorsivo
-# ===========================================================================
+# ====================================================================
 
 class DocumentFolderFilterTests(TestCase):
     """
@@ -3633,9 +3664,9 @@ class DocumentFolderFilterTests(TestCase):
         self.assertNotIn('DFF-DRAFT-PRIV', codes)
 
 
-# ===========================================================================
+# ====================================================================
 # VERIFY-DOCUMENT-SCHEME-EDIT-UI — test view modifica metadati
-# ===========================================================================
+# ====================================================================
 
 class DocumentMetadataEditTests(TestCase):
     """Test della view edit_document_metadata."""
@@ -3781,69 +3812,10 @@ class DocumentMetadataEditTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertNotContains(resp, 'Modifica metadati')
 
-    # TASK-029: campo "allows_simple_ecn" riservato a superuser/supervisor_demo
-    def test_allows_simple_ecn_field_hidden_for_manager(self):
-        self.client.login(username='dme_manager', password='pw')
-        resp = self.client.get(self._url())
-        self.assertNotIn('allows_simple_ecn', resp.context['form'].fields)
-        self.assertNotContains(resp, 'Consenti ECN semplice')
 
-    def test_allows_simple_ecn_field_visible_for_superuser(self):
-        self.client.login(username='dme_super', password='pw')
-        resp = self.client.get(self._url())
-        self.assertIn('allows_simple_ecn', resp.context['form'].fields)
-        self.assertContains(resp, 'Consenti ECN semplice')
-
-    def test_superuser_can_disable_simple_ecn(self):
-        self.client.login(username='dme_super', password='pw')
-        resp = self.client.post(self._url(), {
-            'title': self.doc.title,
-            'description': '',
-            'revision_scheme': 'numeric',
-            # allows_simple_ecn assente = checkbox deselezionata
-        })
-        self.assertRedirects(resp, reverse('document_detail', args=[self.doc.pk]))
-        self.doc.refresh_from_db()
-        self.assertFalse(self.doc.allows_simple_ecn)
-
-    def test_manager_cannot_disable_simple_ecn_even_via_raw_post(self):
-        """Il manager non ha il campo nel form: anche forzandolo nel POST
-        raw, il valore del documento non cambia (il campo non è in
-        form.fields quindi non entra in cleaned_data)."""
-        self.client.login(username='dme_manager', password='pw')
-        resp = self.client.post(self._url(), {
-            'title': self.doc.title,
-            'description': '',
-            'revision_scheme': 'numeric',
-            'allows_simple_ecn': '',  # tentativo di disattivarlo
-        })
-        # fetch_redirect_response=False: il manager non ha visibilità sul
-        # documento in draft (Caso A di can_view_document, non è l'autore),
-        # non rilevante qui — verifichiamo solo target del redirect e stato salvato.
-        self.assertRedirects(
-            resp, reverse('document_detail', args=[self.doc.pk]),
-            fetch_redirect_response=False,
-        )
-        self.doc.refresh_from_db()
-        self.assertTrue(self.doc.allows_simple_ecn)
-
-    @override_settings(DOCUMENTALE_DEMO_MODE=True, DOCUMENTALE_DEMO_SUPERVISOR_USERNAME='supervisor_demo')
-    def test_supervisor_demo_can_disable_simple_ecn(self):
-        # Non superuser: solo Document Manager (per superare il gate generale
-        # can_edit_document_metadata) + supervisor_demo, per isolare che
-        # l'accesso al campo viene da is_demo_supervisor e non da un bypass
-        # superuser o dal solo ruolo Manager (già escluso da dme_manager).
-        from django.contrib.auth.models import Group
-        supervisor = User.objects.create_user('supervisor_demo', password='pw')
-        supervisor.groups.add(Group.objects.get_or_create(name='Document Managers')[0])
-        self.client.login(username='supervisor_demo', password='pw')
-        resp = self.client.get(self._url())
-        self.assertIn('allows_simple_ecn', resp.context['form'].fields)
-
-
-# ===========================================================================
+# ====================================================================
 # First revision after scheme change — test next_label
-# ===========================================================================
+# ====================================================================
 
 class NextLabelAfterSchemeChangeTests(TestCase):
     """
@@ -4174,37 +4146,6 @@ class ECNPolicyViewTests(TestCase):
         self.assertIn('requires_ecn_for_revision', new_values)
         self.assertFalse(new_values['requires_ecn_for_revision'])
 
-    # TASK-029: block_simple_ecn (creazione) si traduce in allows_simple_ecn=False
-    def test_new_document_block_simple_ecn_translates(self):
-        self.client.force_login(self.author)
-        self.client.post(reverse('document_new'), {
-            'code': 'PV-BLOCKSIMPLE',
-            'title': 'Doc blocco ECN semplice',
-            'category': 'QUALITY',
-            'project_folder': self.folder.pk,
-            'revision_scheme': 'numeric',
-            'revision_label': '00',
-            'revision_number': '0',
-            'block_simple_ecn': 'on',
-        })
-        doc = Document.objects.get(code='PV-BLOCKSIMPLE')
-        self.assertFalse(doc.allows_simple_ecn)
-
-    def test_new_document_allows_simple_ecn_true_by_default(self):
-        self.client.force_login(self.author)
-        self.client.post(reverse('document_new'), {
-            'code': 'PV-ALLOWSIMPLE',
-            'title': 'Doc default ECN semplice',
-            'category': 'QUALITY',
-            'project_folder': self.folder.pk,
-            'revision_scheme': 'numeric',
-            'revision_label': '00',
-            'revision_number': '0',
-            # block_simple_ecn assente (checkbox non spuntata) → allows_simple_ecn=True
-        })
-        doc = Document.objects.get(code='PV-ALLOWSIMPLE')
-        self.assertTrue(doc.allows_simple_ecn)
-
     # Caso extra — view new_revision: doc esente mostra form direttamente (no ECN select)
     def test_ecn_exempt_doc_new_revision_shows_form_without_ecn_step(self):
         self.client.force_login(self.author)
@@ -4393,6 +4334,24 @@ class ArchiveDocumentDetailTests(TestCase):
         r = self.client.get(reverse('archive_document_detail', args=[self.doc.pk]))
         self.assertContains(r, 'Storico eventi')
 
+    def test_archive_detail_shows_ecn_applicability_badge(self):
+        ChangeNotice.objects.create(
+            code='ARCD-ECN-APPL',
+            title='ECN archivio con applicabilità',
+            description='Descrizione',
+            motivation=ChangeNotice.Motivation.IMPROVEMENT,
+            applicability_category=ChangeNotice.Applicability.LIMITED,
+            applicability_detail='Solo commessa ABC',
+            document=self.doc,
+            document_version=self.ver,
+            proposed_by=self.manager,
+            created_by=self.manager,
+        )
+        self.client.force_login(self.manager)
+        r = self.client.get(reverse('archive_document_detail', args=[self.doc.pk]))
+        self.assertContains(r, 'Applicabilità')
+        self.assertContains(r, 'badge-applicability-limited')
+
 
 class DocumentDetailCompactHistoryTests(TestCase):
     """document_detail fuori da Archivio non mostra più lo storico completo (TASK-021)."""
@@ -4420,6 +4379,23 @@ class DocumentDetailCompactHistoryTests(TestCase):
         r = self.client.get(reverse('document_detail', args=[self.doc.pk]))
         self.assertContains(r, 'Ultimo ECN / Variante')
         self.assertNotContains(r, 'ECN / Varianti collegate')
+
+    def test_compact_detail_shows_latest_ecn_applicability_badge(self):
+        ChangeNotice.objects.create(
+            code='CMP-ECN-APPL',
+            title='ECN compatta con applicabilità',
+            description='Descrizione',
+            motivation=ChangeNotice.Motivation.IMPROVEMENT,
+            applicability_category=ChangeNotice.Applicability.FUTURE,
+            document=self.doc,
+            document_version=self.ver,
+            proposed_by=self.manager,
+            created_by=self.manager,
+        )
+        self.client.force_login(self.manager)
+        r = self.client.get(reverse('document_detail', args=[self.doc.pk]))
+        self.assertContains(r, 'Ultimo ECN / Variante')
+        self.assertContains(r, 'badge-applicability-future')
 
     def test_compact_detail_shows_archive_link_for_privileged_user(self):
         self.client.force_login(self.manager)
@@ -4544,6 +4520,1289 @@ class DocumentTypeDisplayTests(TestCase):
         self.assertNotIn('DOCTYPEDISP-002', codes)
 
 
+class PDFStrategyPolicyTests(TestCase):
+    """TASK-023 — determine_pdf_strategy: funzione pura, nessun DB coinvolto."""
+
+    def test_pdf_is_native_no_confirmation(self):
+        from documents.pdf_strategy import PDFConverter, PDFStrategy, determine_pdf_strategy
+        decision = determine_pdf_strategy('pdf')
+        self.assertEqual(decision.strategy, PDFStrategy.NATIVE_PDF)
+        self.assertEqual(decision.converter, PDFConverter.IDENTITY)
+        self.assertFalse(decision.requires_confirmation)
+        self.assertTrue(decision.reason)
+
+    def test_pdf_extension_case_and_dot_insensitive(self):
+        from documents.pdf_strategy import PDFStrategy, determine_pdf_strategy
+        for raw in ('PDF', '.pdf', ' .PDF ', 'Pdf'):
+            with self.subTest(raw=raw):
+                self.assertEqual(determine_pdf_strategy(raw).strategy, PDFStrategy.NATIVE_PDF)
+
+    def test_plain_text_formats_are_auto_reliable_and_require_confirmation(self):
+        from documents.pdf_strategy import PDFConverter, PDFStrategy, determine_pdf_strategy
+        for ext in ('txt', 'md', 'csv'):
+            with self.subTest(ext=ext):
+                decision = determine_pdf_strategy(ext)
+                self.assertEqual(decision.strategy, PDFStrategy.AUTO_RELIABLE)
+                self.assertEqual(decision.converter, PDFConverter.TEXT_RENDERER)
+                self.assertTrue(decision.requires_confirmation)
+                self.assertTrue(decision.reason)
+
+    def test_image_formats_are_auto_reliable_and_require_confirmation(self):
+        from documents.pdf_strategy import PDFConverter, PDFStrategy, determine_pdf_strategy
+        for ext in ('png', 'jpg', 'jpeg', 'bmp', 'tiff', 'tif', 'gif'):
+            with self.subTest(ext=ext):
+                decision = determine_pdf_strategy(ext)
+                self.assertEqual(decision.strategy, PDFStrategy.AUTO_RELIABLE)
+                self.assertEqual(decision.converter, PDFConverter.IMAGE_TO_PDF)
+                self.assertTrue(decision.requires_confirmation)
+
+    def test_office_like_formats_require_manual_pdf_with_specific_reason(self):
+        from documents.pdf_strategy import PDFConverter, PDFStrategy, determine_pdf_strategy
+        for ext in ('docx', 'doc', 'odt', 'rtf', 'xlsx', 'xls', 'ods', 'pptx', 'ppt', 'odp'):
+            with self.subTest(ext=ext):
+                decision = determine_pdf_strategy(ext)
+                self.assertEqual(decision.strategy, PDFStrategy.MANUAL_REQUIRED)
+                self.assertEqual(decision.converter, PDFConverter.NONE)
+                self.assertTrue(decision.requires_confirmation)
+                self.assertIn('non è disponibile in questo ambiente', decision.reason)
+
+    def test_risky_formats_require_manual_pdf_with_specific_reason(self):
+        from documents.pdf_strategy import PDFStrategy, determine_pdf_strategy
+        for ext in ('zip', 'rar', 'dwg', 'dxf', 'exe', 'msi'):
+            with self.subTest(ext=ext):
+                decision = determine_pdf_strategy(ext)
+                self.assertEqual(decision.strategy, PDFStrategy.MANUAL_REQUIRED)
+                self.assertIn('non adatto a una conversione automatica affidabile', decision.reason)
+
+    def test_unknown_extension_requires_manual_pdf_with_distinct_reason(self):
+        from documents.pdf_strategy import PDFStrategy, determine_pdf_strategy
+        decision = determine_pdf_strategy('xyz123')
+        self.assertEqual(decision.strategy, PDFStrategy.MANUAL_REQUIRED)
+        self.assertIn('non riconosciuta', decision.reason)
+
+    def test_empty_extension_is_manual_required(self):
+        from documents.pdf_strategy import PDFStrategy, determine_pdf_strategy
+        decision = determine_pdf_strategy('')
+        self.assertEqual(decision.strategy, PDFStrategy.MANUAL_REQUIRED)
+
+    def test_determine_pdf_strategy_for_file_reads_extension(self):
+        from documents.pdf_strategy import PDFStrategy, determine_pdf_strategy_for_file
+
+        class _FakeDocumentFile:
+            extension = 'docx'
+
+        decision = determine_pdf_strategy_for_file(_FakeDocumentFile())
+        self.assertEqual(decision.strategy, PDFStrategy.MANUAL_REQUIRED)
+
+    def test_office_like_formats_auto_external_when_converter_available(self):
+        """TASK-044 — office_converter_available=True instrada verso AUTO_EXTERNAL."""
+        from documents.pdf_strategy import PDFConverter, PDFStrategy, determine_pdf_strategy
+        for ext in ('docx', 'doc', 'odt', 'rtf', 'xlsx', 'xls', 'ods', 'pptx', 'ppt', 'odp'):
+            with self.subTest(ext=ext):
+                decision = determine_pdf_strategy(ext, office_converter_available=True)
+                self.assertEqual(decision.strategy, PDFStrategy.AUTO_EXTERNAL)
+                self.assertEqual(decision.converter, PDFConverter.OFFICE_LIBREOFFICE)
+                self.assertTrue(decision.requires_confirmation)
+                self.assertTrue(decision.reason)
+
+    def test_office_converter_available_does_not_affect_non_office_extensions(self):
+        """TASK-044 — il parametro riguarda solo gli formati Office-like."""
+        from documents.pdf_strategy import PDFStrategy, determine_pdf_strategy
+        self.assertEqual(
+            determine_pdf_strategy('pdf', office_converter_available=True).strategy,
+            PDFStrategy.NATIVE_PDF,
+        )
+        self.assertEqual(
+            determine_pdf_strategy('png', office_converter_available=True).strategy,
+            PDFStrategy.AUTO_RELIABLE,
+        )
+        self.assertEqual(
+            determine_pdf_strategy('zip', office_converter_available=True).strategy,
+            PDFStrategy.MANUAL_REQUIRED,
+        )
+
+    def test_determine_pdf_strategy_for_file_passes_through_office_converter_available(self):
+        """TASK-044 — determine_pdf_strategy_for_file inoltra il nuovo parametro."""
+        from documents.pdf_strategy import PDFStrategy, determine_pdf_strategy_for_file
+
+        class _FakeDocumentFile:
+            extension = 'docx'
+
+        decision = determine_pdf_strategy_for_file(
+            _FakeDocumentFile(), office_converter_available=True,
+        )
+        self.assertEqual(decision.strategy, PDFStrategy.AUTO_EXTERNAL)
+
+
+class PDFArtifactModelTests(TestCase):
+    """TASK-024 — RepresentationPDF / ApprovedPDFArtifact: solo schema."""
+
+    def setUp(self):
+        self.author = User.objects.create_user('pdfmodel-author', password='pw')
+        self.document = make_document(code='PDFMODEL-001', owner=self.author)
+        self.version = create_new_revision(self.document, self.author, 'A', 1)
+
+    def test_document_version_has_no_pdf_by_default(self):
+        self.assertIsNone(self.version.representation_pdf)
+        self.assertIsNone(self.version.approved_pdf)
+
+    def test_representation_pdf_defaults(self):
+        from documents.models import RepresentationPDF
+        rep = RepresentationPDF.objects.create()
+        self.assertEqual(rep.status, RepresentationPDF.Status.NOT_READY)
+        self.assertTrue(rep.requires_confirmation)
+        self.assertIsNone(rep.confirmed_at)
+        self.assertEqual(rep.error_message, '')
+
+    def test_approved_pdf_artifact_defaults(self):
+        from documents.models import ApprovedPDFArtifact
+        artifact = ApprovedPDFArtifact.objects.create()
+        self.assertEqual(artifact.status, ApprovedPDFArtifact.Status.PENDING)
+        self.assertIsNone(artifact.generated_at)
+
+    def test_document_version_can_reference_representation_and_approved_pdf(self):
+        from documents.models import ApprovedPDFArtifact, RepresentationPDF
+        rep = RepresentationPDF.objects.create(status=RepresentationPDF.Status.CONFIRMED)
+        artifact = ApprovedPDFArtifact.objects.create(status=ApprovedPDFArtifact.Status.GENERATED)
+        self.version.representation_pdf = rep
+        self.version.approved_pdf = artifact
+        self.version.save(update_fields=['representation_pdf', 'approved_pdf'])
+        self.version.refresh_from_db()
+        self.assertEqual(self.version.representation_pdf_id, rep.pk)
+        self.assertEqual(self.version.approved_pdf_id, artifact.pk)
+
+    def test_deleting_representation_pdf_sets_version_field_null(self):
+        from documents.models import RepresentationPDF
+        rep = RepresentationPDF.objects.create()
+        self.version.representation_pdf = rep
+        self.version.save(update_fields=['representation_pdf'])
+        rep.delete()
+        self.version.refresh_from_db()
+        self.assertIsNone(self.version.representation_pdf)
+
+    def test_existing_version_without_pdf_still_valid(self):
+        """Revisioni pre-esistenti (senza PDF) restano valide: nessun backfill richiesto."""
+        self.version.refresh_from_db()
+        self.assertIsNone(self.version.representation_pdf)
+        self.assertIsNone(self.version.approved_pdf)
+        self.assertEqual(self.version.status, DocumentVersion.Status.DRAFT)
+
+
+class PDFConvertersTests(TestCase):
+    """TASK-025 — convertitori pure-Python: nessun DB, nessun programma esterno."""
+
+    def test_render_text_to_pdf_bytes_produces_valid_pdf(self):
+        from documents.pdf_converters import render_text_to_pdf_bytes
+        pdf_bytes = render_text_to_pdf_bytes('Ciao mondo\nSeconda riga'.encode('utf-8'))
+        self.assertTrue(pdf_bytes.startswith(b'%PDF-'))
+
+    def test_render_text_to_pdf_bytes_paginates_long_content(self):
+        from documents.pdf_converters import render_text_to_pdf_bytes
+        long_text = '\n'.join(f'riga {i}' for i in range(500))
+        pdf_bytes = render_text_to_pdf_bytes(long_text.encode('utf-8'))
+        self.assertGreater(pdf_bytes.count(b'/Type /Page'), 1)
+
+    def test_render_text_to_pdf_bytes_handles_latin1(self):
+        from documents.pdf_converters import render_text_to_pdf_bytes
+        raw = 'perché città'.encode('latin-1')
+        pdf_bytes = render_text_to_pdf_bytes(raw)
+        self.assertTrue(pdf_bytes.startswith(b'%PDF-'))
+
+    def test_render_image_to_pdf_bytes_produces_valid_pdf(self):
+        import io
+        from PIL import Image
+        from documents.pdf_converters import render_image_to_pdf_bytes
+
+        buf = io.BytesIO()
+        Image.new('RGB', (4, 4), (255, 0, 0)).save(buf, format='PNG')
+        pdf_bytes = render_image_to_pdf_bytes(buf.getvalue())
+        self.assertTrue(pdf_bytes.startswith(b'%PDF-'))
+
+    def test_render_image_to_pdf_bytes_flattens_transparency(self):
+        import io
+        from PIL import Image
+        from documents.pdf_converters import render_image_to_pdf_bytes
+
+        buf = io.BytesIO()
+        Image.new('RGBA', (4, 4), (0, 255, 0, 128)).save(buf, format='PNG')
+        pdf_bytes = render_image_to_pdf_bytes(buf.getvalue())
+        self.assertTrue(pdf_bytes.startswith(b'%PDF-'))
+
+    def test_render_image_to_pdf_bytes_raises_on_garbage(self):
+        from documents.pdf_converters import render_image_to_pdf_bytes
+        with self.assertRaises(Exception):
+            render_image_to_pdf_bytes(b'not an image at all')
+
+
+def _make_source_document_file(user, name, content, content_type='application/octet-stream'):
+    upload = SimpleUploadedFile(name, content, content_type=content_type)
+    return create_document_file(upload, user)
+
+
+def _minimal_docx_bytes(text='Contenuto di test TASK-044.'):
+    """
+    .docx minimo ma realmente valido (OOXML), scritto a mano come zip: nessuna
+    dipendenza aggiuntiva (python-docx) solo per generare un fixture di test.
+    LibreOffice lo apre correttamente (verificato con esecuzione reale).
+    """
+    content_types = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/word/document.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+        '</Types>'
+    )
+    root_rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+        'Target="word/document.xml"/>'
+        '</Relationships>'
+    )
+    document_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        f'<w:body><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:body>'
+        '</w:document>'
+    )
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr('[Content_Types].xml', content_types)
+        archive.writestr('_rels/.rels', root_rels)
+        archive.writestr('word/document.xml', document_xml)
+    return buffer.getvalue()
+
+
+class LibreOfficeAvailabilityTests(SimpleTestCase):
+    """TASK-044 — is_libreoffice_available: solo logica di gating, binario sempre mockato."""
+
+    def test_unavailable_when_setting_disabled_even_if_binary_present(self):
+        from documents.pdf_converters_external import is_libreoffice_available
+        with override_settings(LIBREOFFICE_CONVERSION_ENABLED=False):
+            with mock.patch('shutil.which', return_value='/usr/bin/soffice'):
+                self.assertFalse(is_libreoffice_available())
+
+    def test_unavailable_when_binary_missing_even_if_setting_enabled(self):
+        from documents.pdf_converters_external import is_libreoffice_available
+        with override_settings(LIBREOFFICE_CONVERSION_ENABLED=True):
+            with mock.patch('shutil.which', return_value=None):
+                self.assertFalse(is_libreoffice_available())
+
+    def test_available_when_both_enabled_and_binary_present(self):
+        from documents.pdf_converters_external import is_libreoffice_available
+        with override_settings(LIBREOFFICE_CONVERSION_ENABLED=True):
+            with mock.patch('shutil.which', return_value='/usr/bin/soffice'):
+                self.assertTrue(is_libreoffice_available())
+
+    def test_unavailable_when_both_disabled_and_missing(self):
+        from documents.pdf_converters_external import is_libreoffice_available
+        with override_settings(LIBREOFFICE_CONVERSION_ENABLED=False):
+            with mock.patch('shutil.which', return_value=None):
+                self.assertFalse(is_libreoffice_available())
+
+    def test_render_raises_clear_error_when_binary_missing(self):
+        from documents.pdf_converters_external import render_office_to_pdf_bytes
+        with mock.patch('shutil.which', return_value=None):
+            with self.assertRaisesMessage(RuntimeError, 'non trovato sul PATH'):
+                render_office_to_pdf_bytes(b'qualunque cosa', 'docx')
+
+
+@unittest.skipUnless(shutil.which('soffice'), 'LibreOffice non installato su questa macchina')
+class LibreOfficeConversionIntegrationTests(TestCase):
+    """TASK-044 — conversione reale via LibreOffice, nessun mock: richiede il binario."""
+
+    def test_render_office_to_pdf_bytes_converts_real_docx(self):
+        from documents.pdf_converters_external import render_office_to_pdf_bytes
+        pdf_bytes = render_office_to_pdf_bytes(_minimal_docx_bytes(), 'docx')
+        self.assertTrue(pdf_bytes.startswith(b'%PDF-'))
+
+    def test_render_office_to_pdf_bytes_tolerates_text_garbage_as_docx(self):
+        """
+        Scoperta empirica in questa sessione: il filtro Writer di LibreOffice
+        è tollerante e importa testo grezzo non riconosciuto come OOXML/zip
+        con un fallback testuale, producendo comunque un PDF valido — non
+        solleva un'eccezione. Verificato qui perché contraddice
+        l'assunzione iniziale (rimpiazzata da
+        test_render_office_to_pdf_bytes_raises_on_malformed_binary_input,
+        che usa un input che il filtro Calc rifiuta davvero).
+        """
+        from documents.pdf_converters_external import render_office_to_pdf_bytes
+        pdf_bytes = render_office_to_pdf_bytes(b'non e\' un docx reale', 'docx')
+        self.assertTrue(pdf_bytes.startswith(b'%PDF-'))
+
+    def test_render_office_to_pdf_bytes_raises_on_malformed_binary_input(self):
+        from documents.pdf_converters_external import render_office_to_pdf_bytes
+        with self.assertRaises(RuntimeError):
+            render_office_to_pdf_bytes(b'\x00\x01\x02binary garbage not text at all \xff\xfe', 'xlsx')
+
+
+@unittest.skipUnless(shutil.which('soffice'), 'LibreOffice non installato su questa macchina')
+@override_settings(EMAIL_BACKEND=LOCMEM, LIBREOFFICE_CONVERSION_ENABLED=True)
+class LibreOfficePipelineIntegrationTests(TestCase):
+    """TASK-044 — sync_representation_pdf_for_new_source con LibreOffice abilitato, conversione reale."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.temp_media = tempfile.mkdtemp()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.temp_media, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.author = User.objects.create_user('libreoffice-author', password='pw')
+        self.document = make_document(code='LIBREOFFICE-001', owner=self.author, requires_approved_pdf=True)
+
+    def test_real_docx_source_is_converted_and_ready(self):
+        from documents.models import RepresentationPDF
+        from documents.pdf_strategy import PDFConverter, PDFStrategy
+
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'relazione.docx', _minimal_docx_bytes())
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            version.refresh_from_db()
+
+            rep = version.representation_pdf
+            self.assertEqual(rep.status, RepresentationPDF.Status.READY)
+            self.assertEqual(rep.strategy, PDFStrategy.AUTO_EXTERNAL)
+            self.assertEqual(rep.converter, PDFConverter.OFFICE_LIBREOFFICE)
+            self.assertTrue(rep.requires_confirmation)
+            rep.file.open('rb')
+            try:
+                self.assertTrue(rep.file.read().startswith(b'%PDF-'))
+            finally:
+                rep.file.close()
+
+    def test_malformed_xlsx_source_fails_gracefully_to_conversion_failed(self):
+        """
+        .docx con contenuto non valido viene comunque importato da LibreOffice
+        con un fallback testuale (vedi
+        LibreOfficeConversionIntegrationTests) — per un fallimento di
+        conversione reale serve un input che il filtro Calc rifiuti
+        davvero (binario non testuale con estensione .xlsx).
+        """
+        from documents.models import RepresentationPDF
+
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(
+                self.author, 'foglio.xlsx',
+                b'\x00\x01\x02binary garbage not text at all \xff\xfe',
+            )
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+        version.refresh_from_db()
+
+        rep = version.representation_pdf
+        self.assertEqual(rep.status, RepresentationPDF.Status.CONVERSION_FAILED)
+        self.assertTrue(rep.error_message)
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class PDFPipelineDraftWiringTests(TestCase):
+    """TASK-025 — sync_representation_pdf_for_new_source agganciato alla bozza."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.temp_media = tempfile.mkdtemp()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.temp_media, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.author = User.objects.create_user('pdfwire-author', password='pw')
+        self.document = make_document(code='PDFWIRE-001', owner=self.author, requires_approved_pdf=True)
+
+    def test_native_pdf_source_creates_ready_representation_no_confirmation(self):
+        from documents.models import RepresentationPDF
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(
+                self.author, 'sorgente.pdf', b'%PDF-1.4 contenuto fittizio', content_type='application/pdf',
+            )
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+        version.refresh_from_db()
+        rep = version.representation_pdf
+        self.assertIsNotNone(rep)
+        self.assertEqual(rep.status, RepresentationPDF.Status.READY)
+        self.assertEqual(rep.strategy, 'native_pdf')
+        self.assertFalse(rep.requires_confirmation)
+
+    def test_text_source_auto_converts_and_requires_confirmation(self):
+        from documents.models import RepresentationPDF
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'note.txt', b'Contenuto di prova', content_type='text/plain')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+        version.refresh_from_db()
+        rep = version.representation_pdf
+        self.assertEqual(rep.status, RepresentationPDF.Status.READY)
+        self.assertEqual(rep.converter, 'text_renderer')
+        self.assertTrue(rep.requires_confirmation)
+        self.assertTrue(rep.file.name.endswith('.pdf'))
+
+    def test_office_source_requires_manual_upload(self):
+        from documents.models import RepresentationPDF
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(
+                self.author, 'relazione.docx', b'PK\x03\x04 non reale', content_type='application/octet-stream',
+            )
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+        version.refresh_from_db()
+        rep = version.representation_pdf
+        self.assertEqual(rep.status, RepresentationPDF.Status.MANUAL_UPLOAD_REQUIRED)
+        self.assertTrue(rep.error_message)
+
+    def test_corrupted_image_source_marks_conversion_failed(self):
+        from documents.models import RepresentationPDF
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(
+                self.author, 'immagine.png', b'non e\' davvero un png', content_type='image/png',
+            )
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+        version.refresh_from_db()
+        rep = version.representation_pdf
+        self.assertEqual(rep.status, RepresentationPDF.Status.CONVERSION_FAILED)
+        self.assertTrue(rep.error_message)
+
+    def test_replacing_source_file_invalidates_previous_representation(self):
+        from documents.models import RepresentationPDF
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source_a = _make_source_document_file(self.author, 'a.txt', b'versione A', content_type='text/plain')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source_a)
+            first_rep_id = version.representation_pdf_id
+
+            source_b = _make_source_document_file(self.author, 'b.txt', b'versione B', content_type='text/plain')
+            update_draft_version(version, self.author, 'A', 1, 'aggiornata', new_file=source_b)
+
+        version.refresh_from_db()
+        first_rep = RepresentationPDF.objects.get(pk=first_rep_id)
+        self.assertEqual(first_rep.status, RepresentationPDF.Status.STALE)
+        self.assertNotEqual(version.representation_pdf_id, first_rep_id)
+        self.assertEqual(version.representation_pdf.status, RepresentationPDF.Status.READY)
+
+    def test_draft_without_file_has_no_representation_pdf(self):
+        version = create_new_revision(self.document, self.author, 'A', 1)
+        self.assertIsNone(version.representation_pdf)
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class ManualRepresentationPDFTests(TestCase):
+    """TASK-025 — caricamento manuale e conferma autore."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.temp_media = tempfile.mkdtemp()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.temp_media, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.author = User.objects.create_user('manualpdf-author', password='pw')
+        self.document = make_document(code='MANUALPDF-001', owner=self.author, requires_approved_pdf=True)
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(
+                self.author, 'relazione.docx', b'contenuto office finto', content_type='application/octet-stream',
+            )
+            self.version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+
+    def test_manual_upload_rejects_non_pdf_extension(self):
+        from documents.pdf_pipeline import upload_manual_representation_pdf
+        bad = SimpleUploadedFile('rappresentazione.txt', b'%PDF-1.4 finto', content_type='text/plain')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            with self.assertRaises(ValidationError):
+                upload_manual_representation_pdf(self.version, bad, self.author)
+
+    def test_manual_upload_rejects_file_without_pdf_magic_bytes(self):
+        from documents.pdf_pipeline import upload_manual_representation_pdf
+        bad = SimpleUploadedFile('rappresentazione.pdf', b'non e\' un pdf vero', content_type='application/pdf')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            with self.assertRaises(ValidationError):
+                upload_manual_representation_pdf(self.version, bad, self.author)
+
+    def test_manual_upload_accepts_valid_pdf_and_invalidates_previous(self):
+        from documents.models import RepresentationPDF
+        from documents.pdf_pipeline import upload_manual_representation_pdf
+        previous_rep_id = self.version.representation_pdf_id
+        good = SimpleUploadedFile('rappresentazione.pdf', b'%PDF-1.4 contenuto reale', content_type='application/pdf')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            rep = upload_manual_representation_pdf(self.version, good, self.author)
+
+        self.version.refresh_from_db()
+        self.assertEqual(rep.status, RepresentationPDF.Status.MANUAL_UPLOADED)
+        self.assertTrue(rep.requires_confirmation)
+        self.assertEqual(self.version.representation_pdf_id, rep.pk)
+        previous_rep = RepresentationPDF.objects.get(pk=previous_rep_id)
+        self.assertEqual(previous_rep.status, RepresentationPDF.Status.STALE)
+
+    def test_confirm_requires_existing_representation(self):
+        from documents.models import RepresentationPDF
+        from documents.pdf_pipeline import confirm_representation_pdf
+        self.version.representation_pdf = None
+        self.version.save(update_fields=['representation_pdf'])
+        with self.assertRaises(ValidationError):
+            confirm_representation_pdf(self.version, self.author)
+
+    def test_confirm_rejects_non_confirmable_status(self):
+        from documents.pdf_pipeline import confirm_representation_pdf
+        # relazione.docx -> MANUAL_UPLOAD_REQUIRED: nessun file caricato ancora.
+        with self.assertRaises(ValidationError):
+            confirm_representation_pdf(self.version, self.author)
+
+    def test_confirm_marks_manual_uploaded_as_confirmed(self):
+        from documents.models import RepresentationPDF
+        from documents.pdf_pipeline import confirm_representation_pdf, upload_manual_representation_pdf
+        good = SimpleUploadedFile('rappresentazione.pdf', b'%PDF-1.4 contenuto reale', content_type='application/pdf')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            upload_manual_representation_pdf(self.version, good, self.author)
+            self.version.refresh_from_db()
+            rep = confirm_representation_pdf(self.version, self.author)
+
+        self.assertEqual(rep.status, RepresentationPDF.Status.CONFIRMED)
+        self.assertEqual(rep.confirmed_by_id, self.author.pk)
+        self.assertIsNotNone(rep.confirmed_at)
+
+    def test_confirm_marks_auto_ready_as_confirmed(self):
+        from documents.models import RepresentationPDF
+        from documents.pdf_pipeline import confirm_representation_pdf
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'note.txt', b'testo', content_type='text/plain')
+            version = create_new_revision(self.document, self.author, 'B', 2, file=source)
+            rep = confirm_representation_pdf(version, self.author)
+        self.assertEqual(rep.status, RepresentationPDF.Status.CONFIRMED)
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class RepresentationPDFViewTests(TestCase):
+    """TASK-025 — view di upload manuale e conferma (permessi e redirect)."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.temp_media = tempfile.mkdtemp()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.temp_media, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.author = User.objects.create_user('viewpdf-author', password='pw')
+        self.stranger = User.objects.create_user('viewpdf-stranger', password='pw')
+        self.document = make_document(code='VIEWPDF-001', owner=self.author, requires_approved_pdf=True)
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(
+                self.author, 'relazione.docx', b'contenuto office finto', content_type='application/octet-stream',
+            )
+            self.version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+
+    def test_upload_requires_login(self):
+        response = self.client.post(reverse('version_pdf_upload', args=[self.version.pk]))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/accounts/login/', response.url)
+
+    def test_upload_forbidden_for_stranger(self):
+        self.client.login(username='viewpdf-stranger', password='pw')
+        good = SimpleUploadedFile('rappresentazione.pdf', b'%PDF-1.4 vero', content_type='application/pdf')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            response = self.client.post(
+                reverse('version_pdf_upload', args=[self.version.pk]),
+                {'representation_pdf': good},
+            )
+        self.assertEqual(response.status_code, 403)
+
+    def test_author_can_upload_and_confirm(self):
+        from documents.models import RepresentationPDF
+        self.client.login(username='viewpdf-author', password='pw')
+        good = SimpleUploadedFile('rappresentazione.pdf', b'%PDF-1.4 vero', content_type='application/pdf')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            response = self.client.post(
+                reverse('version_pdf_upload', args=[self.version.pk]),
+                {'representation_pdf': good},
+            )
+        self.assertRedirects(response, reverse('version_detail', args=[self.version.pk]))
+        self.version.refresh_from_db()
+        self.assertEqual(self.version.representation_pdf.status, RepresentationPDF.Status.MANUAL_UPLOADED)
+
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            response = self.client.post(reverse('version_pdf_confirm', args=[self.version.pk]))
+        self.assertRedirects(response, reverse('version_detail', args=[self.version.pk]))
+        self.version.refresh_from_db()
+        self.assertEqual(self.version.representation_pdf.status, RepresentationPDF.Status.CONFIRMED)
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class SubmissionPDFGateTests(TestCase):
+    """TASK-026 — assert_ready_for_submission: gate obbligatorio solo all'invio."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.temp_media = tempfile.mkdtemp()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.temp_media, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.author = User.objects.create_user('gate-author', password='pw')
+        self.approver = User.objects.create_user('gate-approver', password='pw')
+        self.document = make_document(code='GATE-001', owner=self.author, requires_approved_pdf=True)
+
+    def test_draft_without_source_file_can_be_created(self):
+        # La bozza esiste senza alcun PDF: solo l'invio deve essere bloccato.
+        version = create_new_revision(self.document, self.author, 'A', 1)
+        self.assertIsNone(version.representation_pdf)
+
+    def test_submit_allowed_without_any_source_file(self):
+        """
+        Il gate riguarda specificamente sorgente → PDF di rappresentazione:
+        una revisione senza alcun file operativo (fattispecie preesistente,
+        indipendente da questa funzionalità) non viene bloccata qui.
+        """
+        version = create_new_revision(self.document, self.author, 'A', 1)
+        submit_version_for_approval(version, self.author, [self.approver])
+        version.refresh_from_db()
+        self.assertEqual(version.status, DocumentVersion.Status.IN_APPROVAL)
+
+    def test_submit_blocked_when_representation_pdf_missing_despite_source_file(self):
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'sorgente.pdf', b'%PDF-1.4 vero', content_type='application/pdf')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+        version.representation_pdf = None
+        version.save(update_fields=['representation_pdf'])
+        with self.assertRaises(ValidationError) as ctx:
+            submit_version_for_approval(version, self.author, [self.approver])
+        self.assertIn('Nessun PDF di rappresentazione', str(ctx.exception))
+
+    def test_submit_allowed_for_native_pdf_without_confirmation(self):
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'sorgente.pdf', b'%PDF-1.4 vero', content_type='application/pdf')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            submit_version_for_approval(version, self.author, [self.approver])
+        version.refresh_from_db()
+        self.assertEqual(version.status, DocumentVersion.Status.IN_APPROVAL)
+
+    def test_submit_blocked_for_auto_reliable_without_confirmation(self):
+        from documents.pdf_pipeline import confirm_representation_pdf
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'note.txt', b'testo', content_type='text/plain')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            with self.assertRaises(ValidationError) as ctx:
+                submit_version_for_approval(version, self.author, [self.approver])
+            self.assertIn('Confermare', str(ctx.exception))
+            confirm_representation_pdf(version, self.author)
+            submit_version_for_approval(version, self.author, [self.approver])
+        version.refresh_from_db()
+        self.assertEqual(version.status, DocumentVersion.Status.IN_APPROVAL)
+
+    def test_submit_blocked_for_manual_required_format(self):
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'relazione.docx', b'finto office', content_type='application/octet-stream')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            with self.assertRaises(ValidationError) as ctx:
+                submit_version_for_approval(version, self.author, [self.approver])
+        self.assertIn('caricamento manuale', str(ctx.exception))
+
+    def test_submit_blocked_for_conversion_failed(self):
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'img.png', b'non e\' un png', content_type='image/png')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            with self.assertRaises(ValidationError) as ctx:
+                submit_version_for_approval(version, self.author, [self.approver])
+        self.assertIn('fallita', str(ctx.exception))
+
+    def test_submit_blocked_for_stale_representation(self):
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source_a = _make_source_document_file(self.author, 'a.pdf', b'%PDF-1.4 A', content_type='application/pdf')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source_a)
+            source_b = _make_source_document_file(self.author, 'b.pdf', b'%PDF-1.4 B', content_type='application/pdf')
+            update_draft_version(version, self.author, 'A', 1, 'v2', new_file=source_b)
+            # La sync automatica sostituisce già la rappresentazione: forziamo
+            # manualmente lo stato STALE per provare che il gate lo blocchi
+            # anche se, per qualche motivo, non fosse stata rigenerata.
+            from documents.models import RepresentationPDF
+            version.refresh_from_db()
+            version.representation_pdf.status = RepresentationPDF.Status.STALE
+            version.representation_pdf.save(update_fields=['status'])
+            with self.assertRaises(ValidationError) as ctx:
+                submit_version_for_approval(version, self.author, [self.approver])
+        self.assertIn('non è aggiornato', str(ctx.exception))
+
+    def test_source_file_cannot_be_silently_replaced_after_submission(self):
+        """Prova esplicita del congelamento: dopo l'invio, update_draft_version è bloccato
+        dalla macchina a stati esistente (status non più DRAFT/REJECTED)."""
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'sorgente.pdf', b'%PDF-1.4 vero', content_type='application/pdf')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            submit_version_for_approval(version, self.author, [self.approver])
+
+            another_source = _make_source_document_file(self.author, 'sostituto.pdf', b'%PDF-1.4 sostituto', content_type='application/pdf')
+            with self.assertRaises(ValidationError):
+                update_draft_version(version, self.author, 'A', 1, 'tentativo di sostituzione', new_file=another_source)
+
+        version.refresh_from_db()
+        self.assertEqual(version.file.original_filename, 'sorgente.pdf')
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class RepresentationPDFDownloadTests(TestCase):
+    """TASK-026 — download del PDF di rappresentazione: permessi e visibilità."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.temp_media = tempfile.mkdtemp()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.temp_media, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.author = User.objects.create_user('repdl-author', password='pw')
+        self.stranger = User.objects.create_user('repdl-stranger', password='pw')
+        self.document = make_document(code='REPDL-001', owner=self.author, requires_approved_pdf=True)
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'sorgente.pdf', b'%PDF-1.4 vero', content_type='application/pdf')
+            self.version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+
+    def test_permission_false_without_representation_pdf(self):
+        from documents.permissions import can_download_representation_pdf
+        version = create_new_revision(self.document, self.author, 'B', 2)
+        self.assertFalse(can_download_representation_pdf(self.author, version))
+
+    def test_author_can_download_own_draft_representation(self):
+        self.client.login(username='repdl-author', password='pw')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            response = self.client.get(reverse('version_representation_pdf_download', args=[self.version.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+
+    def test_stranger_forbidden_on_draft_representation(self):
+        self.client.login(username='repdl-stranger', password='pw')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            response = self.client.get(reverse('version_representation_pdf_download', args=[self.version.pk]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_missing_representation_returns_404(self):
+        self.client.login(username='repdl-author', password='pw')
+        version = create_new_revision(self.document, self.author, 'B', 2)
+        response = self.client.get(reverse('version_representation_pdf_download', args=[version.pk]))
+        self.assertEqual(response.status_code, 404)
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class RepresentationPDFInlineViewTests(TestCase):
+    """TASK-040 — vista inline del PDF di rappresentazione (stessi permessi del download)."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.temp_media = tempfile.mkdtemp()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.temp_media, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.author = User.objects.create_user('repview-author', password='pw')
+        self.stranger = User.objects.create_user('repview-stranger', password='pw')
+        self.document = make_document(code='REPVIEW-001', owner=self.author, requires_approved_pdf=True)
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'sorgente.pdf', b'%PDF-1.4 vero', content_type='application/pdf')
+            self.version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+
+    def test_author_can_view_inline_representation(self):
+        self.client.login(username='repview-author', password='pw')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            response = self.client.get(reverse('version_representation_pdf_view', args=[self.version.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertNotIn('attachment', response.get('Content-Disposition', ''))
+
+    def test_stranger_forbidden_on_inline_representation(self):
+        self.client.login(username='repview-stranger', password='pw')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            response = self.client.get(reverse('version_representation_pdf_view', args=[self.version.pk]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_missing_representation_inline_returns_404(self):
+        self.client.login(username='repview-author', password='pw')
+        version = create_new_revision(self.document, self.author, 'B', 2)
+        response = self.client.get(reverse('version_representation_pdf_view', args=[version.pk]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_inline_serves_same_pdf_as_download(self):
+        self.client.login(username='repview-author', password='pw')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            download = self.client.get(reverse('version_representation_pdf_download', args=[self.version.pk]))
+            inline = self.client.get(reverse('version_representation_pdf_view', args=[self.version.pk]))
+        self.assertEqual(download.status_code, 200)
+        self.assertEqual(inline.status_code, 200)
+        download_bytes = b''.join(download.streaming_content)
+        inline_bytes = b''.join(inline.streaming_content)
+        self.assertEqual(download_bytes, inline_bytes)
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class ApprovedPDFUIAndRegenerateTests(TestCase):
+    """TASK-031 — PDF approvato primario in UI, banner storico, permessi rigenerazione."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.temp_media = tempfile.mkdtemp()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.temp_media, ignore_errors=True)
+        super().tearDownClass()
+
+    @staticmethod
+    def _real_pdf_bytes(text='Contenuto di prova'):
+        import io
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+
+        buf = io.BytesIO()
+        pdf = canvas.Canvas(buf, pagesize=A4)
+        pdf.drawString(50, 800, text)
+        pdf.showPage()
+        pdf.save()
+        return buf.getvalue()
+
+    def setUp(self):
+        from approvals.services import approve_version
+
+        self.author = User.objects.create_user('ui031-author', password='pw')
+        self.approver = User.objects.create_user('ui031-approver', password='pw')
+        self.stranger = User.objects.create_user('ui031-stranger', password='pw')
+        self.superuser = User.objects.create_superuser('ui031-admin', password='pw')
+        self.document = make_document(code='UI031-001', owner=self.author, requires_approved_pdf=True)
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'a.pdf', self._real_pdf_bytes('A'), content_type='application/pdf')
+            self.v1 = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            req1 = submit_version_for_approval(self.v1, self.author, [self.approver])
+            approve_version(req1, self.approver)
+            self.v1.refresh_from_db()
+
+            source2 = _make_source_document_file(self.author, 'b.pdf', self._real_pdf_bytes('B'), content_type='application/pdf')
+            self.v2 = create_new_revision(self.document, self.author, 'B', 2, file=source2, _bypass_ecn_check=True)
+            req2 = submit_version_for_approval(self.v2, self.author, [self.approver])
+            approve_version(req2, self.approver)
+            self.v1.refresh_from_db()
+            self.v2.refresh_from_db()
+
+    def test_approved_version_shows_approved_pdf_as_primary_button(self):
+        self.client.login(username='ui031-author', password='pw')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            response = self.client.get(reverse('version_detail', args=[self.v2.pk]))
+        self.assertContains(response, 'Scarica PDF approvato')
+
+    def test_superseded_version_shows_link_to_current(self):
+        # can_view_version richiede view_history per le versioni SUPERSEDED:
+        # l'autore semplice non lo ha automaticamente (regola preesistente,
+        # indipendente da questa funzionalità) — verifica con un superuser.
+        self.client.login(username='ui031-admin', password='pw')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            response = self.client.get(reverse('version_detail', args=[self.v1.pk]))
+        self.assertContains(response, 'Esiste una revisione corrente successiva')
+
+    def test_regenerate_forbidden_for_stranger(self):
+        self.client.login(username='ui031-stranger', password='pw')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            response = self.client.post(reverse('version_approved_pdf_regenerate', args=[self.v2.pk]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_regenerate_allowed_for_document_owner(self):
+        self.client.login(username='ui031-author', password='pw')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            response = self.client.post(reverse('version_approved_pdf_regenerate', args=[self.v2.pk]))
+        self.assertRedirects(response, reverse('version_detail', args=[self.v2.pk]))
+
+    def test_historical_version_without_approved_pdf_shows_message(self):
+        version = create_new_revision(self.document, self.author, 'C', 3, _bypass_ecn_check=True)
+        version.status = DocumentVersion.Status.SUPERSEDED
+        version.approved_at = timezone.now()
+        version.save(update_fields=['status', 'approved_at'])
+        self.client.login(username='ui031-admin', password='pw')
+        response = self.client.get(reverse('version_detail', args=[version.pk]))
+        self.assertContains(response, 'Non disponibile per questa revisione storica')
+
+
+class DocumentPDFPolicyMigrationDefaultTests(TestCase):
+    """TASK-035 — migrazione: valore di default compatibile con i dati esistenti."""
+
+    def test_document_created_via_orm_without_flag_defaults_to_false(self):
+        """Simula un documento pre-esistente (creato prima di questa funzionalità)."""
+        author = User.objects.create_user('migdef-author', password='pw')
+        doc = Document.objects.create(
+            code='MIGDEF-001', title='Documento storico', category=Document.Category.QUALITY,
+            owner=author, created_by=author,
+        )
+        self.assertFalse(doc.requires_approved_pdf)
+
+    def test_existing_approved_version_without_pdf_fields_remains_valid(self):
+        """Revisione storica priva di representation_pdf/approved_pdf: nessun errore, nessun crash."""
+        author = User.objects.create_user('migdef-author2', password='pw')
+        doc = make_document(code='MIGDEF-002', owner=author)  # requires_approved_pdf=False di default
+        version = create_new_revision(doc, author, 'A', 1)
+        version.status = DocumentVersion.Status.APPROVED
+        version.is_current = True
+        version.approved_at = timezone.now()
+        version.approved_by = author
+        version.save(update_fields=['status', 'is_current', 'approved_at', 'approved_by'])
+        doc.current_version = version
+        doc.save(update_fields=['current_version'])
+
+        version.refresh_from_db()
+        self.assertIsNone(version.representation_pdf)
+        self.assertIsNone(version.approved_pdf)
+        self.assertEqual(version.status, DocumentVersion.Status.APPROVED)
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class DocumentPDFPolicyCreationTests(TestCase):
+    """TASK-035 — creazione: scelta del flusso PDF opzionale, visualizzazione, permessi."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        self.author = User.objects.create_user('pdfpolicy-author', password='pw')
+        Group.objects.get_or_create(name='Document Authors')[0].user_set.add(self.author)
+        from projects.models import ProjectFolder, ProjectFolderMembership
+        self.folder = ProjectFolder.objects.create(
+            code='PDFPOL-FOLD', name='Cartella policy PDF',
+            folder_kind=ProjectFolder.FolderKind.GENERIC,
+            status=ProjectFolder.Status.ACTIVE, owner=self.author,
+        )
+        ProjectFolderMembership.objects.create(folder=self.folder, user=self.author, role='author')
+        self.client.login(username='pdfpolicy-author', password='pw')
+
+    def _post_new_document(self, code, extra=None):
+        data = {
+            'code': code, 'title': 'Documento test policy PDF', 'category': 'QUALITY',
+            'project_folder': self.folder.pk, 'revision_scheme': 'numeric',
+            'revision_label': '00', 'revision_number': 0,
+        }
+        if extra:
+            data.update(extra)
+        return self.client.post(reverse('document_new'), data)
+
+    def test_document_created_with_pdf_flow_disabled_by_default(self):
+        self._post_new_document('PDFPOL-001')
+        doc = Document.objects.get(code='PDFPOL-001')
+        self.assertFalse(doc.requires_approved_pdf)
+
+    def test_document_created_with_pdf_flow_enabled(self):
+        self._post_new_document('PDFPOL-002', {'requires_approved_pdf': 'on'})
+        doc = Document.objects.get(code='PDFPOL-002')
+        self.assertTrue(doc.requires_approved_pdf)
+
+    def test_creation_audit_log_records_choice(self):
+        from auditlog.models import AuditLog
+        self._post_new_document('PDFPOL-003', {'requires_approved_pdf': 'on'})
+        doc = Document.objects.get(code='PDFPOL-003')
+        log = AuditLog.objects.filter(action='DOCUMENT_CREATED', object_id=str(doc.pk)).first()
+        self.assertIsNotNone(log)
+        self.assertTrue(log.changes['new_values']['requires_approved_pdf'])
+
+    def test_badge_shown_on_document_detail_when_enabled(self):
+        self._post_new_document('PDFPOL-004', {'requires_approved_pdf': 'on'})
+        doc = Document.objects.get(code='PDFPOL-004')
+        response = self.client.get(reverse('document_detail', args=[doc.pk]))
+        self.assertContains(response, 'Richiede copia PDF approvata')
+
+    def test_badge_absent_on_document_detail_when_disabled(self):
+        self._post_new_document('PDFPOL-005')
+        doc = Document.objects.get(code='PDFPOL-005')
+        response = self.client.get(reverse('document_detail', args=[doc.pk]))
+        self.assertNotContains(response, 'Richiede copia PDF approvata')
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class DocumentPDFPolicyMetadataEditTests(TestCase):
+    """TASK-035 — modifica successiva della policy PDF: permessi, audit, effetto futuro."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        self.author = User.objects.create_user('pdfmeta-author', password='pw')
+        self.stranger = User.objects.create_user('pdfmeta-stranger', password='pw')
+        Group.objects.get_or_create(name='Document Authors')[0].user_set.add(self.author)
+        self.document = make_document(code='PDFMETA-001', owner=self.author)
+        # can_view_document richiede che l'utente sia autore di una bozza (o che
+        # il documento sia già pubblicato) — creiamo la prima bozza realistica.
+        create_new_revision(self.document, self.author, '00', 0)
+
+    def test_owner_can_enable_pdf_flow(self):
+        self.client.login(username='pdfmeta-author', password='pw')
+        response = self.client.post(reverse('document_edit_metadata', args=[self.document.pk]), {
+            'title': self.document.title, 'description': '', 'revision_scheme': 'numeric',
+            'requires_approved_pdf': 'on',
+        })
+        self.assertRedirects(response, reverse('document_detail', args=[self.document.pk]))
+        self.document.refresh_from_db()
+        self.assertTrue(self.document.requires_approved_pdf)
+
+    def test_owner_can_disable_pdf_flow(self):
+        self.document.requires_approved_pdf = True
+        self.document.save(update_fields=['requires_approved_pdf'])
+        self.client.login(username='pdfmeta-author', password='pw')
+        response = self.client.post(reverse('document_edit_metadata', args=[self.document.pk]), {
+            'title': self.document.title, 'description': '', 'revision_scheme': 'numeric',
+        })
+        self.assertRedirects(response, reverse('document_detail', args=[self.document.pk]))
+        self.document.refresh_from_db()
+        self.assertFalse(self.document.requires_approved_pdf)
+
+    def test_unauthorized_user_cannot_edit_metadata(self):
+        self.client.login(username='pdfmeta-stranger', password='pw')
+        response = self.client.post(reverse('document_edit_metadata', args=[self.document.pk]), {
+            'title': self.document.title, 'description': '', 'revision_scheme': 'numeric',
+            'requires_approved_pdf': 'on',
+        })
+        self.assertEqual(response.status_code, 403)
+        self.document.refresh_from_db()
+        self.assertFalse(self.document.requires_approved_pdf)
+
+    def test_change_is_audited_with_old_and_new_value(self):
+        from auditlog.models import AuditLog
+        self.client.login(username='pdfmeta-author', password='pw')
+        self.client.post(reverse('document_edit_metadata', args=[self.document.pk]), {
+            'title': self.document.title, 'description': '', 'revision_scheme': 'numeric',
+            'requires_approved_pdf': 'on',
+        })
+        log = AuditLog.objects.filter(
+            action='PDF_POLICY_CHANGED', object_id=str(self.document.pk),
+        ).order_by('-timestamp').first()
+        self.assertIsNotNone(log)
+        self.assertFalse(log.changes['old_values']['requires_approved_pdf'])
+        self.assertTrue(log.changes['new_values']['requires_approved_pdf'])
+
+    def test_no_change_no_audit_log_entry(self):
+        from auditlog.models import AuditLog
+        self.client.login(username='pdfmeta-author', password='pw')
+        self.client.post(reverse('document_edit_metadata', args=[self.document.pk]), {
+            'title': self.document.title, 'description': '', 'revision_scheme': 'numeric',
+        })
+        self.assertFalse(
+            AuditLog.objects.filter(action='PDF_POLICY_CHANGED', object_id=str(self.document.pk)).exists()
+        )
+
+    def test_success_message_mentions_future_only_effect(self):
+        from django.contrib.messages import get_messages
+        self.client.login(username='pdfmeta-author', password='pw')
+        response = self.client.post(reverse('document_edit_metadata', args=[self.document.pk]), {
+            'title': self.document.title, 'description': '', 'revision_scheme': 'numeric',
+            'requires_approved_pdf': 'on',
+        })
+        msgs = [str(m) for m in get_messages(response.wsgi_request)]
+        self.assertTrue(any('non ancora inviate in approvazione' in m for m in msgs))
+
+    def test_enabling_flag_does_not_error_on_existing_fileless_draft(self):
+        """Attivare la policy su un documento con una bozza già esistente non genera errori immediati."""
+        draft = create_new_revision(self.document, self.author, 'A', 1)
+        self.client.login(username='pdfmeta-author', password='pw')
+        response = self.client.post(reverse('document_edit_metadata', args=[self.document.pk]), {
+            'title': self.document.title, 'description': '', 'revision_scheme': 'numeric',
+            'requires_approved_pdf': 'on',
+        })
+        self.assertEqual(response.status_code, 302)
+        draft.refresh_from_db()
+        self.assertEqual(draft.status, DocumentVersion.Status.DRAFT)
+        self.assertIsNone(draft.representation_pdf)
+
+    def test_existing_draft_blocked_at_submission_after_flag_enabled(self):
+        """
+        Una bozza con un file sorgente già esistente (creata mentre la policy
+        era disattivata, quindi senza PDF di rappresentazione collegato) non
+        si rompe quando la policy viene attivata, ma il suo invio resta
+        bloccato finché non viene fornito un PDF.
+        """
+        import tempfile
+        approver = User.objects.create_user('pdfmeta-approver', password='pw')
+        temp_media = tempfile.mkdtemp()
+        try:
+            with self.settings(MEDIA_ROOT=temp_media):
+                source = _make_source_document_file(self.author, 'relazione.docx', b'contenuto office finto', content_type='application/octet-stream')
+                draft = create_new_revision(self.document, self.author, 'A', 1, file=source)
+                self.assertIsNone(draft.representation_pdf)  # policy era disattivata alla creazione
+
+                self.document.requires_approved_pdf = True
+                self.document.save(update_fields=['requires_approved_pdf'])
+
+                with self.assertRaises(ValidationError):
+                    submit_version_for_approval(draft, self.author, [approver])
+        finally:
+            import shutil
+            shutil.rmtree(temp_media, ignore_errors=True)
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class DocumentPDFPolicyHistoricalNonRetroactivityTests(TestCase):
+    """TASK-035 — storico: nessun cambiamento retroattivo quando la policy cambia."""
+
+    def setUp(self):
+        from approvals.services import approve_version
+        self.approve_version = approve_version
+        self.author = User.objects.create_user('histpol-author', password='pw')
+        self.approver = User.objects.create_user('histpol-approver', password='pw')
+
+    @staticmethod
+    def _real_pdf_bytes(text='Contenuto'):
+        import io
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+        buf = io.BytesIO()
+        pdf = canvas.Canvas(buf, pagesize=A4)
+        pdf.drawString(50, 800, text)
+        pdf.showPage()
+        pdf.save()
+        return buf.getvalue()
+
+    def test_version_approved_before_enabling_flow_stays_valid_without_pdf(self):
+        document = make_document(code='HISTPOL-001', owner=self.author, requires_approved_pdf=False)
+        version = create_new_revision(document, self.author, 'A', 1)
+        req = submit_version_for_approval(version, self.author, [self.approver])
+        self.approve_version(req, self.approver)
+        version.refresh_from_db()
+        self.assertEqual(version.status, DocumentVersion.Status.APPROVED)
+        self.assertIsNone(version.representation_pdf)
+        self.assertIsNone(version.approved_pdf)
+
+        # Abilitare ora la policy non deve alterare retroattivamente la revisione già approvata.
+        document.requires_approved_pdf = True
+        document.save(update_fields=['requires_approved_pdf'])
+        version.refresh_from_db()
+        self.assertIsNone(version.representation_pdf)
+        self.assertIsNone(version.approved_pdf)
+        self.assertEqual(version.status, DocumentVersion.Status.APPROVED)
+
+    def test_disabling_flow_after_approval_does_not_remove_existing_approved_pdf(self):
+        import tempfile
+        temp_media = tempfile.mkdtemp()
+        try:
+            with self.settings(MEDIA_ROOT=temp_media):
+                document = make_document(code='HISTPOL-002', owner=self.author, requires_approved_pdf=True)
+                upload = SimpleUploadedFile('a.pdf', self._real_pdf_bytes(), content_type='application/pdf')
+                source = create_document_file(upload, self.author)
+                version = create_new_revision(document, self.author, 'A', 1, file=source)
+                req = submit_version_for_approval(version, self.author, [self.approver])
+                self.approve_version(req, self.approver)
+                version.refresh_from_db()
+                artifact_id = version.approved_pdf_id
+                self.assertIsNotNone(artifact_id)
+
+                document.requires_approved_pdf = False
+                document.save(update_fields=['requires_approved_pdf'])
+
+                version.refresh_from_db()
+                self.assertEqual(version.approved_pdf_id, artifact_id)
+                self.assertEqual(version.approved_pdf.status, 'generated')
+        finally:
+            import shutil
+            shutil.rmtree(temp_media, ignore_errors=True)
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class DocumentPDFPolicyChangedWhileDraftExistsTests(TestCase):
+    """
+    TASK-035 (fix) — cambio della policy PDF mentre esiste una bozza non
+    ancora inviata (non durante l'approvazione, ma prima): il congelamento
+    avviene esattamente al momento dell'invio, non prima e non dopo.
+    """
+
+    @staticmethod
+    def _real_pdf_bytes(text='Contenuto'):
+        import io
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+        buf = io.BytesIO()
+        pdf = canvas.Canvas(buf, pagesize=A4)
+        pdf.drawString(50, 800, text)
+        pdf.showPage()
+        pdf.save()
+        return buf.getvalue()
+
+    def setUp(self):
+        self.author = User.objects.create_user('draftcfg-author', password='pw')
+        self.approver = User.objects.create_user('draftcfg-approver', password='pw')
+
+    def test_disabling_after_representation_pdf_exists_but_before_submission_skips_generation(self):
+        """
+        Riproduce lo scenario: bozza creata con policy attiva (representation_pdf
+        generata), poi la policy viene disattivata PRIMA dell'invio. L'invio deve
+        seguire il flag corrente (disattivato: nessun gate) e l'approvazione
+        finale NON deve generare un PDF approvato, nonostante la
+        representation_pdf residua fosse ancora collegata alla revisione.
+        """
+        import shutil
+        import tempfile
+        from approvals.services import approve_version
+
+        temp_media = tempfile.mkdtemp()
+        try:
+            with self.settings(MEDIA_ROOT=temp_media):
+                document = make_document(code='DRAFTCFG-001', owner=self.author, requires_approved_pdf=True)
+                source = _make_source_document_file(self.author, 'a.pdf', self._real_pdf_bytes(), content_type='application/pdf')
+                version = create_new_revision(document, self.author, 'A', 1, file=source)
+                self.assertIsNotNone(version.representation_pdf_id)  # generata mentre il flag era attivo
+
+                # L'operatore disattiva la policy PRIMA dell'invio.
+                document.requires_approved_pdf = False
+                document.save(update_fields=['requires_approved_pdf'])
+
+                # L'invio segue il flag corrente (disattivato): nessun gate, consentito.
+                req = submit_version_for_approval(version, self.author, [self.approver])
+                version.refresh_from_db()
+                self.assertEqual(version.status, DocumentVersion.Status.IN_APPROVAL)
+                # Coerenza interna: la representation_pdf residua viene scollegata
+                # al momento dell'invio, così il comportamento a valle (generazione
+                # del PDF approvato) resta coerente con "policy disattivata".
+                self.assertIsNone(version.representation_pdf_id)
+
+                approve_version(req, self.approver)
+                version.refresh_from_db()
+                self.assertEqual(version.status, DocumentVersion.Status.APPROVED)
+                self.assertIsNone(
+                    version.approved_pdf,
+                    "Il PDF approvato non deve essere generato: la policy era disattivata al momento dell'invio.",
+                )
+        finally:
+            shutil.rmtree(temp_media, ignore_errors=True)
+
+    def test_enabling_after_draft_created_disabled_blocks_submission_until_pdf_provided(self):
+        """Caso inverso (simmetrico): bozza creata a policy disattivata, poi
+        attivata prima dell'invio — l'invio deve essere bloccato finché non
+        esiste un PDF di rappresentazione valido."""
+        document = make_document(code='DRAFTCFG-002', owner=self.author, requires_approved_pdf=False)
+        import tempfile
+        import shutil
+        temp_media = tempfile.mkdtemp()
+        try:
+            with self.settings(MEDIA_ROOT=temp_media):
+                source = _make_source_document_file(self.author, 'relazione.docx', b'finto office', content_type='application/octet-stream')
+                version = create_new_revision(document, self.author, 'A', 1, file=source)
+                self.assertIsNone(version.representation_pdf)  # policy disattivata alla creazione
+
+                document.requires_approved_pdf = True
+                document.save(update_fields=['requires_approved_pdf'])
+
+                with self.assertRaises(ValidationError):
+                    submit_version_for_approval(version, self.author, [self.approver])
+        finally:
+            shutil.rmtree(temp_media, ignore_errors=True)
+
 # ---------------------------------------------------------------------------
 # TASK-022 — UI: ECN semplice sostituisce "revisione senza ECN" come flusso
 # principale; il percorso legacy resta funzionante per dati esistenti.
@@ -4559,6 +5818,17 @@ class SimpleEcnUiTests(TestCase):
     def test_new_document_form_has_no_ecn_exemption_checkbox(self):
         response = self.client.get(reverse('document_new'))
         self.assertNotContains(response, 'Consenti revisioni senza ECN obbligatorio')
+
+    def test_new_document_page_has_no_stray_comment_text(self):
+        """
+        Regressione 2026-07-28: un commento Django {# ... #} multi-riga non
+        viene nascosto da Django (limite reale, verificato empiricamente) e
+        veniva mostrato come testo grezzo sulla pagina. Convertito in
+        {% comment %}...{% endcomment %}, che supporta più righe.
+        """
+        response = self.client.get(reverse('document_new'))
+        self.assertNotContains(response, '{#')
+        self.assertNotContains(response, '#}')
 
     def test_document_detail_shows_both_ecn_creation_buttons(self):
         doc, _ = _make_published_doc('SIMPLEUI-DOC-001', self.folder, self.viewer)
@@ -4578,109 +5848,691 @@ class SimpleEcnUiTests(TestCase):
         self.assertContains(response, '+ Nuova revisione</a>')
 
 
-class NewRevisionButtonLabelTests(TestCase):
-    """TASK-023: il bottone di creazione revisione deve distinguersi da
-    quello di creazione documento ('Crea documento e prima bozza')."""
+# ---------------------------------------------------------------------------
+# AREA A (2026-07-28) — Document.allow_simple_ecn: nuova opzione per
+# vietare specificamente il flusso ECN semplice (l'ECN standard resta
+# sempre consentito). Funzionalità mai esistita prima in nessuna forma
+# (verificato via cronologia Git completa + PROJECT_HANDOFF.md del
+# progetto originale, sezione ECNPOL-1): distinta sia da
+# requires_ecn_for_revision (ECN obbligatorio o no, in assoluto) sia da
+# ChangeNotice.flow_type (quale tipo è una singola istanza di ECN).
+# ---------------------------------------------------------------------------
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class AllowSimpleEcnCreationTests(TestCase):
+    """Opzione presente e salvata correttamente alla creazione del documento."""
 
     def setUp(self):
         from django.contrib.auth.models import Group
-        self.author = User.objects.create_user('rev_btn_author', password='pw')
-        self.author.groups.add(Group.objects.get_or_create(name='Document Authors')[0])
-        self.doc = make_document('REVBTN-001', owner=self.author)
-        create_new_revision(self.doc, self.author, '00', 0)
-
-    def test_new_revision_button_says_crea_bozza_revisione(self):
+        self.author = User.objects.create_user('simplepol-author', password='pw')
+        Group.objects.get_or_create(name='Document Authors')[0].user_set.add(self.author)
+        self.folder = _make_folder(code='SIMPLEPOL-FOLD', owner=self.author)
+        from projects.models import ProjectFolderMembership
+        ProjectFolderMembership.objects.create(
+            folder=self.folder, user=self.author, role='author', created_by=self.author,
+        )
         self.client.force_login(self.author)
-        response = self.client.get(reverse('document_new_revision', args=[self.doc.pk]))
-        self.assertContains(response, 'Crea bozza revisione')
+
+    def _post_new_document(self, code, allow_simple_ecn_checked):
+        data = {
+            'code': code, 'title': 'Doc test', 'description': '',
+            'category': Document.Category.QUALITY, 'document_type': '',
+            'project_folder': self.folder.pk,
+            'revision_scheme': 'numeric', 'revision_label': '00', 'revision_number': '0',
+            'change_summary': '',
+        }
+        if allow_simple_ecn_checked:
+            data['allow_simple_ecn'] = 'on'
+        return self.client.post(reverse('document_new'), data)
+
+    def test_option_checked_by_default_in_creation_form(self):
+        response = self.client.get(reverse('document_new'))
+        self.assertContains(response, 'allow_simple_ecn')
+        self.assertContains(response, 'checked')
+
+    def test_document_created_with_flag_true_when_checked(self):
+        self._post_new_document('SIMPLEPOL-001', allow_simple_ecn_checked=True)
+        doc = Document.objects.get(code='SIMPLEPOL-001')
+        self.assertTrue(doc.allow_simple_ecn)
+
+    def test_document_created_with_flag_false_when_unchecked(self):
+        self._post_new_document('SIMPLEPOL-002', allow_simple_ecn_checked=False)
+        doc = Document.objects.get(code='SIMPLEPOL-002')
+        self.assertFalse(doc.allow_simple_ecn)
+
+    def test_default_value_is_true_at_model_level(self):
+        """Migrazione retrocompatibile: i documenti esistenti restano invariati (simple ECN consentito)."""
+        doc = make_document(code='SIMPLEPOL-DEFAULT', owner=self.author)
+        self.assertTrue(doc.allow_simple_ecn)
 
 
-class MyRevisionsViewTests(TestCase):
-    """Test per /my-revisions/ (TASK-023)."""
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class AllowSimpleEcnMetadataEditTests(TestCase):
+    """
+    Modifica successiva della policy (allineato 2026-07-28): SOLO superuser o
+    supervisor_demo (demo mode) possono cambiarla dopo la creazione — non
+    autori/manager, che pure possono modificare titolo/descrizione/schema/PDF.
+    L'autore resta libero di impostarla alla creazione (vedi
+    AllowSimpleEcnCreationTests).
+    """
 
     def setUp(self):
-        self.user = User.objects.create_user('myrev_user', password='pw')
-        self.other = User.objects.create_user('myrev_other', password='pw')
+        from django.contrib.auth.models import Group
+        self.author = User.objects.create_user('simplemeta-author', password='pw')
+        self.manager = User.objects.create_user('simplemeta-manager', password='pw')
+        self.superuser = User.objects.create_superuser('simplemeta-super', 'x@example.com', 'pw')
+        self.stranger = User.objects.create_user('simplemeta-stranger', password='pw')
+        Group.objects.get_or_create(name='Document Authors')[0].user_set.add(self.author)
+        Group.objects.get_or_create(name='Document Managers')[0].user_set.add(self.manager)
+        self.document = make_document(code='SIMPLEMETA-001', owner=self.author)
+        create_new_revision(self.document, self.author, '00', 0)
 
-    def test_redirects_anonymous(self):
-        r = self.client.get(reverse('my_revisions'))
-        self.assertRedirects(r, '/accounts/login/?next=/my-revisions/', fetch_redirect_response=False)
+    def test_hidden_in_metadata_edit_form_for_author(self):
+        self.client.login(username='simplemeta-author', password='pw')
+        response = self.client.get(reverse('document_edit_metadata', args=[self.document.pk]))
+        self.assertNotContains(response, 'allow_simple_ecn')
 
-    def test_shows_all_statuses_for_own_versions(self):
-        doc = make_document('MYREV-001', owner=self.user)
-        draft_version = create_new_revision(doc, self.user, '00', 0)
+    def test_hidden_in_metadata_edit_form_for_manager(self):
+        self.client.login(username='simplemeta-manager', password='pw')
+        response = self.client.get(reverse('document_edit_metadata', args=[self.document.pk]))
+        self.assertNotContains(response, 'allow_simple_ecn')
 
-        doc2 = make_document('MYREV-002', owner=self.user)
-        approved_version = create_new_revision(doc2, self.user, '00', 0)
-        from approvals.services import approve_version
-        req = submit_version_for_approval(approved_version, self.user, [self.user])
-        approve_version(req, self.user)
+    def test_visible_in_metadata_edit_form_for_superuser(self):
+        self.client.login(username='simplemeta-super', password='pw')
+        response = self.client.get(reverse('document_edit_metadata', args=[self.document.pk]))
+        self.assertContains(response, 'allow_simple_ecn')
 
-        self.client.force_login(self.user)
-        r = self.client.get(reverse('my_revisions'))
-        self.assertEqual(r.status_code, 200)
-        self.assertContains(r, 'MYREV-001')
-        self.assertContains(r, 'MYREV-002')
+    def test_author_cannot_disable_even_via_raw_post(self):
+        """Il campo non esiste nel form dell'autore: un POST grezzo non ha alcun effetto."""
+        self.client.login(username='simplemeta-author', password='pw')
+        response = self.client.post(reverse('document_edit_metadata', args=[self.document.pk]), {
+            'title': self.document.title, 'description': '', 'revision_scheme': 'numeric',
+            'allow_simple_ecn': '',  # tenta di forzare a False
+        })
+        self.assertRedirects(response, reverse('document_detail', args=[self.document.pk]))
+        self.document.refresh_from_db()
+        self.assertTrue(self.document.allow_simple_ecn)  # invariato
 
-    def test_does_not_show_other_users_revisions(self):
-        doc = make_document('MYREV-003', owner=self.other)
-        create_new_revision(doc, self.other, '00', 0)
+    def test_manager_cannot_reenable_even_via_raw_post(self):
+        """Stesso principio con il flag già disattivato: il manager non può riattivarlo."""
+        self.document.allow_simple_ecn = False
+        self.document.save(update_fields=['allow_simple_ecn'])
+        self.client.login(username='simplemeta-manager', password='pw')
+        self.client.post(reverse('document_edit_metadata', args=[self.document.pk]), {
+            'title': self.document.title, 'description': '', 'revision_scheme': 'numeric',
+            'allow_simple_ecn': 'on',
+        })
+        self.document.refresh_from_db()
+        self.assertFalse(self.document.allow_simple_ecn)  # invariato
 
-        self.client.force_login(self.user)
-        r = self.client.get(reverse('my_revisions'))
-        self.assertNotContains(r, 'MYREV-003')
+    def test_superuser_can_disable(self):
+        self.client.login(username='simplemeta-super', password='pw')
+        response = self.client.post(reverse('document_edit_metadata', args=[self.document.pk]), {
+            'title': self.document.title, 'description': '', 'revision_scheme': 'numeric',
+        })
+        self.assertRedirects(response, reverse('document_detail', args=[self.document.pk]))
+        self.document.refresh_from_db()
+        self.assertFalse(self.document.allow_simple_ecn)
+
+    def test_superuser_can_reenable(self):
+        self.document.allow_simple_ecn = False
+        self.document.save(update_fields=['allow_simple_ecn'])
+        self.client.login(username='simplemeta-super', password='pw')
+        response = self.client.post(reverse('document_edit_metadata', args=[self.document.pk]), {
+            'title': self.document.title, 'description': '', 'revision_scheme': 'numeric',
+            'allow_simple_ecn': 'on',
+        })
+        self.document.refresh_from_db()
+        self.assertTrue(self.document.allow_simple_ecn)
+
+    @override_settings(
+        DOCUMENTALE_DEMO_MODE=True, DOCUMENTALE_DEMO_SUPERVISOR_USERNAME='simplemeta-demosup',
+        EMAIL_BACKEND=LOCMEM,
+    )
+    def test_demo_supervisor_can_disable(self):
+        # Anche Document Manager, solo per superare il gate generale
+        # can_edit_document_metadata: isola che l'accesso al campo viene da
+        # is_demo_supervisor, non dal ruolo Manager (di per sé insufficiente,
+        # vedi test_hidden_in_metadata_edit_form_for_manager).
+        from django.contrib.auth.models import Group
+        demosup = User.objects.create_user('simplemeta-demosup', password='pw')
+        demosup.groups.add(Group.objects.get_or_create(name='Document Managers')[0])
+        self.client.login(username='simplemeta-demosup', password='pw')
+        response = self.client.post(reverse('document_edit_metadata', args=[self.document.pk]), {
+            'title': self.document.title, 'description': '', 'revision_scheme': 'numeric',
+        })
+        # Verifica solo il redirect (302 verso document_detail): il documento
+        # di test è una bozza mai pubblicata, quindi document_detail stesso
+        # non sarebbe visibile a questo utente (Manager vede solo documenti
+        # pubblicati) — irrilevante per ciò che questo test verifica.
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('document_detail', args=[self.document.pk]))
+        self.document.refresh_from_db()
+        self.assertFalse(self.document.allow_simple_ecn)
+
+    def test_unauthorized_user_cannot_edit_metadata_at_all(self):
+        self.client.login(username='simplemeta-stranger', password='pw')
+        response = self.client.post(reverse('document_edit_metadata', args=[self.document.pk]), {
+            'title': self.document.title, 'description': '', 'revision_scheme': 'numeric',
+        })
+        self.assertEqual(response.status_code, 403)
+        self.document.refresh_from_db()
+        self.assertTrue(self.document.allow_simple_ecn)
+
+    def test_change_is_audited_with_old_and_new_value(self):
+        from auditlog.models import AuditLog
+        self.client.login(username='simplemeta-super', password='pw')
+        self.client.post(reverse('document_edit_metadata', args=[self.document.pk]), {
+            'title': self.document.title, 'description': '', 'revision_scheme': 'numeric',
+        })
+        log = AuditLog.objects.filter(
+            action='ECN_SIMPLE_POLICY_CHANGED', object_id=str(self.document.pk),
+        ).order_by('-timestamp').first()
+        self.assertIsNotNone(log)
+        self.assertTrue(log.changes['old_values']['allow_simple_ecn'])
+        self.assertFalse(log.changes['new_values']['allow_simple_ecn'])
+
+    def test_no_change_no_audit_log_entry(self):
+        from auditlog.models import AuditLog
+        self.client.login(username='simplemeta-super', password='pw')
+        self.client.post(reverse('document_edit_metadata', args=[self.document.pk]), {
+            'title': self.document.title, 'description': '', 'revision_scheme': 'numeric',
+            'allow_simple_ecn': 'on',
+        })
+        self.assertFalse(
+            AuditLog.objects.filter(action='ECN_SIMPLE_POLICY_CHANGED', object_id=str(self.document.pk)).exists()
+        )
+
+    def test_author_can_still_set_it_at_creation(self):
+        """L'autore resta libero di impostare il flag in fase di creazione documento."""
+        from django.contrib.auth.models import Group
+        from projects.models import ProjectFolderMembership
+        folder = _make_folder(code='SIMPLEMETA-CREATE-FOLD', owner=self.author)
+        ProjectFolderMembership.objects.create(
+            folder=folder, user=self.author, role='author', created_by=self.author,
+        )
+        self.client.login(username='simplemeta-author', password='pw')
+        response = self.client.post(reverse('document_new'), {
+            'code': 'SIMPLEMETA-CREATE-001', 'title': 'Doc test', 'description': '',
+            'category': Document.Category.QUALITY, 'document_type': '',
+            'project_folder': folder.pk,
+            'revision_scheme': 'numeric', 'revision_label': '00', 'revision_number': '0',
+            'change_summary': '',
+            # allow_simple_ecn assente → checkbox non spuntata
+        })
+        doc = Document.objects.get(code='SIMPLEMETA-CREATE-001')
+        self.assertFalse(doc.allow_simple_ecn)
 
 
-class MyDocumentsViewTests(TestCase):
-    """Test per /my-documents/ (TASK-023)."""
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class AllowSimpleEcnEnforcementTests(TestCase):
+    """Standard sempre consentito; semplice bloccato solo quando disattivato — a livello service e UI."""
 
     def setUp(self):
-        self.author = User.objects.create_user('mydoc_author', password='pw')
-        self.other = User.objects.create_user('mydoc_other', password='pw')
+        from django.contrib.auth.models import Group
+        self.author = User.objects.create_user('simpleenf-author', password='pw')
+        self.approver = User.objects.create_user('simpleenf-approver', password='pw')
+        Group.objects.get_or_create(name='Document Authors')[0].user_set.add(self.author)
+        self.folder = _make_folder(code='SIMPLEENF-FOLD', owner=self.author)
+        from projects.models import ProjectFolderMembership
+        ProjectFolderMembership.objects.create(
+            folder=self.folder, user=self.author, role='author', created_by=self.author,
+        )
 
-    def test_redirects_anonymous(self):
-        r = self.client.get(reverse('my_documents'))
-        self.assertRedirects(r, '/accounts/login/?next=/my-documents/', fetch_redirect_response=False)
+    def _published_doc(self, code, allow_simple_ecn):
+        doc, ver = _make_published_doc(code, self.folder, self.author)
+        doc.allow_simple_ecn = allow_simple_ecn
+        doc.save(update_fields=['allow_simple_ecn'])
+        return doc, ver
 
-    def test_shows_own_documents_with_current_version(self):
-        doc = make_document('MYDOC-001', owner=self.author)
-        version = create_new_revision(doc, self.author, '00', 0)
-        from approvals.services import approve_version
-        req = submit_version_for_approval(version, self.author, [self.author])
-        approve_version(req, self.author)
+    def test_create_simple_ecn_raises_when_disallowed(self):
+        from ecn.models import ChangeNotice
+        from ecn.services import create_simple_ecn
+        doc, _ = self._published_doc('SIMPLEENF-001', allow_simple_ecn=False)
+        with self.assertRaises(ValidationError) as ctx:
+            create_simple_ecn(document=doc, proposed_by=self.author, title='Tentativo', send_notifications=False)
+        self.assertIn('non è consentito', str(ctx.exception))
 
+    def test_create_simple_ecn_still_works_when_allowed(self):
+        from ecn.models import ChangeNotice
+        from ecn.services import create_simple_ecn
+        doc, _ = self._published_doc('SIMPLEENF-002', allow_simple_ecn=True)
+        ecn = create_simple_ecn(document=doc, proposed_by=self.author, title='OK', send_notifications=False)
+        self.assertEqual(ecn.flow_type, ChangeNotice.FlowType.SIMPLE)
+        self.assertEqual(ecn.status, ChangeNotice.Status.APPROVED)
+
+    def test_standard_ecn_always_available_when_simple_disallowed(self):
+        """Requisito esplicito: l'ECN standard non deve mai essere bloccato da questa opzione."""
+        from ecn.models import ChangeNotice
+        from ecn.services import create_change_notice
+        doc, _ = self._published_doc('SIMPLEENF-003', allow_simple_ecn=False)
+        ecn = create_change_notice(
+            document=doc, proposed_by=self.author, title='Standard sempre ok',
+            motivation=ChangeNotice.Motivation.IMPROVEMENT,
+            send_notifications=False,
+        )
+        self.assertIsNotNone(ecn.pk)
+
+    def test_document_detail_hides_simple_button_when_disallowed(self):
+        doc, _ = self._published_doc('SIMPLEENF-004', allow_simple_ecn=False)
         self.client.force_login(self.author)
-        r = self.client.get(reverse('my_documents'))
-        self.assertEqual(r.status_code, 200)
-        self.assertContains(r, 'MYDOC-001')
-        self.assertContains(r, 'Rev. 00')
+        response = self.client.get(reverse('document_detail', args=[doc.pk]))
+        self.assertNotContains(response, '+ Crea ECN semplice')
+        self.assertContains(response, '+ Richiedi ECN standard')
 
-    def test_shows_own_document_without_current_version(self):
-        make_document('MYDOC-002', owner=self.author)
+    def test_document_detail_shows_both_buttons_when_allowed(self):
+        doc, _ = self._published_doc('SIMPLEENF-005', allow_simple_ecn=True)
         self.client.force_login(self.author)
-        r = self.client.get(reverse('my_documents'))
-        self.assertContains(r, 'MYDOC-002')
-        self.assertContains(r, 'Nessuna versione')
+        response = self.client.get(reverse('document_detail', args=[doc.pk]))
+        self.assertContains(response, '+ Crea ECN semplice')
+        self.assertContains(response, '+ Richiedi ECN standard')
 
-    def test_does_not_show_other_users_documents(self):
-        make_document('MYDOC-003', owner=self.other)
+    def test_document_detail_shows_policy_badge_when_disallowed(self):
+        doc, _ = self._published_doc('SIMPLEENF-006', allow_simple_ecn=False)
         self.client.force_login(self.author)
-        r = self.client.get(reverse('my_documents'))
-        self.assertNotContains(r, 'MYDOC-003')
+        response = self.client.get(reverse('document_detail', args=[doc.pk]))
+        self.assertContains(response, 'Solo ECN standard')
 
-    def test_shows_my_latest_version_even_if_not_yet_public_current(self):
-        """La versione pubblica in 'Documenti' resta quella approvata (Rev. 00);
-        'Miei documenti' deve invece mostrare la Rev. 01 appena creata
-        dall'autore, ancora in bozza e non visibile agli altri utenti."""
-        doc = make_document('MYDOC-004', owner=self.author)
-        v00 = create_new_revision(doc, self.author, '00', 0)
-        from approvals.services import approve_version
-        req = submit_version_for_approval(v00, self.author, [self.author])
-        approve_version(req, self.author)
-
-        create_new_revision(doc, self.author, '01', 1, _bypass_ecn_check=True)
-
+    def test_ecn_create_simple_view_redirects_with_message_when_disallowed(self):
+        doc, _ = self._published_doc('SIMPLEENF-007', allow_simple_ecn=False)
         self.client.force_login(self.author)
-        r = self.client.get(reverse('my_documents'))
-        self.assertContains(r, 'Rev. 01')
-        self.assertContains(r, 'Non ancora la versione pubblica')
+        response = self.client.get(
+            reverse('ecn:ecn_create_simple') + f'?document={doc.pk}', follow=True,
+        )
+        self.assertRedirects(response, reverse('document_detail', args=[doc.pk]))
+        self.assertContains(response, 'non è consentito')
+
+    def test_existing_simple_ecn_unaffected_by_later_disallow(self):
+        """Cambiare la policy non tocca ECN già esistenti né i workflow già in corso."""
+        from ecn.models import ChangeNotice
+        from ecn.services import create_simple_ecn
+        doc, _ = self._published_doc('SIMPLEENF-008', allow_simple_ecn=True)
+        ecn = create_simple_ecn(document=doc, proposed_by=self.author, title='Prima del cambio', send_notifications=False)
+
+        doc.allow_simple_ecn = False
+        doc.save(update_fields=['allow_simple_ecn'])
+
+        ecn.refresh_from_db()
+        self.assertEqual(ecn.status, ChangeNotice.Status.APPROVED)
+        self.assertEqual(ecn.flow_type, ChangeNotice.FlowType.SIMPLE)
+
+        # La revisione di esecuzione collegata a questo ECN già esistente
+        # deve poter essere creata regolarmente nonostante il flag sia
+        # ora disattivato (il gate riguarda solo la CREAZIONE di NUOVI
+        # ECN semplici, non l'uso di uno già approvato).
+        version = create_new_revision(
+            doc, self.author, '01', 1, ecn=ecn, change_summary='Eseguita dopo il cambio policy',
+        )
+        self.assertEqual(version.status, DocumentVersion.Status.DRAFT)
+
+    def test_historical_document_default_unaffected_by_new_field(self):
+        """Documenti storici/preesistenti restano invariati: allow_simple_ecn default True."""
+        doc, ver = _make_published_doc('SIMPLEENF-HIST', self.folder, self.author)
+        self.assertTrue(doc.allow_simple_ecn)
+
+    def test_not_confused_with_legacy_no_ecn_path(self):
+        """
+        Un documento con requires_ecn_for_revision=False (percorso legacy, nessun
+        ECN richiesto affatto) e allow_simple_ecn=False (nessun ECN semplice, ma
+        ECN non richiesto comunque in questo caso) non genera errori: le due
+        configurazioni sono ortogonali, non si sostituiscono a vicenda.
+        """
+        doc, _ = self._published_doc('SIMPLEENF-009', allow_simple_ecn=False)
+        doc.requires_ecn_for_revision = False
+        doc.save(update_fields=['requires_ecn_for_revision'])
+        # Nessun ECN necessario affatto: la revisione diretta funziona comunque.
+        version = create_new_revision(doc, self.author, '01', 1, change_summary='Diretta, nessun ECN')
+        self.assertEqual(version.status, DocumentVersion.Status.DRAFT)
+
+
+# ---------------------------------------------------------------------------
+# AREA B (2026-07-28) — la pagina "Invia in approvazione" offre un percorso
+# di caricamento del PDF di rappresentazione quando il gate blocca l'invio,
+# invece di un vicolo cieco (verifica manuale: il gate segnalava l'errore
+# ma non c'era alcun campo per risolverlo sulla stessa pagina). Riusa gli
+# stessi service (upload_manual_representation_pdf/confirm_representation_pdf,
+# get_pdf_submission_status) già usati da version_detail — nessuna logica
+# duplicata.
+# ---------------------------------------------------------------------------
+
+@override_settings(EMAIL_BACKEND=LOCMEM)
+class SubmitForApprovalPdfUploadTests(TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.temp_media = tempfile.mkdtemp()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.temp_media, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        self.author = User.objects.create_user('submitpdf-author', password='pw')
+        self.approver = User.objects.create_user('submitpdf-approver', password='pw')
+        Group.objects.get_or_create(name='Document Authors')[0].user_set.add(self.author)
+        self.document = make_document(code='SUBMITPDF-001', owner=self.author, requires_approved_pdf=True)
+
+    @staticmethod
+    def _real_pdf_bytes(text='Contenuto'):
+        import io
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+        buf = io.BytesIO()
+        pdf = canvas.Canvas(buf, pagesize=A4)
+        pdf.drawString(50, 800, text)
+        pdf.showPage()
+        pdf.save()
+        return buf.getvalue()
+
+    # --- campo assente quando non serve --------------------------------
+
+    def test_no_pdf_section_when_policy_disabled(self):
+        doc = make_document(code='SUBMITPDF-NOPOLICY', owner=self.author, requires_approved_pdf=False)
+        version = create_new_revision(doc, self.author, 'A', 1)
+        self.client.login(username='submitpdf-author', password='pw')
+        response = self.client.get(reverse('version_submit', args=[version.pk]))
+        self.assertNotContains(response, 'PDF di rappresentazione')
+
+    def test_no_pdf_section_when_no_source_file(self):
+        version = create_new_revision(self.document, self.author, 'A', 1)
+        self.client.login(username='submitpdf-author', password='pw')
+        response = self.client.get(reverse('version_submit', args=[version.pk]))
+        self.assertNotContains(response, 'PDF di rappresentazione')
+
+    # --- conversione automatica riuscita: nessun upload necessario ------
+
+    def test_native_pdf_ready_no_upload_prompt_needed(self):
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'a.pdf', b'%PDF-1.4 vero', content_type='application/pdf')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            self.client.login(username='submitpdf-author', password='pw')
+            response = self.client.get(reverse('version_submit', args=[version.pk]))
+        self.assertContains(response, 'PDF di rappresentazione')
+        self.assertContains(response, 'pronto')
+        self.assertNotContains(response, 'Non puoi ancora inviare')
+
+    # --- conversione fallita / manuale: upload proposto -----------------
+
+    def test_conversion_failed_shows_upload_field(self):
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'img.png', b'non e\' un png', content_type='image/png')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            self.client.login(username='submitpdf-author', password='pw')
+            response = self.client.get(reverse('version_submit', args=[version.pk]))
+        self.assertContains(response, 'fallita')
+        self.assertContains(response, 'type="file"')
+        self.assertContains(response, reverse('version_pdf_upload', args=[version.pk]))
+
+    def test_manual_required_shows_upload_field(self):
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'relazione.docx', b'finto office', content_type='application/octet-stream')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            self.client.login(username='submitpdf-author', password='pw')
+            response = self.client.get(reverse('version_submit', args=[version.pk]))
+        self.assertContains(response, 'caricamento manuale')
+        self.assertContains(response, 'type="file"')
+
+    def test_stale_shows_upload_field(self):
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source_a = _make_source_document_file(self.author, 'a.pdf', b'%PDF-1.4 A', content_type='application/pdf')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source_a)
+            from documents.models import RepresentationPDF
+            version.refresh_from_db()
+            version.representation_pdf.status = RepresentationPDF.Status.STALE
+            version.representation_pdf.save(update_fields=['status'])
+            self.client.login(username='submitpdf-author', password='pw')
+            response = self.client.get(reverse('version_submit', args=[version.pk]))
+        self.assertContains(response, 'non è aggiornato')
+        self.assertContains(response, 'type="file"')
+
+    def test_auto_reliable_unconfirmed_shows_confirm_step(self):
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'note.txt', b'testo', content_type='text/plain')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            self.client.login(username='submitpdf-author', password='pw')
+            response = self.client.get(reverse('version_submit', args=[version.pk]))
+        self.assertContains(response, 'Confermare')
+        self.assertContains(response, reverse('version_pdf_confirm', args=[version.pk]))
+
+    # --- caricamento dalla pagina di invio -------------------------------
+
+    def test_valid_upload_from_submit_page_redirects_back_to_submit_page(self):
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'relazione.docx', b'finto office', content_type='application/octet-stream')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            self.client.login(username='submitpdf-author', password='pw')
+            response = self.client.post(
+                reverse('version_pdf_upload', args=[version.pk]),
+                {'representation_pdf': SimpleUploadedFile(
+                    'rappresentazione.pdf', self._real_pdf_bytes(), content_type='application/pdf',
+                ), 'next': 'version_submit'},
+            )
+        self.assertRedirects(response, reverse('version_submit', args=[version.pk]))
+        version.refresh_from_db()
+        self.assertIsNotNone(version.representation_pdf)
+
+    def test_upload_then_confirm_then_submit_succeeds(self):
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'relazione.docx', b'finto office', content_type='application/octet-stream')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            self.client.login(username='submitpdf-author', password='pw')
+            self.client.post(
+                reverse('version_pdf_upload', args=[version.pk]),
+                {'representation_pdf': SimpleUploadedFile(
+                    'rappresentazione.pdf', self._real_pdf_bytes(), content_type='application/pdf',
+                ), 'next': 'version_submit'},
+            )
+            self.client.post(reverse('version_pdf_confirm', args=[version.pk]), {'next': 'version_submit'})
+            response = self.client.post(reverse('version_submit', args=[version.pk]), {
+                'approval_policy': 'all', 'due_date': '',
+                'approver-TOTAL_FORMS': '1', 'approver-INITIAL_FORMS': '0',
+                'approver-MIN_NUM_FORMS': '0', 'approver-MAX_NUM_FORMS': '1000',
+                'approver-0-approver': self.approver.pk,
+            })
+        self.assertRedirects(response, reverse('dashboard'))
+        version.refresh_from_db()
+        self.assertEqual(version.status, DocumentVersion.Status.IN_APPROVAL)
+
+    def test_non_pdf_upload_rejected(self):
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'relazione.docx', b'finto office', content_type='application/octet-stream')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            self.client.login(username='submitpdf-author', password='pw')
+            response = self.client.post(
+                reverse('version_pdf_upload', args=[version.pk]),
+                {'representation_pdf': SimpleUploadedFile(
+                    'non_un_pdf.txt', b'testo semplice', content_type='text/plain',
+                ), 'next': 'version_submit'},
+                follow=True,
+            )
+        self.assertContains(response, 'deve essere un PDF')
+        version.refresh_from_db()
+        # Il sorgente .docx genera già in automatico una RepresentationPDF
+        # in stato "caricamento manuale richiesto" — il tentativo non valido
+        # non deve alterarla.
+        from documents.models import RepresentationPDF
+        self.assertEqual(version.representation_pdf.status, RepresentationPDF.Status.MANUAL_UPLOAD_REQUIRED)
+
+    def test_corrupted_pdf_rejected(self):
+        """File con estensione .pdf ma senza il magic number reale: rifiutato."""
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'relazione.docx', b'finto office', content_type='application/octet-stream')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            self.client.login(username='submitpdf-author', password='pw')
+            response = self.client.post(
+                reverse('version_pdf_upload', args=[version.pk]),
+                {'representation_pdf': SimpleUploadedFile(
+                    'falso.pdf', b'questo non e\' un pdf valido', content_type='application/pdf',
+                ), 'next': 'version_submit'},
+                follow=True,
+            )
+        self.assertContains(response, 'non sembra un PDF valido')
+        version.refresh_from_db()
+        from documents.models import RepresentationPDF
+        self.assertEqual(version.representation_pdf.status, RepresentationPDF.Status.MANUAL_UPLOAD_REQUIRED)
+
+    def test_invalid_upload_does_not_replace_valid_pdf(self):
+        """Un caricamento non valido non deve sostituire un PDF già valido e confermato."""
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'relazione.docx', b'finto office', content_type='application/octet-stream')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            self.client.login(username='submitpdf-author', password='pw')
+            self.client.post(
+                reverse('version_pdf_upload', args=[version.pk]),
+                {'representation_pdf': SimpleUploadedFile(
+                    'rappresentazione.pdf', self._real_pdf_bytes(), content_type='application/pdf',
+                ), 'next': 'version_submit'},
+            )
+            self.client.post(reverse('version_pdf_confirm', args=[version.pk]), {'next': 'version_submit'})
+            version.refresh_from_db()
+            good_rep_id = version.representation_pdf_id
+            self.assertIsNotNone(version.representation_pdf.confirmed_at)
+
+            # Tenta di sostituire con un file non valido.
+            self.client.post(
+                reverse('version_pdf_upload', args=[version.pk]),
+                {'representation_pdf': SimpleUploadedFile(
+                    'non_un_pdf.txt', b'testo semplice', content_type='text/plain',
+                ), 'next': 'version_submit'},
+            )
+        version.refresh_from_db()
+        self.assertEqual(version.representation_pdf_id, good_rep_id)
+        self.assertIsNotNone(version.representation_pdf.confirmed_at)
+
+    def test_unauthorized_user_cannot_upload(self):
+        """Solo l'autore della bozza (o superuser) può caricare — stessa regola di can_edit_version."""
+        stranger = User.objects.create_user('submitpdf-stranger', password='pw')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'relazione.docx', b'finto office', content_type='application/octet-stream')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            self.client.login(username='submitpdf-stranger', password='pw')
+            response = self.client.post(
+                reverse('version_pdf_upload', args=[version.pk]),
+                {'representation_pdf': SimpleUploadedFile(
+                    'rappresentazione.pdf', self._real_pdf_bytes(), content_type='application/pdf',
+                ), 'next': 'version_submit'},
+            )
+        self.assertEqual(response.status_code, 403)
+
+    def test_upload_form_hidden_for_user_without_edit_permission(self):
+        """Un Manager che può inviare ma non modificare la bozza non vede i campi di upload."""
+        from django.contrib.auth.models import Group
+        manager = User.objects.create_user('submitpdf-manager', password='pw')
+        Group.objects.get_or_create(name='Document Managers')[0].user_set.add(manager)
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'relazione.docx', b'finto office', content_type='application/octet-stream')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+        self.client.login(username='submitpdf-manager', password='pw')
+        response = self.client.get(reverse('version_submit', args=[version.pk]))
+        self.assertContains(response, 'caricamento manuale')
+        self.assertNotContains(response, '<input type="file" name="representation_pdf"')
+
+    def test_source_changed_after_upload_invalidates_confirmation(self):
+        """Se il sorgente cambia dopo il caricamento, il PDF torna obsoleto e la conferma si invalida."""
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'relazione.docx', b'finto office', content_type='application/octet-stream')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            self.client.login(username='submitpdf-author', password='pw')
+            self.client.post(
+                reverse('version_pdf_upload', args=[version.pk]),
+                {'representation_pdf': SimpleUploadedFile(
+                    'rappresentazione.pdf', self._real_pdf_bytes(), content_type='application/pdf',
+                ), 'next': 'version_submit'},
+            )
+            self.client.post(reverse('version_pdf_confirm', args=[version.pk]), {'next': 'version_submit'})
+            version.refresh_from_db()
+            self.assertIsNotNone(version.representation_pdf.confirmed_at)
+
+            new_source = _make_source_document_file(self.author, 'relazione_v2.docx', b'altro contenuto', content_type='application/octet-stream')
+            update_draft_version(version, self.author, 'A', 1, 'nuova versione sorgente', new_file=new_source)
+            version.refresh_from_db()
+
+            with self.assertRaises(ValidationError) as ctx:
+                submit_version_for_approval(version, self.author, [self.approver])
+        self.assertIn('caricamento manuale', str(ctx.exception))
+
+    def test_gate_error_after_upload_does_not_create_partial_approval_request(self):
+        """Un errore del gate dopo il caricamento non deve creare una richiesta di approvazione parziale."""
+        from approvals.models import ApprovalRequest
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            source = _make_source_document_file(self.author, 'relazione.docx', b'finto office', content_type='application/octet-stream')
+            version = create_new_revision(self.document, self.author, 'A', 1, file=source)
+            self.client.login(username='submitpdf-author', password='pw')
+            # Carica ma NON conferma: il gate deve ancora bloccare.
+            self.client.post(
+                reverse('version_pdf_upload', args=[version.pk]),
+                {'representation_pdf': SimpleUploadedFile(
+                    'rappresentazione.pdf', self._real_pdf_bytes(), content_type='application/pdf',
+                ), 'next': 'version_submit'},
+            )
+            response = self.client.post(reverse('version_submit', args=[version.pk]), {
+                'approval_policy': 'all', 'due_date': '',
+                'approver-TOTAL_FORMS': '1', 'approver-INITIAL_FORMS': '0',
+                'approver-MIN_NUM_FORMS': '0', 'approver-MAX_NUM_FORMS': '1000',
+                'approver-0-approver': self.approver.pk,
+            })
+        self.assertEqual(response.status_code, 200)  # form re-renders, nessun redirect
+        self.assertFalse(ApprovalRequest.objects.filter(document_version=version).exists())
+        version.refresh_from_db()
+        self.assertEqual(version.status, DocumentVersion.Status.DRAFT)
+
+    def test_pdf_flow_independent_of_approval_policy(self):
+        """La readiness del PDF non dipende dalla policy di approvazione scelta (ANY/ALL/SEQUENTIAL)."""
+        approver2 = User.objects.create_user('submitpdf-approver2', password='pw')
+        with self.settings(MEDIA_ROOT=self.temp_media):
+            for i, policy in enumerate(('any', 'all', 'sequential'), start=1):
+                source = _make_source_document_file(self.author, 'a.pdf', b'%PDF-1.4 vero', content_type='application/pdf')
+                version = create_new_revision(
+                    self.document, self.author, f'P{i}', 10 + i, file=source,
+                )
+                req = submit_version_for_approval(
+                    version, self.author, [self.approver, approver2], approval_policy=policy,
+                )
+                self.assertIsNotNone(req.pk)
+
+
+class CheckboxCheckedStyleRegressionTests(SimpleTestCase):
+    """
+    Regressione: `input[type="checkbox"]{background-color:var(--field-bg)}`
+    in src/css/main.css aveva la STESSA specificità CSS della regola
+    `:checked` di @tailwindcss/forms (che imposta background-color:
+    currentColor per rendere visibile la spunta bianca) ma la seguiva nel
+    file compilato, vincendo la cascata — risultato: spunta bianca su
+    sfondo rimasto bianco, checkbox visivamente sempre "vuota" anche da
+    selezionata (bug reale riscontrato dall'utente, non solo teorico:
+    vedi verifica manuale sotto). Il valore reale di `checked` nel DOM
+    non era mai stato alterato — da qui la falsa impressione di un
+    conflitto "tipo radio button" tra due checkbox indipendenti.
+
+    Nessun test Django può verificare lo stile calcolato in un browser
+    reale: questo test verifica solo che la regola sorgente resti
+    scoped a `:not(:checked)`, così da non poter più avere la stessa
+    specificità della regola `:checked` del plugin e ricadere nello
+    stesso bug per una modifica futura distratta.
+
+    Verifica manuale eseguita (non solo questo test): in Chrome, via
+    `getComputedStyle` sulla checkbox dopo averla selezionata,
+    `backgroundColor` risulta `rgb(16, 184, 212)` (il cyan del brand,
+    non più bianco) dopo il fix.
+    """
+
+    def test_checkbox_background_rule_excludes_checked_state(self):
+        from pathlib import Path
+
+        from django.conf import settings
+
+        css_path = Path(settings.BASE_DIR) / 'src' / 'css' / 'main.css'
+        css = css_path.read_text(encoding='utf-8')
+
+        self.assertIn(
+            'input[type="checkbox"]:not(:checked)',
+            css,
+            "La regola che imposta background-color/border-color per "
+            "input[type=checkbox] deve restare scoped a :not(:checked), "
+            "altrimenti vince la cascata sulla regola :checked di "
+            "@tailwindcss/forms (stessa specificità, ordine successivo) "
+            "e la spunta selezionata torna invisibile (bianco su bianco).",
+        )

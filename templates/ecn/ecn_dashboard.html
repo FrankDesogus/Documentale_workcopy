@@ -38,7 +38,7 @@
       {% for ecn in draft_no_ccb %}
       <tr>
         <td class="font-mono font-semibold text-brand-800"><a href="{% url 'ecn:ecn_detail' ecn.pk %}" class="hover:underline">{{ ecn.code }}</a></td>
-        <td>{{ ecn.title }}</td>
+        <td>{{ ecn.title }} {% include "ecn/_applicability_badge.html" with ecn=ecn %}</td>
         <td><a href="{% url 'document_detail' ecn.document_id %}" class="text-brand-600 hover:underline">{{ ecn.document.code }}</a></td>
         <td class="meta">{{ ecn.proposed_by.get_full_name|default:ecn.proposed_by.username }}</td>
         <td class="meta whitespace-nowrap">{{ ecn.proposed_at|date:"d/m/Y" }}</td>
@@ -67,7 +67,7 @@
   <h2 class="section-title mb-0">Pronte da inviare</h2>
   {% if draft_ccb_ready %}<span class="badge-ecn-ccb_prep">{{ draft_ccb_ready|length }}</span>{% endif %}
 </div>
-<p class="meta mb-3">ECN in bozza con CCB configurata — pronti per l'invio in revisione.</p>
+<p class="meta mb-3">ECN in bozza con CCB configurata — pronti per l'invio in valutazione.</p>
 {% if draft_ccb_ready %}
 <div class="table-container">
   <table class="data-table">
@@ -85,7 +85,7 @@
       {% for ecn in draft_ccb_ready %}
       <tr>
         <td class="font-mono font-semibold text-brand-800"><a href="{% url 'ecn:ecn_detail' ecn.pk %}" class="hover:underline">{{ ecn.code }}</a></td>
-        <td>{{ ecn.title }}</td>
+        <td>{{ ecn.title }} {% include "ecn/_applicability_badge.html" with ecn=ecn %}</td>
         <td><a href="{% url 'document_detail' ecn.document_id %}" class="text-brand-600 hover:underline">{{ ecn.document.code }}</a></td>
         <td class="meta">{{ ecn.approvers.count }} approvatore/i</td>
         <td class="meta whitespace-nowrap">{{ ecn.proposed_at|date:"d/m/Y" }}</td>
@@ -104,12 +104,12 @@
 </div>
 {% endif %}
 
-{# ---- 3: In revisione CCB ---- #}
+{# ---- 3: In Valutazione CCB ---- #}
 <div class="flex items-center gap-2 mb-2 mt-8">
-  <h2 class="section-title mb-0">In revisione CCB</h2>
+  <h2 class="section-title mb-0">In Valutazione CCB</h2>
   {% if under_review_data %}<span class="badge-ecn-under_review">{{ under_review_data|length }}</span>{% endif %}
 </div>
-<p class="meta mb-3">ECN in corso di revisione da parte della CCB.</p>
+<p class="meta mb-3">ECN in corso di valutazione da parte della CCB.</p>
 {% if under_review_data %}
 <div class="table-container">
   <table class="data-table">
@@ -127,7 +127,7 @@
       {% for row in under_review_data %}
       <tr>
         <td class="font-mono font-semibold text-brand-800"><a href="{% url 'ecn:ecn_detail' row.ecn.pk %}" class="hover:underline">{{ row.ecn.code }}</a></td>
-        <td>{{ row.ecn.title }}</td>
+        <td>{{ row.ecn.title }} {% include "ecn/_applicability_badge.html" with ecn=row.ecn %}</td>
         <td><a href="{% url 'document_detail' row.ecn.document_id %}" class="text-brand-600 hover:underline">{{ row.ecn.document.code }}</a></td>
         <td class="meta whitespace-nowrap">{{ row.decided }}/{{ row.total }}</td>
         <td class="meta">
@@ -143,8 +143,8 @@
 {% else %}
 <div class="card mb-6">
   <div class="empty-state py-8">
-    <div class="empty-state-title">Nessun ECN in revisione</div>
-    <div class="empty-state-desc">Nessun ECN in revisione CCB.</div>
+    <div class="empty-state-title">Nessun ECN in valutazione</div>
+    <div class="empty-state-desc">Nessun ECN in valutazione CCB.</div>
   </div>
 </div>
 {% endif %}
@@ -171,7 +171,7 @@
       {% for ecn in approved_no_exec %}
       <tr>
         <td class="font-mono font-semibold text-brand-800"><a href="{% url 'ecn:ecn_detail' ecn.pk %}" class="hover:underline">{{ ecn.code }}</a></td>
-        <td>{{ ecn.title }}</td>
+        <td>{{ ecn.title }} {% include "ecn/_applicability_badge.html" with ecn=ecn %}</td>
         <td><a href="{% url 'document_detail' ecn.document_id %}" class="text-brand-600 hover:underline">{{ ecn.document.code }}</a></td>
         <td class="meta whitespace-nowrap">{{ ecn.ccb_reviewed_at|date:"d/m/Y"|default:"—" }}</td>
         <td><a href="{% url 'ecn:ecn_detail' ecn.pk %}" class="btn-secondary btn-sm">Dettaglio</a></td>
@@ -211,7 +211,7 @@
       {% for ecn in approved_exec %}
       <tr>
         <td class="font-mono font-semibold text-brand-800"><a href="{% url 'ecn:ecn_detail' ecn.pk %}" class="hover:underline">{{ ecn.code }}</a></td>
-        <td>{{ ecn.title }}</td>
+        <td>{{ ecn.title }} {% include "ecn/_applicability_badge.html" with ecn=ecn %}</td>
         <td><a href="{% url 'document_detail' ecn.document_id %}" class="text-brand-600 hover:underline">{{ ecn.document.code }}</a></td>
         <td class="meta whitespace-nowrap">Rev. {{ ecn.executed_version.revision_label }}</td>
         <td><a href="{% url 'ecn:ecn_close' ecn.pk %}" class="btn-success btn-sm">Chiudi</a></td>

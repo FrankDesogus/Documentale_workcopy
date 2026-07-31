@@ -1,13 +1,47 @@
-import logging
+import os
 
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils import timezone
 
 from approvals.models import ApprovalDecision, ApprovalRequest, ApprovalRequestApprover
 from auditlog.services import create_audit_log
 
-logger = logging.getLogger(__name__)
+
+def _build_decision_snapshot(decision, user, approval_request):
+    """
+    Congela nome, ordine di fase e firma visiva dell'utente al momento
+    della decisione (TASK-029): un cambio successivo di nome/ruolo/firma
+    non deve alterare lo storico già registrato.
+    """
+    from accounts.models import UserSignature
+
+    decision.snapshot_approver_display_name = user.get_full_name() or user.username
+
+    slot = approval_request.approvers.filter(approver=user).first()
+    decision.snapshot_approver_order = slot.order if slot else None
+
+    try:
+        profile = user.signature_profile
+    except UserSignature.DoesNotExist:
+        profile = None
+
+    if profile is not None and profile.image:
+        decision.snapshot_signature_mode = ApprovalDecision.SignatureMode.TEXT_AND_IMAGE
+        with profile.image.open('rb') as fh:
+            decision.snapshot_signature_image.save(
+                os.path.basename(profile.image.name), ContentFile(fh.read()), save=False,
+            )
+    else:
+        decision.snapshot_signature_mode = ApprovalDecision.SignatureMode.TEXT_ONLY
+
+    decision.save(update_fields=[
+        'snapshot_approver_display_name',
+        'snapshot_approver_order',
+        'snapshot_signature_mode',
+        'snapshot_signature_image',
+    ])
 
 
 def create_approval_request_attachment(approval_request, uploaded_file, uploaded_by, attachment_type='signature_template'):
@@ -50,7 +84,10 @@ def create_approval_request_attachment(approval_request, uploaded_file, uploaded
     return attachment
 
 
-def approve_version(approval_request, approved_by, comment="", send_notifications=True):
+def approve_version(
+    approval_request, approved_by, comment="", send_notifications=True,
+    signature_page=None, signature_x=None, signature_y=None,
+):
     from documents.models import DocumentVersion
 
     Policy = ApprovalRequest.Policy
@@ -94,24 +131,33 @@ def approve_version(approval_request, approved_by, comment="", send_notification
                 "Non è ancora il tuo turno: aspetta che l'approvatore precedente abbia approvato."
             )
 
+    # 6. Posizionamento libero firma: o tutti e 3 i valori sono forniti
+    #    (firma manuale), o nessuno (firma automatica in calce, comportamento
+    #    invariato) — nessuno stato intermedio ammesso.
+    placement_fields = (signature_page, signature_x, signature_y)
+    if any(f is not None for f in placement_fields) and not all(f is not None for f in placement_fields):
+        raise ValidationError(
+            "Per posizionare manualmente la firma servono pagina, X e Y insieme."
+        )
+    if signature_page is not None:
+        if signature_page < 1:
+            raise ValidationError("La pagina della firma deve essere >= 1.")
+        if not (0.0 <= signature_x <= 1.0) or not (0.0 <= signature_y <= 1.0):
+            raise ValidationError("Le coordinate della firma devono essere comprese tra 0.0 e 1.0.")
+
     with transaction.atomic():
         now = timezone.now()
 
-        from accounts.models import UserSignature
-        decision_record = ApprovalDecision.objects.create(
+        decision = ApprovalDecision.objects.create(
             approval_request=approval_request,
             approver=approved_by,
             decision=ApprovalDecision.Decision.APPROVED,
             notes=comment,
+            signature_page=signature_page,
+            signature_x=signature_x,
+            signature_y=signature_y,
         )
-        # Snapshot per il registro del PDF approvato (TASK-032/036): congelato
-        # ORA, non al momento della generazione — se nome o firma dell'utente
-        # cambiano dopo, questa decisione storica non deve cambiare.
-        decision_record.signature_display_name = approved_by.get_full_name() or approved_by.username
-        decision_record.signature_used = UserSignature.objects.filter(
-            user=approved_by, is_active=True,
-        ).first()
-        decision_record.save(update_fields=['signature_display_name', 'signature_used'])
+        _build_decision_snapshot(decision, approved_by, approval_request)
 
         # Aggiorna stato per-approvatore (solo se è assegnato)
         if is_assigned:
@@ -136,19 +182,36 @@ def approve_version(approval_request, approved_by, comment="", send_notification
                 document_version=version,
             )
 
-    # Generazione del PDF approvato (TASK-036): SEMPRE dopo il commit della
-    # transazione sopra, mai dentro — un problema qui non deve mai
-    # invalidare un'approvazione già registrata correttamente. Indipendente
-    # da send_notifications: deve avvenire anche in modalità sanatoria.
-    if is_final:
-        from documents.approved_pdf import generate_approved_pdf
+    # Generazione del PDF approvato: solo se questa specifica revisione è
+    # effettivamente passata dal gate PDF all'invio (version.representation_pdf
+    # esiste solo in quel caso — TASK-033). Non si rilegge qui il flag
+    # corrente del documento: la richiesta si conclude secondo le regole che
+    # gli approvatori hanno effettivamente seguito, non secondo un'eventuale
+    # policy cambiata nel frattempo. Se il flusso PDF non era richiesto,
+    # nessun tentativo viene fatto: nessun artefatto, nessun errore.
+    if is_final and version.representation_pdf_id is not None:
+        # Fuori dalla transazione che ha già finalizzato l'approvazione: un
+        # errore qui non deve annullare un'approvazione già registrata
+        # correttamente — resta solo un ApprovedPDFArtifact in stato FAILED,
+        # rigenerabile.
+        from documents.pdf_generation import generate_approved_pdf
         try:
-            generate_approved_pdf(version)
+            generate_approved_pdf(version, actor=approved_by)
         except Exception:
-            logger.exception(
-                'Generazione PDF approvato fallita in modo imprevisto per la revisione #%s.',
-                version.pk,
-            )
+            pass
+
+    if is_final:
+        # Chiusura automatica dell'ECN collegato — standard o semplice
+        # (requisito aziendale del 2026-07-28, generalizza AREA 3 che
+        # limitava la chiusura automatica al solo flusso semplice). Fuori
+        # dalla transazione che ha finalizzato l'approvazione: un errore
+        # qui non deve mai invalidare un'approvazione già registrata
+        # correttamente.
+        try:
+            from ecn.services import auto_close_executed_ecn_if_ready
+            auto_close_executed_ecn_if_ready(version, approved_by)
+        except Exception:
+            pass
 
     if not send_notifications:
         return approval_request
@@ -279,12 +342,13 @@ def reject_version(approval_request, rejected_by, rejection_reason, comment="", 
     with transaction.atomic():
         now = timezone.now()
 
-        ApprovalDecision.objects.create(
+        decision = ApprovalDecision.objects.create(
             approval_request=approval_request,
             approver=rejected_by,
             decision=ApprovalDecision.Decision.REJECTED,
             notes=comment,
         )
+        _build_decision_snapshot(decision, rejected_by, approval_request)
 
         if is_assigned:
             ApprovalRequestApprover.objects.filter(

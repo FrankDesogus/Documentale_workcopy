@@ -69,6 +69,10 @@ class Command(BaseCommand):
         self._scenario_approval_policies(supervisor, mario, lucia, anna, folder)
         self._scenario_sanatoria(supervisor, mario)
         self._scenario_project_snapshot(supervisor)
+        self._scenario_user_signatures(supervisor, mario, lucia, anna)
+        self._scenario_pdf_workflow(mario, lucia, folder)
+        self._scenario_ecn_standard_execution_pending(supervisor, mario, lucia, anna, folder)
+        self._scenario_simple_ecn_disallowed(supervisor, mario, lucia, folder)
 
         self.stdout.write(self.style.SUCCESS('\nDemo full completato.'))
 
@@ -170,7 +174,7 @@ class Command(BaseCommand):
         from approvals.services import approve_version
         from ecn.models import ChangeNotice
         from ecn.services import (
-            approve_change_notice, close_change_notice, configure_ccb,
+            approve_change_notice, configure_ccb,
             create_change_notice, reject_change_notice, submit_change_notice,
             update_ccb_dossier,
         )
@@ -210,12 +214,17 @@ class Command(BaseCommand):
                 code=code,
             )
 
-        def _setup_ccb(ecn):
+        def _setup_ccb(ecn, applicability_category=ChangeNotice.Applicability.GENERAL,
+                       applicability_detail=''):
             configure_ccb(ecn, actor=supervisor, users=[supervisor, ccb_member],
                           policy='any', coordinator=supervisor,
                           send_notifications=False)
+            # L'applicabilità è decisa dalla CCB nel dossier istruttorio, non
+            # dal proponente (TASK-037) — vive qui, non in _make_ecn.
             update_ccb_dossier(
                 ecn, actor=supervisor,
+                applicability_category=applicability_category,
+                applicability_detail=applicability_detail,
                 ccb_class='class2',
                 ccb_requirements='Conformità normativa verificata.',
                 ccb_technical_impact='Impatto limitato a sezione 3.',
@@ -226,13 +235,13 @@ class Command(BaseCommand):
                 ccb_notes='Demo automatico.',
             )
 
-        # ECN-S-01: DRAFT
+        # ECN-S-01: DRAFT (non ancora in istruttoria: applicabilità non ancora decisa)
         _make_ecn('ECN-S-01', 'Aggiornamento tolleranze sezione 2 (DRAFT)')
         self._step('ECN-S-01: stato DRAFT.')
 
         # ECN-S-02: CCB_PREPARATION
         ecn_ccb = _make_ecn('ECN-S-02', 'Revisione criteri accettazione (CCB_PREPARATION)')
-        _setup_ccb(ecn_ccb)
+        _setup_ccb(ecn_ccb, applicability_category=ChangeNotice.Applicability.FUTURE)
         self._step('ECN-S-02: stato CCB_PREPARATION (dossier compilato).')
 
         # ECN-S-03: UNDER_REVIEW
@@ -243,7 +252,14 @@ class Command(BaseCommand):
 
         # ECN-S-04: APPROVED (policy='any' → basta un voto)
         ecn_approved = _make_ecn('ECN-S-04', 'Nuova procedura testing (APPROVED)')
-        _setup_ccb(ecn_approved)
+        _setup_ccb(
+            ecn_approved,
+            applicability_category=ChangeNotice.Applicability.LIMITED,
+            applicability_detail=(
+                'Si applica solo alla linea di testing del reparto 3, non alle '
+                'altre linee di produzione.'
+            ),
+        )
         submit_change_notice(ecn_approved, supervisor, send_notifications=False)
         approve_change_notice(ecn_approved, supervisor,
                               ccb_class='class2',
@@ -284,12 +300,15 @@ class Command(BaseCommand):
         approve_version(req01, supervisor,
                         comment='Rev. 01 approvata demo.',
                         send_notifications=False)
+        # Requisito 2026-07-28: l'approvazione definitiva di Rev. 01 chiude
+        # già automaticamente ECN-S-06 (standard) — nessuna chiusura manuale
+        # necessaria (né possibile: l'ECN non è più in stato APPROVED).
         doc.refresh_from_db()
         ecn_closed.refresh_from_db()
-        close_change_notice(ecn_closed, supervisor,
-                            close_notes='ECN eseguito. Rev. 01 approvata e pubblicata.',
-                            send_notifications=False)
-        self._step(f'ECN-S-06: stato CLOSED (Rev. 01 di {BASE_CODE} creata e approvata).')
+        self._step(
+            f'ECN-S-06: stato {ecn_closed.get_status_display()} — chiuso automaticamente '
+            f'dopo l\'approvazione di Rev. 01 di {BASE_CODE}.'
+        )
 
     # ──────────────────────────────────────────────────────────────────────
     # Scenario 4 — ECN che origina una revisione (mostra "ECN di origine")
@@ -301,7 +320,7 @@ class Command(BaseCommand):
         from approvals.services import approve_version
         from ecn.models import ChangeNotice
         from ecn.services import (
-            approve_change_notice, close_change_notice, configure_ccb,
+            approve_change_notice, configure_ccb,
             create_change_notice, submit_change_notice, update_ccb_dossier,
         )
 
@@ -342,6 +361,11 @@ class Command(BaseCommand):
                       send_notifications=False)
         update_ccb_dossier(
             ecn, actor=supervisor,
+            applicability_category=ChangeNotice.Applicability.LIMITED,
+            applicability_detail=(
+                'Si applica solo agli strumenti di misura interessati dalla '
+                'non conformità NC-2026-017, non all\'intero parco dinamometri.'
+            ),
             ccb_class='class2',
             ccb_requirements='Conformità ISO 9001:2015 richiesta.',
             ccb_technical_impact='Aggiornamento metodo — nessun impatto hardware.',
@@ -376,15 +400,166 @@ class Command(BaseCommand):
         approve_version(req01, approver,
                         comment='Rev. 01 approvata.',
                         send_notifications=False)
+        # Requisito 2026-07-28: l'approvazione definitiva di Rev. 01 chiude
+        # già automaticamente ECN-EXEC-001 (standard, policy ALL) — nessuna
+        # chiusura manuale necessaria.
         doc.refresh_from_db()
         ecn.refresh_from_db()
-        close_change_notice(ecn, supervisor,
-                            close_notes='ECN chiuso dopo approvazione Rev. 01.',
-                            send_notifications=False)
 
         self._step(
-            f'{CODE}: Rev. 00 + ECN-EXEC-001 (policy ALL, 2 voti) + '
-            f'Rev. 01 con ECN di origine visibile in version_detail.'
+            f'{CODE}: Rev. 00 + ECN-EXEC-001 (policy ALL, 2 voti, {ecn.get_status_display()} '
+            f'automaticamente) + Rev. 01 con ECN di origine visibile in version_detail.'
+        )
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Scenario 4bis — ECN standard con revisione di esecuzione ancora in
+    # approvazione (requisito 2026-07-28): mostra lo stato intermedio
+    # "in attesa", prima della chiusura automatica che scatta solo alla
+    # approvazione definitiva della revisione collegata.
+    # ──────────────────────────────────────────────────────────────────────
+
+    def _scenario_ecn_standard_execution_pending(self, supervisor, author, approver1, approver2, folder):
+        from documents.models import Document
+        from documents.services import create_new_revision, submit_version_for_approval
+        from approvals.services import approve_version
+        from ecn.models import ChangeNotice
+        from ecn.services import (
+            approve_change_notice, configure_ccb, create_change_notice,
+            submit_change_notice, update_ccb_dossier,
+        )
+
+        CODE = 'DEMO-ECN-PENDING-CLOSE'
+        if Document.objects.filter(code=CODE).exists():
+            self._step(f'{CODE}: già esistente, saltato.')
+            return
+
+        doc = Document.objects.create(
+            code=CODE,
+            title='Procedura demo — ECN standard con esecuzione in corso',
+            category=Document.Category.QUALITY,
+            document_type='SYSP',
+            project_folder=folder,
+            owner=author,
+            created_by=author,
+        )
+        ver00 = create_new_revision(doc, author, '00', 0,
+                                    change_summary='Prima emissione.',
+                                    _bypass_ecn_check=True)
+        req00 = submit_version_for_approval(ver00, author, [approver1], send_notifications=False)
+        approve_version(req00, approver1, comment='Prima emissione approvata.', send_notifications=False)
+        doc.refresh_from_db()
+
+        ecn = create_change_notice(
+            document=doc, proposed_by=author,
+            title='Aggiornamento sezione 5 — procedura demo',
+            motivation=ChangeNotice.Motivation.IMPROVEMENT,
+            code='ECN-PENDING-001',
+        )
+        configure_ccb(ecn, actor=supervisor, users=[supervisor], policy='any',
+                      coordinator=supervisor, send_notifications=False)
+        update_ccb_dossier(ecn, actor=supervisor,
+                           applicability_category=ChangeNotice.Applicability.FUTURE,
+                           ccb_class='class2',
+                           ccb_requirements='Verificato.', ccb_technical_impact='Limitato.')
+        submit_change_notice(ecn, supervisor, send_notifications=False)
+        approve_change_notice(ecn, supervisor,
+                              ccb_class='class2', ccb_requirements='Approvato.',
+                              ccb_technical_impact='Limitato.',
+                              comment='CCB approva — demo.', send_notifications=False)
+
+        ver01 = create_new_revision(
+            doc, author, '01', 1, ecn=ecn,
+            change_summary='Aggiornamento sezione 5 (da ECN-PENDING-001).',
+        )
+        submit_version_for_approval(
+            ver01, author, [approver1, approver2], approval_policy='all',
+            send_notifications=False,
+        )
+        # Deliberatamente NON approvata qui: Rev. 01 resta IN_APPROVAL e
+        # l'ECN resta APPROVED (non chiuso) — dimostra lo stato "in attesa"
+        # prima della chiusura automatica, che scatterà solo quando
+        # entrambi gli approvatori avranno approvato definitivamente.
+
+        self._step(
+            f'{CODE}: {ecn.code} approvato + Rev. 01 IN_APPROVAL (policy ALL, 2 approvatori) '
+            '— esecuzione ancora in corso, ECN non ancora chiuso: si chiuderà da solo alla '
+            'approvazione definitiva di entrambi gli approvatori.'
+        )
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Scenario 4ter — Document.allow_simple_ecn=False (AREA A, 2026-07-28):
+    # per questo documento è consentito solo l'ECN standard (con CCB);
+    # l'ECN semplice non è proponibile. Dimostra che lo standard resta
+    # sempre disponibile e completa comunque una revisione regolarmente.
+    # ──────────────────────────────────────────────────────────────────────
+
+    def _scenario_simple_ecn_disallowed(self, supervisor, author, approver, folder):
+        from documents.models import Document
+        from documents.services import create_new_revision, submit_version_for_approval
+        from approvals.services import approve_version
+        from ecn.models import ChangeNotice
+        from ecn.services import approve_change_notice, configure_ccb, create_change_notice, create_simple_ecn, submit_change_notice, update_ccb_dossier
+
+        CODE = 'DEMO-ECN-SIMPLE-DISALLOWED'
+        if Document.objects.filter(code=CODE).exists():
+            self._step(f'{CODE}: già esistente, saltato.')
+            return
+
+        doc = Document.objects.create(
+            code=CODE,
+            title='Specifica critica — solo ECN standard consentito (Demo AREA A)',
+            category=Document.Category.QUALITY,
+            document_type='SYSD',
+            project_folder=folder,
+            owner=author,
+            created_by=author,
+            allow_simple_ecn=False,
+        )
+        ver00 = create_new_revision(doc, author, '00', 0,
+                                    change_summary='Prima emissione.',
+                                    _bypass_ecn_check=True)
+        req00 = submit_version_for_approval(ver00, author, [approver], send_notifications=False)
+        approve_version(req00, approver, comment='Prima emissione approvata.', send_notifications=False)
+        doc.refresh_from_db()
+
+        # Dimostra il blocco esplicito: il tentativo di ECN semplice è rifiutato.
+        try:
+            create_simple_ecn(document=doc, proposed_by=author, title='Tentativo bloccato',
+                              send_notifications=False)
+            blocked_ok = False
+        except Exception:
+            blocked_ok = True
+
+        # L'ECN standard resta invece sempre disponibile.
+        ecn = create_change_notice(
+            document=doc, proposed_by=author,
+            title='Aggiornamento sezione 2 — solo standard consentito',
+            motivation=ChangeNotice.Motivation.IMPROVEMENT,
+            code='ECN-NOSIMPLE-001',
+        )
+        configure_ccb(ecn, actor=supervisor, users=[supervisor], policy='any',
+                      coordinator=supervisor, send_notifications=False)
+        update_ccb_dossier(ecn, actor=supervisor,
+                           applicability_category=ChangeNotice.Applicability.GENERAL,
+                           ccb_class='class2',
+                           ccb_requirements='Verificato.', ccb_technical_impact='Limitato.')
+        submit_change_notice(ecn, supervisor, send_notifications=False)
+        approve_change_notice(ecn, supervisor, ccb_class='class2', ccb_requirements='Approvato.',
+                              ccb_technical_impact='Limitato.', comment='CCB approva — demo.',
+                              send_notifications=False)
+
+        ver01 = create_new_revision(doc, author, '01', 1, ecn=ecn,
+                                    change_summary='Aggiornamento sezione 2 (da ECN-NOSIMPLE-001).')
+        req01 = submit_version_for_approval(ver01, author, [approver], send_notifications=False)
+        approve_version(req01, approver, comment='Rev. 01 approvata.', send_notifications=False)
+        doc.refresh_from_db()
+        ecn.refresh_from_db()
+
+        self._step(
+            f'{CODE}: allow_simple_ecn=False — tentativo ECN semplice '
+            f'{"correttamente bloccato" if blocked_ok else "NON bloccato (errore)"}, '
+            f'ECN standard {ecn.code} usato regolarmente '
+            f'({ecn.get_status_display()} automaticamente dopo Rev. 01).'
         )
 
     # ──────────────────────────────────────────────────────────────────────
@@ -650,6 +825,193 @@ class Command(BaseCommand):
         self._step(
             f'{project.code}: snapshot revisione {snap.revision_label} emesso '
             f'({n_items} documenti congelati).'
+        )
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Scenario 9 — Firme visive fittizie (TASK-028)
+    #
+    # Non è firma digitale: solo un'immagine PNG associata al profilo
+    # utente, usata dal registro di approvazione del PDF approvato quando
+    # l'utente approva/rifiuta una revisione (snapshot al momento della
+    # decisione — vedi ApprovalDecision.snapshot_signature_image).
+    # ──────────────────────────────────────────────────────────────────────
+
+    def _scenario_user_signatures(self, supervisor, mario, lucia, anna):
+        from accounts.models import UserSignature
+
+        for user, initials, color in [
+            (supervisor, 'SD', (30, 60, 140, 255)),
+            (mario, 'MR', (150, 30, 30, 255)),
+            (lucia, 'LB', (30, 110, 60, 255)),
+            (anna, 'AN', (140, 90, 20, 255)),
+        ]:
+            if UserSignature.objects.filter(user=user).exists():
+                self._step(f'{user.username}: firma visiva già esistente, saltata.')
+                continue
+            sig = UserSignature.objects.create(user=user)
+            sig.image.save(
+                f'firma_demo_{user.username}.png',
+                self._fake_signature_png(initials, color),
+                save=True,
+            )
+            self._step(
+                f'{user.username}: firma visiva fittizia creata ({initials}) — '
+                'immagine PNG demo, non è firma digitale.'
+            )
+
+    @staticmethod
+    def _fake_signature_png(initials, color):
+        """
+        Genera uno scarabocchio PNG fittizio (nessuna firma reale, solo per
+        demo/test manuale): un tratto ondulato + iniziali, sfondo trasparente.
+        """
+        import math
+        from io import BytesIO
+
+        from django.core.files.base import ContentFile
+        from PIL import Image, ImageDraw
+
+        width, height = 300, 100
+        img = Image.new('RGBA', (width, height), (255, 255, 255, 0))
+        draw = ImageDraw.Draw(img)
+
+        points = []
+        for x in range(10, width - 60, 3):
+            y = height // 2 + int(16 * math.sin(x / 11.0)) + ((x // 7) % 5 - 2)
+            points.append((x, y))
+        draw.line(points, fill=color, width=3, joint='curve')
+        draw.text((width - 46, height // 2 - 8), initials, fill=color)
+
+        buf = BytesIO()
+        img.save(buf, format='PNG')
+        buf.seek(0)
+        return ContentFile(buf.read())
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Scenario 10 — Flusso PDF di rappresentazione / PDF approvato opzionale
+    # (TASK-023..035): un documento con requires_approved_pdf=True percorre
+    # sia la via automatica (sorgente .txt → conversione reportlab) sia la
+    # via manuale (sorgente .docx → PDF caricato dall'autore), più una bozza
+    # ferma al gate per mostrare il blocco all'invio.
+    # ──────────────────────────────────────────────────────────────────────
+
+    def _scenario_pdf_workflow(self, author, approver, folder):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from approvals.services import approve_version
+        from documents.models import Document
+        from documents.pdf_converters import render_text_to_pdf_bytes
+        from documents.pdf_pipeline import confirm_representation_pdf, upload_manual_representation_pdf
+        from documents.services import create_document_file, create_new_revision, submit_version_for_approval
+
+        CODE = 'DEMO-PDF-001'
+        if Document.objects.filter(code=CODE).exists():
+            self._step(f'{CODE}: già esistente, saltato (flusso PDF).')
+        else:
+            doc = Document.objects.create(
+                code=CODE,
+                title='Specifica critica con PDF approvato — Demo flusso PDF',
+                category=Document.Category.QUALITY,
+                document_type='SYSD',
+                project_folder=folder,
+                owner=author,
+                created_by=author,
+                requires_approved_pdf=True,
+                requires_ecn_for_revision=False,
+            )
+
+            txt_bytes = (
+                'Specifica tecnica — prima emissione.\n\n'
+                'Documento demo per il flusso PDF di rappresentazione / PDF '
+                'approvato con registro delle approvazioni e firme visive.\n'
+            ).encode('utf-8')
+            src00 = create_document_file(
+                SimpleUploadedFile('specifica.txt', txt_bytes, content_type='text/plain'),
+                author,
+            )
+            ver00 = create_new_revision(
+                doc, author, '00', 0, file=src00,
+                change_summary='Prima emissione (PDF di rappresentazione auto-generato da .txt).',
+                _bypass_ecn_check=True,
+            )
+            ver00.refresh_from_db()
+            confirm_representation_pdf(ver00, author)
+            req00 = submit_version_for_approval(ver00, author, [approver], send_notifications=False)
+            approve_version(req00, approver,
+                            comment='Prima emissione approvata — PDF approvato generato.',
+                            send_notifications=False)
+            doc.refresh_from_db()
+            self._step(
+                f'{CODE}: Rev. 00 — sorgente .txt, PDF di rappresentazione auto-generato e '
+                'confermato, approvata → PDF approvato con registro generato.'
+            )
+
+            docx_bytes = b'PK\x03\x04' + b'contenuto docx fittizio per demo' * 5
+            src01 = create_document_file(
+                SimpleUploadedFile(
+                    'specifica_v2.docx', docx_bytes,
+                    content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                ),
+                author,
+            )
+            ver01 = create_new_revision(
+                doc, author, '01', 1, file=src01,
+                change_summary='Revisione con sorgente .docx (PDF di rappresentazione manuale).',
+                _bypass_ecn_check=True,
+            )
+            ver01.refresh_from_db()
+
+            manual_pdf_bytes = render_text_to_pdf_bytes(
+                'Rappresentazione caricata manualmente — Rev. 01 — Demo flusso PDF.'.encode('utf-8')
+            )
+            upload_manual_representation_pdf(
+                ver01,
+                SimpleUploadedFile('specifica_v2_rappresentazione.pdf', manual_pdf_bytes,
+                                  content_type='application/pdf'),
+                author,
+            )
+            confirm_representation_pdf(ver01, author)
+            req01 = submit_version_for_approval(ver01, author, [approver], send_notifications=False)
+            approve_version(req01, approver,
+                            comment='Rev. 01 approvata — PDF di rappresentazione manuale confermato.',
+                            send_notifications=False)
+            doc.refresh_from_db()
+            self._step(
+                f'{CODE}: Rev. 01 — sorgente .docx (MANUAL_REQUIRED), PDF di rappresentazione '
+                'caricato manualmente, confermato, approvata → nuovo PDF approvato generato.'
+            )
+
+        CODE_GATE = 'DEMO-PDF-GATE'
+        if Document.objects.filter(code=CODE_GATE).exists():
+            self._step(f'{CODE_GATE}: già esistente, saltato.')
+            return
+
+        doc_gate = Document.objects.create(
+            code=CODE_GATE,
+            title='Bozza in attesa di PDF di rappresentazione — Demo gate invio',
+            category=Document.Category.QUALITY,
+            document_type='WIPO',
+            project_folder=folder,
+            owner=author,
+            created_by=author,
+            requires_approved_pdf=True,
+        )
+        docx_bytes_gate = b'PK\x03\x04' + b'contenuto docx fittizio per demo gate' * 5
+        src_gate = create_document_file(
+            SimpleUploadedFile(
+                'bozza_gate.docx', docx_bytes_gate,
+                content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ),
+            author,
+        )
+        create_new_revision(
+            doc_gate, author, '00', 0, file=src_gate,
+            change_summary='Bozza — richiede PDF di rappresentazione manuale prima dell\'invio.',
+            _bypass_ecn_check=True,
+        )
+        self._step(
+            f'{CODE_GATE}: bozza con requires_approved_pdf=True e sorgente .docx senza PDF '
+            'ancora confermato — mostra il gate che blocca l\'invio in approvazione.'
         )
 
     # ──────────────────────────────────────────────────────────────────────

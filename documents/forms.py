@@ -82,13 +82,30 @@ class DocumentCreateForm(SanatoriaFieldsMixin, forms.Form):
             'Il normale ciclo di approvazione rimane obbligatorio.'
         ),
     )
-    block_simple_ecn = forms.BooleanField(
+    allow_simple_ecn = forms.BooleanField(
+        required=False,
+        initial=True,
+        label='Consenti ECN a flusso semplice per questo documento',
+        help_text=(
+            'Se disattivato, per questo documento sarà possibile creare solo ECN '
+            'standard (con istruttoria e votazione CCB): l\'ECN a flusso semplice '
+            '(autoapprovato, senza CCB) non sarà proponibile. L\'ECN standard resta '
+            'sempre disponibile in ogni caso. Modificabile in seguito dai metadati '
+            'del documento.'
+        ),
+    )
+    requires_approved_pdf = forms.BooleanField(
         required=False,
         initial=False,
-        label='Blocca ECN semplice per questo documento',
+        label='Richiede copia PDF approvata con registro delle approvazioni',
         help_text=(
-            'Se spuntato, per questo documento non sarà possibile richiedere un ECN semplice '
-            '(autoapprovato, senza CCB): resterà disponibile solo l\'ECN standard.'
+            'Se attivo: prima di ogni invio in approvazione sarà richiesto un PDF che '
+            'rappresenti il file sorgente (prodotto automaticamente quando possibile, '
+            'altrimenti caricato dall\'autore); al termine dell\'approvazione verrà '
+            'generata una copia PDF con il registro delle approvazioni ed eventuali '
+            'firme visive. Le firme non costituiscono firma digitale. '
+            'Modificabile in seguito dai metadati del documento — vale solo per le '
+            'revisioni non ancora inviate in approvazione.'
         ),
     )
     file = forms.FileField(required=False, label='File operativo')
@@ -206,10 +223,19 @@ class DocumentMetadataEditForm(forms.ModelForm):
 
     class Meta:
         model = Document
-        fields = ['title', 'description', 'revision_scheme']
+        fields = ['title', 'description', 'revision_scheme', 'requires_approved_pdf']
         labels = {
             'title': 'Titolo',
             'description': 'Descrizione',
+            'requires_approved_pdf': 'Richiede copia PDF approvata con registro delle approvazioni',
+        }
+        help_texts = {
+            'requires_approved_pdf': (
+                'Vale solo per le revisioni non ancora inviate in approvazione: le '
+                'revisioni storiche e i workflow già in corso non cambiano. Se esiste '
+                'già una bozza senza PDF e questa opzione viene attivata, sarà '
+                'necessario fornire un PDF prima di poterla inviare in approvazione.'
+            ),
         }
         widgets = {
             'description': forms.Textarea(attrs={'rows': 3}),
@@ -217,18 +243,27 @@ class DocumentMetadataEditForm(forms.ModelForm):
 
     def __init__(self, *args, current_user=None, **kwargs):
         super().__init__(*args, **kwargs)
-        # TASK-029: il flag "consenti ECN semplice" è modificabile solo da
-        # superuser o supervisor_demo (in demo mode) — non da autori/manager
-        # che già possono modificare titolo/descrizione/schema revisione.
+        # Allineamento 2026-07-28 alla decisione presa per allow_simple_ecn:
+        # solo superuser o supervisor_demo (demo mode) possono cambiare questa
+        # configurazione DOPO la creazione del documento — non autori/manager,
+        # che pure possono modificare titolo/descrizione/schema/PDF. L'autore
+        # può comunque impostarla liberamente in fase di creazione documento
+        # (DocumentCreateForm, invariato). Il campo non viene aggiunto affatto
+        # al form per chi non è autorizzato: un tentativo di POST grezzo con
+        # allow_simple_ecn=on viene ignorato (nessun campo, nessun cleaned_data),
+        # non solo nascosto lato client.
         from documents.permissions import can_edit_simple_ecn_flag
         if current_user is not None and can_edit_simple_ecn_flag(current_user):
-            self.fields['allows_simple_ecn'] = forms.BooleanField(
+            self.fields['allow_simple_ecn'] = forms.BooleanField(
                 required=False,
-                initial=self.instance.allows_simple_ecn if self.instance else True,
-                label='Consenti ECN semplice',
+                initial=self.instance.allow_simple_ecn if self.instance else True,
+                label='Consenti ECN a flusso semplice per questo documento',
                 help_text=(
-                    'Se deselezionato, per questo documento non sarà possibile richiedere '
-                    'un ECN semplice (autoapprovato, senza CCB).'
+                    'Se disattivato, per i prossimi ECN di questo documento sarà possibile '
+                    'usare solo il flusso standard (istruttoria e votazione CCB): il flusso '
+                    'semplice (autoapprovato) non sarà proponibile. L\'ECN standard resta '
+                    'sempre disponibile. Vale solo per gli ECN non ancora creati: gli ECN '
+                    'già esistenti e i workflow già in corso non cambiano.'
                 ),
             )
 
@@ -300,4 +335,9 @@ class SubmitForApprovalForm(SanatoriaFieldsMixin, forms.Form):
         required=False,
         label='Scadenza approvazione',
         widget=forms.DateInput(attrs={'type': 'date'}),
+    )
+    signature_template_file = forms.FileField(
+        required=False,
+        label='Modello da firmare',
+        help_text='Allegato opzionale consultabile dagli approvatori.',
     )

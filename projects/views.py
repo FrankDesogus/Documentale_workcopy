@@ -407,16 +407,17 @@ def project_list(request):
     })
 
 
-@login_required
-def project_detail(request, project_id):
-    project = get_object_or_404(
-        Project.objects.select_related('root_folder', 'root_folder__parent', 'manager'),
-        pk=project_id,
-    )
-
+def _assert_can_view_project(request, project):
+    """
+    Stessa regola di accesso usata da project_detail
+    (TASK 2, 2026-07-28): la vista storica non deve essere raggiungibile con
+    permessi diversi (più permissivi) rispetto al dettaglio ordinario — mai
+    solo un pulsante nascosto, un accesso diretto via URL deve fallire allo
+    stesso modo.
+    """
     if not _can_manage_project(request.user):
         if project.root_folder:
-            # Document Auditor globale può vedere il dettaglio progetto (per audit)
+            # Document Auditor globale può vedere il progetto (per audit)
             from projects.permissions import _is_privileged
             if not _is_privileged(request.user):
                 from projects.resolver import has_folder_permission as _has_fperm
@@ -427,6 +428,16 @@ def project_detail(request, project_id):
                     raise PermissionDenied
         else:
             raise PermissionDenied
+
+
+@login_required
+def project_detail(request, project_id):
+    project = get_object_or_404(
+        Project.objects.select_related('root_folder', 'root_folder__parent', 'manager'),
+        pk=project_id,
+    )
+
+    _assert_can_view_project(request, project)
 
     # ── Ricerca documenti nel progetto ──────────────────────────────────────
     from django.core.paginator import Paginator as _Paginator
@@ -512,6 +523,7 @@ def project_detail(request, project_id):
         project.root_folder is not None
         and can_create_document_in_folder(request.user, project.root_folder)
     )
+
     can_view_project_archive = can_view_archived_project(request.user, project)
 
     # ECN collegati ai documenti nelle cartelle del progetto
@@ -529,9 +541,9 @@ def project_detail(request, project_id):
         'project': project,
         'documents': documents,
         'subfolders': subfolders,
+        'current_baseline': current_baseline,
         'can_manage': _can_manage_project(request.user),
         'can_create_doc': can_create_doc,
-        'current_baseline': current_baseline,
         'can_view_project_archive': can_view_project_archive,
         'project_ecns': project_ecns,
         # ricerca documenti
@@ -545,41 +557,14 @@ def project_detail(request, project_id):
 
 
 @login_required
-def archive_project_list(request):
-    """Lista completa progetti per la sezione Archivio progetti (TASK-026).
-    Accesso gated da can_view_archive — stesso permesso di Archivio documenti
-    (Manager/Auditor/Quality Manager globali, o view_history per cartella)."""
-    from django.core.paginator import Paginator
-    from documents.permissions import can_view_archive
-
-    if not can_view_archive(request.user):
-        raise Http404
-
-    qs = Project.objects.select_related('root_folder', 'root_folder__parent', 'manager').order_by('code')
-
-    q = request.GET.get('q', '').strip()
-    if q:
-        qs = qs.filter(
-            Q(code__icontains=q) | Q(name__icontains=q) | Q(description__icontains=q)
-        )
-
-    paginator = Paginator(qs, 20)
-    page_obj = paginator.get_page(request.GET.get('page', 1))
-
-    return render(request, 'projects/archive_project_list.html', {
-        'projects': page_obj,
-        'page_obj': page_obj,
-        'q': q,
-        'total_count': paginator.count,
-    })
-
-
-@login_required
 def archive_project_detail(request, project_id):
-    """Storico completo di un progetto (TASK-026): tutti gli snapshot versione/
+    """
+    Storico completo del progetto (TASK-026): tutti gli snapshot versione/
     revisione, confronto con la baseline corrente, storico eventi. Accesso
     gated da can_view_archived_project — non raggiungibile da project_detail
-    se non autorizzati."""
+    se non autorizzati (stesso permesso più alto di can_view_audit, non
+    quello più permissivo di project_detail).
+    """
     from projects.permissions import can_view_archived_project
 
     project = get_object_or_404(
@@ -616,9 +601,19 @@ def archive_project_detail(request, project_id):
         | Q(changes__document_id__in=_doc_ids)
     ).select_related('user').order_by('-timestamp')[:20]
 
+    project_ecns = []
+    if project.root_folder:
+        from ecn.models import ChangeNotice
+        project_ecns = list(
+            ChangeNotice.objects
+            .filter(document__project_folder=project.root_folder)
+            .select_related('document', 'proposed_by')
+            .order_by('-proposed_at')
+        )
+
     from django.urls import reverse as _reverse
-    save_version_url = _reverse('project_snapshot_create', kwargs={'project_id': project.pk}) + '?snapshot_type=version'
-    save_revision_url = _reverse('project_snapshot_create', kwargs={'project_id': project.pk}) + '?snapshot_type=revision'
+    _save_version_url = _reverse('project_snapshot_create', kwargs={'project_id': project.pk}) + '?snapshot_type=version'
+    _save_revision_url = _reverse('project_snapshot_create', kwargs={'project_id': project.pk}) + '?snapshot_type=revision'
 
     return render(request, 'projects/archive_project_detail.html', {
         'project': project,
@@ -627,9 +622,45 @@ def archive_project_detail(request, project_id):
         'current_baseline': current_baseline,
         'comparison_rows': comparison_rows,
         'audit_logs': audit_logs,
+        'project_ecns': project_ecns,
         'can_manage': _can_manage_project(request.user),
-        'save_version_url': save_version_url,
-        'save_revision_url': save_revision_url,
+        'save_version_url': _save_version_url,
+        'save_revision_url': _save_revision_url,
+    })
+
+
+@login_required
+def archive_project_list(request):
+    """
+    Lista completa progetti per la sezione Archivio progetti (TASK-026).
+    Accesso gated da can_view_archive — stesso permesso di Archivio
+    documenti (Manager/Auditor/Quality Manager globali, o view_history per
+    cartella). Diversamente da prima (TASK 2), non è la visibilità
+    ordinaria di project_list: è lo stesso permesso più alto della vista
+    di dettaglio storico a cui questa lista dà accesso.
+    """
+    from django.core.paginator import Paginator
+    from documents.permissions import can_view_archive
+
+    if not can_view_archive(request.user):
+        raise Http404
+
+    qs = Project.objects.select_related('root_folder', 'root_folder__parent', 'manager').order_by('code')
+
+    q = request.GET.get('q', '').strip()
+    if q:
+        qs = qs.filter(
+            Q(code__icontains=q) | Q(name__icontains=q) | Q(description__icontains=q)
+        )
+
+    paginator = Paginator(qs, 20)
+    page_obj = paginator.get_page(request.GET.get('page', 1))
+
+    return render(request, 'projects/archive_project_list.html', {
+        'projects': page_obj,
+        'page_obj': page_obj,
+        'q': q,
+        'total_count': paginator.count,
     })
 
 

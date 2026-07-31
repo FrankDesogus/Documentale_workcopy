@@ -1,90 +1,42 @@
 import base64
-import hashlib
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 
-from accounts.forms import UserSignatureUploadForm
+from accounts.forms import UserSignatureForm
 from accounts.models import UserSignature
-from auditlog.services import create_audit_log
-
-
-def _active_signature_preview_data_uri(signature):
-    """
-    Anteprima come data URI: nessun URL scaricabile per la firma di un altro
-    utente, nessuna vista di download separata da proteggere. Usata solo per
-    l'anteprima della propria firma nella pagina di gestione.
-    """
-    signature.image.open('rb')
-    try:
-        encoded = base64.b64encode(signature.image.read()).decode('ascii')
-    finally:
-        signature.image.close()
-    return f'data:image/png;base64,{encoded}'
 
 
 @login_required
-def signature_manage(request):
-    active_signature = UserSignature.objects.filter(user=request.user, is_active=True).first()
+def signature_settings(request):
+    signature, _ = UserSignature.objects.get_or_create(user=request.user)
 
     if request.method == 'POST':
-        action = request.POST.get('action')
+        if request.POST.get('remove') == '1':
+            if signature.image:
+                signature.image.delete(save=False)
+                signature.image = None
+                signature.save(update_fields=['image', 'updated_at'])
+            messages.success(request, 'Firma visiva rimossa. Verrà usato solo il nome testuale.')
+            return redirect('signature_settings')
 
-        if action == 'remove':
-            if active_signature is None:
-                messages.error(request, 'Non hai una firma visiva attiva da rimuovere.')
-                return redirect('signature_manage')
-            active_signature.is_active = False
-            active_signature.save(update_fields=['is_active'])
-            create_audit_log(
-                user=request.user,
-                action='SIGNATURE_REMOVED',
-                instance=active_signature,
-            )
-            messages.success(
-                request,
-                'Firma visiva rimossa. Verrà usata solo la firma testuale (nome utente).',
-            )
-            return redirect('signature_manage')
-
-        form = UserSignatureUploadForm(request.POST, request.FILES)
+        form = UserSignatureForm(request.POST, request.FILES, instance=signature)
         if form.is_valid():
-            image = form.cleaned_data['image']
-            sha256 = hashlib.sha256()
-            for chunk in image.chunks():
-                sha256.update(chunk)
-            image.seek(0)
-
-            if active_signature is not None:
-                active_signature.is_active = False
-                active_signature.save(update_fields=['is_active'])
-
-            new_signature = UserSignature.objects.create(
-                user=request.user,
-                image=image,
-                original_filename=image.name,
-                size=image.size,
-                sha256_hash=sha256.hexdigest(),
-                is_active=True,
-            )
-            create_audit_log(
-                user=request.user,
-                action='SIGNATURE_UPLOADED',
-                instance=new_signature,
-                new_values={'original_filename': image.name},
-            )
-            messages.success(request, 'Firma visiva caricata correttamente.')
-            return redirect('signature_manage')
+            form.save()
+            messages.success(request, 'Firma visiva aggiornata.')
+            return redirect('signature_settings')
     else:
-        form = UserSignatureUploadForm()
+        form = UserSignatureForm(instance=signature)
 
-    preview_data_uri = None
-    if active_signature is not None:
-        preview_data_uri = _active_signature_preview_data_uri(active_signature)
+    signature_data_uri = None
+    if signature.image:
+        with signature.image.open('rb') as fh:
+            encoded = base64.b64encode(fh.read()).decode('ascii')
+        signature_data_uri = f'data:image/png;base64,{encoded}'
 
-    return render(request, 'accounts/signature_manage.html', {
+    return render(request, 'accounts/signature_settings.html', {
         'form': form,
-        'active_signature': active_signature,
-        'preview_data_uri': preview_data_uri,
+        'signature': signature,
+        'signature_data_uri': signature_data_uri,
     })
