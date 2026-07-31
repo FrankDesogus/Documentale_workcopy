@@ -38,7 +38,7 @@ GRANT ALL PRIVILEGES ON DATABASE documentale TO documentale_user;
 sudo mkdir -p /srv/documentale
 sudo chown $USER:$USER /srv/documentale
 
-git clone <repository-url> /srv/documentale
+git clone https://github.com/FrankDesogus/Documentale_workcopy.git /srv/documentale
 cd /srv/documentale
 
 python3.12 -m venv .venv
