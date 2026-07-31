@@ -29,10 +29,9 @@ python manage.py runserver
 Il file `static/css/tailwind.css` è committato nel repository.
 Non è necessario avere Node.js in produzione.
 
-## Ambiente Station (workcopy)
+## Deploy e stato progetto
 
-Questa è una copia di lavoro (`projects/documentale-workcopy`) importata
-nella AI Software Station per sviluppo assistito. Per test, venv e comandi
-specifici di questa copia vedi `AGENTS.md`, `CLAUDE.md` e
-`docs/ai/TESTING_STATUS.md`. Per lo stato del progetto sorgente originale
-(fuori Station), vedi `PROJECT_HANDOFF.md` e `AI_CONTEXT.md`.
+Per deploy su server vedi `DEPLOY.md`. Per lo stato del progetto, il
+checkpoint corrente e i comandi di avvio vedi `PROJECT_HANDOFF.md` e
+`AI_CONTEXT.md`. Per test e comandi di sviluppo vedi `AGENTS.md`,
+`CLAUDE.md` e `docs/ai/TESTING_STATUS.md`.
